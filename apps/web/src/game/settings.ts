@@ -17,8 +17,12 @@ export const RULE_OPTIONS = [
 ] as const
 const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard']
 
-type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean; difficulty: Difficulty; rules: RuleSet }
-const DEFAULTS: Settings = { claimSeconds: 10, sound: true, voice: true, difficulty: 'medium', rules: 'mcr' }
+/** Scales every text size in the app (see the type scale in style.css). */
+export const TEXT_SIZE_OPTIONS = ['normal', 'large', 'larger'] as const
+export type TextSize = (typeof TEXT_SIZE_OPTIONS)[number]
+
+type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean; difficulty: Difficulty; rules: RuleSet; textSize: TextSize }
+const DEFAULTS: Settings = { claimSeconds: 10, sound: true, voice: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' }
 
 function read(key: string): Record<string, unknown> | null {
   try {
@@ -41,6 +45,7 @@ export function load(): Settings {
     voice: typeof raw?.voice === 'boolean' ? raw.voice : DEFAULTS.voice,
     difficulty: DIFFICULTIES.includes(difficulty as Difficulty) ? (difficulty as Difficulty) : DEFAULTS.difficulty,
     rules: isRuleSet(rules) ? rules : DEFAULTS.rules,
+    textSize: TEXT_SIZE_OPTIONS.includes(raw?.textSize as TextSize) ? (raw!.textSize as TextSize) : DEFAULTS.textSize,
   }
 }
 
@@ -55,12 +60,20 @@ const voice = ref(initial.voice)
 const difficulty = ref<Difficulty>(initial.difficulty)
 /** Rule set for new matches; a match in progress keeps the rules it started with. */
 const rules = ref<RuleSet>(initial.rules)
+const textSize = ref<TextSize>(initial.textSize)
 
 watch(
-  [claimSeconds, sound, voice, difficulty, rules, needsOnboarding],
+  [claimSeconds, sound, voice, difficulty, rules, textSize, needsOnboarding],
   () => {
     if (needsOnboarding.value) return
-    const settings: Settings = { claimSeconds: claimSeconds.value, sound: sound.value, voice: voice.value, difficulty: difficulty.value, rules: rules.value }
+    const settings: Settings = {
+      claimSeconds: claimSeconds.value,
+      sound: sound.value,
+      voice: voice.value,
+      difficulty: difficulty.value,
+      rules: rules.value,
+      textSize: textSize.value,
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
     } catch {
@@ -70,9 +83,17 @@ watch(
   { immediate: true },
 )
 
+watch(
+  textSize,
+  (size) => {
+    if (typeof document !== 'undefined') document.documentElement.dataset.textSize = size
+  },
+  { immediate: true },
+)
+
 export function useSettings() {
   const finishOnboarding = () => {
     needsOnboarding.value = false
   }
-  return { claimSeconds, sound, voice, difficulty, rules, needsOnboarding, finishOnboarding }
+  return { claimSeconds, sound, voice, difficulty, rules, textSize, needsOnboarding, finishOnboarding }
 }

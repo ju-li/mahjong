@@ -22,7 +22,7 @@ describe('settings', () => {
   it('falls back to defaults without storage', async () => {
     vi.stubGlobal('localStorage', undefined)
     const { load } = await importSettings()
-    expect(load()).toEqual({ claimSeconds: 10, sound: true, voice: true, difficulty: 'medium', rules: 'mcr' })
+    expect(load()).toEqual({ claimSeconds: 10, sound: true, voice: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' })
   })
 
   it('asks a first-time player to onboard and saves nothing until they finish', async () => {
@@ -49,11 +49,12 @@ describe('settings', () => {
     s.sound.value = false
     s.difficulty.value = 'hard'
     s.rules.value = 'hk'
+    s.textSize.value = 'larger'
     await nextTick()
-    expect(JSON.parse(data.get('mahjong.settings.v1')!)).toEqual({ claimSeconds: 5, sound: false, voice: true, difficulty: 'hard', rules: 'hk' })
+    expect(JSON.parse(data.get('mahjong.settings.v1')!)).toEqual({ claimSeconds: 5, sound: false, voice: true, difficulty: 'hard', rules: 'hk', textSize: 'larger' })
 
     const reloaded = await importSettings()
-    expect(reloaded.load()).toEqual({ claimSeconds: 5, sound: false, voice: true, difficulty: 'hard', rules: 'hk' })
+    expect(reloaded.load()).toEqual({ claimSeconds: 5, sound: false, voice: true, difficulty: 'hard', rules: 'hk', textSize: 'larger' })
   })
 
   it('takes difficulty and rules from a match saved by an older version', async () => {
@@ -62,12 +63,12 @@ describe('settings', () => {
       'mahjong.match.v2': JSON.stringify({ match: { rules: 'hk' }, difficulty: 'easy' }),
     })
     const { load } = await importSettings()
-    expect(load()).toEqual({ claimSeconds: 20, sound: true, voice: true, difficulty: 'easy', rules: 'hk' })
+    expect(load()).toEqual({ claimSeconds: 20, sound: true, voice: true, difficulty: 'easy', rules: 'hk', textSize: 'normal' })
   })
 
   it('ignores invalid stored values', async () => {
-    stubStorage({ 'mahjong.settings.v1': JSON.stringify({ claimSeconds: 7, sound: 'yes', difficulty: 'insane', rules: 'riichi-x' }) })
+    stubStorage({ 'mahjong.settings.v1': JSON.stringify({ claimSeconds: 7, sound: 'yes', difficulty: 'insane', rules: 'riichi-x', textSize: 'huge' }) })
     const { load } = await importSettings()
-    expect(load()).toEqual({ claimSeconds: 10, sound: true, voice: true, difficulty: 'medium', rules: 'mcr' })
+    expect(load()).toEqual({ claimSeconds: 10, sound: true, voice: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' })
   })
 })
