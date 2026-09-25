@@ -182,7 +182,7 @@ function evaluateDiscards(ctx: Ctx, discards: (Action & { type: 'discard' })[], 
     if (e.shanten > best + (ctx.difficulty === 'hard' ? 1 : 0)) continue
     counts[e.kind]!--
     e.ukeire = ukeire(ctx, counts, ctx.meldCount, e.shanten)
-    if (e.shanten === 0) e.valid = validWaits(ctx, counts, ctx.ownMelds)
+    if (e.shanten === 0 && ctx.difficulty !== 'beginner') e.valid = validWaits(ctx, counts, ctx.ownMelds)
     counts[e.kind]!++
   }
   return evals
@@ -221,8 +221,10 @@ function chooseDiscard(ctx: Ctx, discards: (Action & { type: 'discard' })[]): Ac
   const evals = evaluateDiscards(ctx, discards, counts)
   const bestShanten = Math.min(...evals.map((e) => e.shanten))
 
-  // Easy bots play like medium ones but often make a merely reasonable discard instead of the best.
-  if (ctx.difficulty === 'easy' && ctx.rand() < 0.25) {
+  // Easy bots play like medium ones but often make a merely reasonable discard instead of the best;
+  // beginners do so most of the time.
+  const sloppiness = ctx.difficulty === 'beginner' ? 0.6 : ctx.difficulty === 'easy' ? 0.25 : 0
+  if (sloppiness > 0 && ctx.rand() < sloppiness) {
     return pick(ctx, evals.filter((e) => e.shanten <= bestShanten + 1)).action
   }
 
@@ -237,7 +239,8 @@ function chooseDiscard(ctx: Ctx, discards: (Action & { type: 'discard' })[]): Ac
   const score = (e: DiscardEval) => {
     // Ready hands that can actually score 8 fan dominate; then speed, then fan potential.
     let v = -e.shanten * 100 + e.ukeire
-    if (e.shanten === 0) v += e.valid > 0 ? 200 + e.valid * 4 : -60
+    // Beginners chase any ready hand, whether or not it can reach 8 fan.
+    if (e.shanten === 0 && ctx.difficulty !== 'beginner') v += e.valid > 0 ? 200 + e.valid * 4 : -60
     if (ctx.difficulty === 'hard') v += e.potential * 25
     return v - e.keep * 0.1
   }
@@ -295,6 +298,8 @@ function claimWorthIt(ctx: Ctx, action: Action, claimed: number): boolean {
 
   const after = shantenAfterClaim(ctx, used, meld)
   if (after.shanten >= current) return false
+  // Beginners open their hand for any progress, often leaving no route to 8 fan.
+  if (ctx.difficulty === 'beginner') return true
   // Opening the hand loses concealed-hand fan: only do it with a route to 8 fan.
   if (valuable.includes(claimed) && action.type !== 'chow') return true
   return after.potential >= (ctx.difficulty === 'medium' ? 0.7 : 0.8)
@@ -311,13 +316,15 @@ function claimWorthIt(ctx: Ctx, action: Action, claimed: number): boolean {
 export function chooseAction(req: Pick<BotRequest, 'view' | 'legal' | 'difficulty' | 'seed'>): Action {
   const { legal } = req
   if (legal.length === 0) throw new Error('bot asked to act with no legal actions')
-  const win = legal.find((a) => a.type === 'win')
-  if (win) return win
-  const draw = legal.find((a) => a.type === 'draw')
-  if (draw) return draw
-
   const ctx = makeCtx(req)
   const phase = req.view.phase
+
+  const win = legal.find((a) => a.type === 'win')
+  // Beginners always see a self-drawn win but often miss one on a discard.
+  const missesWin = ctx.difficulty === 'beginner' && (phase.kind === 'claim' || phase.kind === 'robKong') && ctx.rand() < 0.4
+  if (win && !missesWin) return win
+  const draw = legal.find((a) => a.type === 'draw')
+  if (draw) return draw
 
   if (phase.kind === 'claim' || phase.kind === 'robKong') {
     const claimed = kindIndex(phase.tile.kind)

@@ -26,6 +26,7 @@ export const en = {
   'app.fanReference': 'Fan list',
   'app.settings': 'Settings',
 
+  'level.beginner': 'Beginner',
   'level.easy': 'Easy',
   'level.medium': 'Medium',
   'level.hard': 'Hard',
@@ -174,6 +175,7 @@ export const en = {
   'onboarding.comingSoon': 'Coming soon',
   'onboarding.bots.title': 'How strong should the bots be?',
   'onboarding.bots.body': 'Your three opponents are played by the computer.',
+  'onboarding.level.beginner': 'Gentle opponents who make plenty of mistakes.',
   'onboarding.level.easy': 'Relaxed opponents, good while you learn.',
   'onboarding.level.medium': 'A fair game for most players.',
   'onboarding.level.hard': 'Opponents who play to win.',
@@ -218,6 +220,7 @@ export const zhHans: Record<MessageKey, string> = {
   'app.fanReference': '番种表',
   'app.settings': '设置',
 
+  'level.beginner': '入门',
   'level.easy': '简单',
   'level.medium': '中等',
   'level.hard': '困难',
@@ -366,6 +369,7 @@ export const zhHans: Record<MessageKey, string> = {
   'onboarding.comingSoon': '即将推出',
   'onboarding.bots.title': '电脑对手要多强？',
   'onboarding.bots.body': '另外三名对手由电脑扮演。',
+  'onboarding.level.beginner': '失误较多的温和对手，适合初学者。',
   'onboarding.level.easy': '轻松的对手，适合入门。',
   'onboarding.level.medium': '适合大多数玩家的对局。',
   'onboarding.level.hard': '全力求胜的对手。',

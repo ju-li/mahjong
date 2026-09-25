@@ -66,6 +66,12 @@ describe('settings', () => {
     expect(load()).toEqual({ claimSeconds: 20, sound: true, voice: true, difficulty: 'easy', rules: 'hk', textSize: 'normal' })
   })
 
+  it('accepts the beginner level', async () => {
+    stubStorage({ 'mahjong.settings.v1': JSON.stringify({ difficulty: 'beginner' }) })
+    const { load } = await importSettings()
+    expect(load().difficulty).toBe('beginner')
+  })
+
   it('ignores invalid stored values', async () => {
     stubStorage({ 'mahjong.settings.v1': JSON.stringify({ claimSeconds: 7, sound: 'yes', difficulty: 'insane', rules: 'riichi-x', textSize: 'huge' }) })
     const { load } = await importSettings()
