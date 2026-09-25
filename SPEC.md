@@ -93,7 +93,7 @@ T14|x|worker protocol → `{ view, legal, difficulty, seed }` → `{ action }`; 
 T15|x|UI playable slice: table, own hand, click-to-discard, claim buttons from `legalActions`, bots via worker, hand ends on exhaustion|V26,I.ui
 T16|x|engine `decompose` + `shanten` (standard, seven pairs, thirteen orphans, knitted forms)|V24,I.api
 T17|x|engine fan framework: win context, fan table (81 entries), exclusion rules; wire `win` legality via shape + (temp) ⊥ 8-fan check|V21,V22
-T18|.|engine fans 88 → 6 pt|V22
+T18|x|engine fans 88 → 6 pt|V22
 T19|.|engine fans 4 → 1 pt + flowers|V22
 T20|.|reference-hand suite (≥30 hands from official rules/examples); enforce 8-fan min; `settle`|V21,V22,V23
 T21|.|engine `Match`: 16 hands, prevailing wind progression, dealer rotation, cumulative scores|V13,V23,I.api
