@@ -1,6 +1,6 @@
 import type { Action, PlayerView } from '@mahjong/engine'
 
-export type Difficulty = 'easy' | 'medium' | 'hard'
+export type Difficulty = 'beginner' | 'easy' | 'medium' | 'hard'
 
 /** Main thread → bot worker. `id` pairs a reply with its request. */
 export type BotRequest = {

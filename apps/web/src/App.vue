@@ -22,7 +22,7 @@ const rulesOpen = ref(false)
 
 /** Per player. Bots are numbered by where they sit relative to you at the start of the match. */
 const NAMES = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
-const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
+const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
 const { claimSeconds, sound, voice, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
 const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, rules, resumed, act, continueToNextHand, startNewMatch } = useMatch()

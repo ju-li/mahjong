@@ -51,7 +51,7 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - api: `RuleSet` = `'mcr'|'hk'`. `GameState.rules`, `Match.rules`, `PlayerView.rules`. `scoreFor` / `meetsMinimumFor` / `settleFor` / `fansFor` / `fanDef` dispatch by rule set; hk fan ids prefixed `hk.`.
 - api: `Match` (16 hands, 4 prevailing winds × 4): `newMatch(seed, rules?)`, `nextHand(match, result)`, cumulative scores per player.
 - api: `Match.seating` / `seatOf(match, player)` / `playerAt(match, seat)`: player ↔ table seat for current round. players 0..3 fixed identities; seats change per round.
-- worker: `apps/web/src/bots/bot.worker.ts`. in `{ view: PlayerView, legal: Action[], difficulty: 'easy'|'medium'|'hard', seed }` → out `{ action }`.
+- worker: `apps/web/src/bots/bot.worker.ts`. in `{ view: PlayerView, legal: Action[], difficulty: 'beginner'|'easy'|'medium'|'hard', seed }` → out `{ action }`.
 - ui: table (4 seats, discards, melds, flowers), own hand, claim prompts, win screen w/ fan breakdown, difficulty picker, new match. match saved to `localStorage`.
 - ui: language toggle `en` ↔ `zh-Hans`, persisted; defaults from `navigator.language`.
 - ui: fan reference page: all 81 fans, points, description, exclusions, both languages.
@@ -124,7 +124,7 @@ T18|x|engine fans 88 → 6 pt|V22
 T19|x|engine fans 4 → 1 pt + flowers|V22
 T20|x|reference-hand suite (≥30 hands from official rules/examples); enforce 8-fan min; `settle`|V21,V22,V23
 T21|x|engine `Match`: 16 hands, prevailing wind progression, dealer rotation, cumulative scores|V13,V23,I.api
-T22|x|bots easy/medium/hard: shanten-based discard, useful-tile count, claim heuristics, 8-fan awareness, defense (hard)|V25,V26
+T22|x|bots beginner/easy/medium/hard: shanten-based discard, useful-tile count, claim heuristics, 8-fan awareness, defense (hard)|V25,V26
 T23|x|UI full: win screen fan breakdown, scores, difficulty picker, new match, `localStorage` resume|V26,I.ui
 T24|x|source ≥ 20 scored MCR example hands (official rulebook / WMO / reputable calculator), cite each; add to reference suite; mismatches → `/ck:spec bug:`|V22,V30
 T25|x|V1 enforcement test: scan engine src for browser/Node globals (web vitest, `import.meta.glob` raw); rename `window` locals in `rules.ts`|V1,V33
