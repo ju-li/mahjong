@@ -978,72 +978,6 @@ body {
   margin: 0;
 }
 
-.result__hand {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.result__hand .meld {
-  background: rgb(0 0 0 / 0.08);
-}
-
-.result__concealed {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 1px;
-}
-
-.result__fans {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.95rem;
-}
-
-.result__fans td,
-.result__fans th {
-  padding: 4px 0;
-  border-bottom: 1px solid var(--tile-edge);
-  text-align: left;
-}
-
-.result__fans .num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.result__fans tfoot th {
-  border-bottom: none;
-  padding-top: 8px;
-}
-
-.result__deltas,
-.result__standings {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 16px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.result__standings {
-  grid-template-columns: 1fr;
-  list-style: decimal inside;
-}
-
-.result__deltas li,
-.result__standings li {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.result__standings li.is-me {
-  font-weight: 700;
-}
-
 .result__note {
   margin: 0;
   color: var(--muted);
@@ -1051,6 +985,293 @@ body {
 
 .result .action {
   align-self: flex-end;
+}
+
+/* ---- Post-hand summary: banner over the dimmed table ---- */
+
+.summary {
+  --summary-glow: 242 182 50;
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(1.5px);
+}
+
+.summary--loss {
+  --summary-glow: 110 170 220;
+}
+
+.summary--draw {
+  --summary-glow: 170 180 175;
+}
+
+.summary__card {
+  width: min(880px, 100%);
+  padding: 0 clamp(14px, 3vw, 28px) 20px;
+  gap: 14px;
+  align-items: center;
+  text-align: center;
+  color: var(--felt-text);
+  background:
+    radial-gradient(ellipse 70% 38% at 50% 0%, rgb(var(--summary-glow) / 0.28), transparent 70%),
+    linear-gradient(rgb(14 30 26 / 0.94), rgb(8 16 14 / 0.94));
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.5);
+}
+
+.summary__banner {
+  margin: 0;
+  padding-top: 14px;
+  font-size: clamp(2.6rem, 9vw, 4.6rem);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0.08em;
+  animation: banner-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.summary__banner span {
+  background: linear-gradient(#fff8d6 10%, #f2b632 55%, #b86e0e 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 3px 0 rgb(0 0 0 / 0.45)) drop-shadow(0 0 18px rgb(var(--summary-glow) / 0.55));
+}
+
+.summary--loss .summary__banner span {
+  background-image: linear-gradient(#f3fbff 10%, #9fcdec 55%, #3d77a6 90%);
+}
+
+.summary--draw .summary__banner span {
+  background-image: linear-gradient(#ffffff 10%, #c7d0cb 55%, #7b8782 90%);
+}
+
+.summary__headline {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.6vw, 1.45rem);
+  font-weight: 700;
+  text-wrap: balance;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary__headline small {
+  font-size: 0.8em;
+  font-weight: 400;
+  color: var(--felt-muted);
+}
+
+.summary__hand {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.summary__hand .meld {
+  background: rgb(255 255 255 / 0.08);
+}
+
+.summary__hand .meld .tile {
+  --tw: calc(var(--tile-w) * 0.8);
+}
+
+.summary__concealed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1px;
+}
+
+.summary__tile {
+  position: relative;
+  display: inline-flex;
+  padding-top: 1.5em;
+}
+
+.summary__tile.is-win .tile {
+  transform: translateY(-6px);
+  outline-offset: 2px;
+}
+
+.summary__tag {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--tile-face);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
+}
+
+.summary__fans {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: clamp(0.95rem, 2.2vw, 1.2rem);
+}
+
+.summary__fans li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.summary__fans strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.summary__times {
+  color: var(--felt-muted);
+  font-size: 0.85em;
+}
+
+.summary__total {
+  margin: -4px 0 0;
+  padding: 3px 14px;
+  border-radius: 999px;
+  font-size: clamp(0.95rem, 2.2vw, 1.15rem);
+  color: var(--accent);
+  background: rgb(242 182 50 / 0.12);
+}
+
+.summary__players {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary__players li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  text-align: left;
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid transparent;
+}
+
+.summary__players li.is-me {
+  border-color: rgb(255 255 255 / 0.25);
+}
+
+.summary__players li.is-winner {
+  border-color: var(--accent);
+  box-shadow: 0 0 16px rgb(242 182 50 / 0.25);
+}
+
+.summary__face {
+  grid-row: span 2;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.summary__face svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.summary__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  color: var(--felt-muted);
+}
+
+.summary__delta {
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary__delta.pos {
+  color: #b9f5c9;
+}
+
+.summary__delta.neg {
+  color: #ffc1b8;
+}
+
+.summary__running {
+  grid-column: 2;
+  font-size: 0.75rem;
+  color: var(--felt-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary__standings {
+  display: grid;
+  gap: 4px;
+  width: min(240px, 100%);
+  margin: 0;
+  padding: 0;
+  list-style: decimal inside;
+}
+
+.summary__standings li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.summary__standings li.is-me {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.summary .summary__continue {
+  align-self: flex-end;
+  padding: 12px 34px;
+  border-radius: 999px;
+  border: 2px solid #fff6a8;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #5a3a06;
+  background: linear-gradient(#f4ff7a, #b6dc1f 60%, #8fb512);
+  box-shadow: 0 4px 0 #5f7a0c, 0 8px 18px rgb(0 0 0 / 0.4);
+}
+
+.summary .summary__continue:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #5f7a0c, 0 4px 10px rgb(0 0 0 / 0.4);
+}
+
+@media (max-width: 640px) {
+  .summary__players {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary .summary__continue {
+    align-self: stretch;
+  }
+}
+
+@keyframes banner-in {
+  from {
+    transform: scale(1.8);
+    opacity: 0;
+  }
 }
 
 .topbar h1 {

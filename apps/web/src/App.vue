@@ -133,6 +133,7 @@ function changeRules(e: Event) {
       :result="result"
       :view="view"
       :names="seatNames"
+      :avatars="seatAvatars"
       :match-over="matchOver || match.handIndex === 15"
       :final-scores="seatTotals"
       @next="continueToNextHand"
