@@ -20,6 +20,9 @@ export const en = {
   'app.matchFinished': 'Match finished',
   'app.language': 'Language',
   'app.switchLanguage': '中文',
+  'app.loadLatest': 'Load latest version',
+  'app.loadingLatest': 'Loading…',
+  'app.loadLatestOffline': 'Can’t reach the server. Check your connection and try again.',
   'app.fanReference': 'Fan list',
   'app.settings': 'Settings',
 
@@ -205,6 +208,9 @@ export const zhHans: Record<MessageKey, string> = {
   'app.matchFinished': '比赛结束',
   'app.language': '语言',
   'app.switchLanguage': 'EN',
+  'app.loadLatest': '加载最新版本',
+  'app.loadingLatest': '加载中…',
+  'app.loadLatestOffline': '无法连接服务器。请检查网络后重试。',
   'app.fanReference': '番种表',
   'app.settings': '设置',
 

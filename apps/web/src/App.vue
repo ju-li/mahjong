@@ -7,6 +7,7 @@ import GameTable from './components/GameTable.vue'
 import HandResult from './components/HandResult.vue'
 import Onboarding from './components/Onboarding.vue'
 import RulesReference from './components/RulesReference.vue'
+import { loadLatestVersion } from './game/appUpdate'
 import { avatarSeeds, avatarSvg } from './game/avatar'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
@@ -82,6 +83,16 @@ function changeRules(e: Event) {
   if (isRuleSet(next) && next !== rules.value && (!inProgress() || window.confirm(t('app.confirmRules')))) startNewMatch(next)
   else select.value = rules.value
 }
+
+/** Reload onto the newest deploy (installed PWAs can otherwise linger on an old build). */
+const updating = ref(false)
+async function loadLatest() {
+  updating.value = true
+  if (!(await loadLatestVersion())) {
+    updating.value = false
+    window.alert(t('app.loadLatestOffline'))
+  }
+}
 </script>
 
 <template>
@@ -136,6 +147,7 @@ function changeRules(e: Event) {
               <input v-model="voice" class="toggle__input" type="checkbox" role="switch" />
             </label>
             <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle">{{ t('app.switchLanguage') }}</button>
+            <button class="action action--quiet-light" :disabled="updating" @click="loadLatest">{{ updating ? t('app.loadingLatest') : t('app.loadLatest') }}</button>
           </div>
         </details>
         <button class="action action--quiet-light" @click="rulesOpen = true">{{ t('app.howToPlay') }}</button>
