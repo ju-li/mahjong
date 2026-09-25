@@ -20,6 +20,7 @@ import type { Difficulty } from '../bots/protocol'
 import { BotClient } from './botClient'
 import { timeoutAction } from './keyboard'
 import { useSettings } from './settings'
+import { calloutFor, speakCallout } from './callout'
 import { playSound, soundFor } from './sound'
 
 /** The human is always player 0; their table seat changes between rounds. */
@@ -85,12 +86,18 @@ export function useMatch() {
   const handOver = computed(() => state.value?.phase.kind === 'ended')
 
   // Claim timer: counts down while the human may claim; on expiry it passes (only if legal).
-  const { claimSeconds, sound } = useSettings()
+  const { claimSeconds, sound, voice } = useSettings()
 
   watch(state, (next, prev) => {
-    if (!sound.value) return
-    const kind = soundFor(prev ?? null, next ?? null, humanSeat.value)
-    if (kind) playSound(kind)
+    if (sound.value) {
+      const kind = soundFor(prev ?? null, next ?? null, humanSeat.value)
+      if (kind) playSound(kind)
+    }
+    if (voice.value) {
+      // Only the bots speak; the human makes their own calls.
+      const call = calloutFor(prev ?? null, next ?? null)
+      if (call && call.seat !== humanSeat.value) speakCallout(call)
+    }
   })
   const claimRemaining = ref<number | null>(null)
   let claimTimer: ReturnType<typeof setInterval> | undefined
