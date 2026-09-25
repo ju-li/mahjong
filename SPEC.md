@@ -84,7 +84,7 @@ T5|x|deps: engine devDeps `vitest`, `typescript`; web dep `"@mahjong/engine": "w
 T6|x|`apps/web/src/bots/bot.worker.ts` import engine, reply `{ echo, wallSize }`; `App.vue` spawn worker & render reply; drop `HelloWorld` scaffold|C.worker,I.worker,I.ui
 T7|x|root scripts `dev`/`build`/`test`/`typecheck`; web `typecheck: vue-tsc -b`; clean root `package.json` placeholders|V10,I.cmd
 T8|x|verify: `pnpm test`, `pnpm typecheck`, `pnpm build` exit 0; `apps/web/dist` exists; dev page shows worker reply (headless check)|V10
-T9|.|rm `apps/web/railway.json` (dead: service can't use Config as Code)|I.deploy
+T9|x|rm `apps/web/railway.json` (dead: service can't use Config as Code)|I.deploy
 T10|.|engine state types: `Seat`, `Meld`, `GameState`, `Action`; `newHand` deal + flower replacement|V12,V13,V19,V20,I.api
 T11|.|engine turn loop: `legalActions` + `applyAction` for draw, discard, pass, wall exhaustion. win stub = never legal|V12,V13,V14,V15,V19
 T12|.|engine claims: chow/pung/exposed kong on discard, concealed & promoted kong, replacement draw, claim window & priority|V12,V15,V17,V18,V19,V20
