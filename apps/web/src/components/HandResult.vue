@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { kindIndex, type HandResult, type PlayerView } from '@mahjong/engine'
 import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
+import ScoreExplain from './ScoreExplain.vue'
 import TileFace from './TileFace.vue'
 
 const props = defineProps<{
   result: HandResult
   view: PlayerView
   names: string[]
+  avatars: string[]
   matchOver: boolean
   finalScores: number[]
 }>()
@@ -17,12 +19,34 @@ defineEmits<{ next: []; newMatch: []; explain: [fanId: string] }>()
 
 const { t, fanName } = useI18n()
 
-const title = computed(() => {
+/** The step-by-step scoring breakdown, opened from the total. */
+const explaining = ref(false)
+
+/** How the hand went for you: decides the banner. */
+const outcome = computed<'win' | 'loss' | 'draw'>(() => {
   const r = props.result
-  if (r.type === 'drawn') return t('result.drawn')
-  const who = r.winner === props.view.seat ? t('result.youWin') : t('result.theyWin', { name: props.names[r.winner]! })
-  if (r.from === null) return t('result.bySelfDraw', { who })
-  return r.from === props.view.seat ? t('result.onYourDiscard', { who }) : t('result.onDiscard', { who, from: props.names[r.from]! })
+  if (r.type === 'drawn') return 'draw'
+  const mine = r.deltas[props.view.seat]!
+  return mine > 0 ? 'win' : mine < 0 ? 'loss' : 'draw'
+})
+
+/** One line in the style of "Bot 1 wins 12 fan · you lose 20 (self-draw)". */
+const headline = computed(() => {
+  const r = props.result
+  if (r.type === 'drawn') return t('result.noPoints')
+  const me = props.view.seat
+  const fan = r.score.total
+  const won = r.winner === me ? t('result.youWinFan', { fan }) : t('result.theyWinFan', { name: props.names[r.winner]!, fan })
+  const mine = r.deltas[me]!
+  const cost = r.winner === me ? t('result.youGain', { n: mine }) : mine < 0 ? t('result.youLose', { n: -mine }) : ''
+  return [won, cost].filter(Boolean).join(t('result.sep'))
+})
+
+const how = computed(() => {
+  const r = props.result
+  if (r.type === 'drawn') return ''
+  if (r.from === null) return t('result.howSelfDraw', { name: r.winner === props.view.seat ? t('player.you') : props.names[r.winner]! })
+  return r.from === props.view.seat ? t('result.howYourDiscard') : t('result.howDiscard', { from: props.names[r.from]! })
 })
 
 const winningTiles = computed(() => {
@@ -32,63 +56,92 @@ const winningTiles = computed(() => {
 
 const winTileId = computed(() => (props.result.type === 'win' ? props.result.tileId : null))
 
-const standings = computed(() =>
-  props.names
-    .map((name, seat) => ({ name, seat, score: props.finalScores[seat]! }))
-    .sort((a, b) => b.score - a.score),
+/** Every seat's change this hand and running total, in seat order. */
+const players = computed(() =>
+  props.names.map((name, seat) => ({
+    name,
+    seat,
+    avatar: props.avatars[seat]!,
+    delta: props.result.type === 'win' ? props.result.deltas[seat]! : 0,
+    total: props.finalScores[seat]!,
+  })),
 )
+
+const standings = computed(() => [...players.value].sort((a, b) => b.total - a.total))
+
+const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
 </script>
 
 <template>
-  <div class="result" role="dialog" aria-modal="true" aria-labelledby="result-title">
-    <div class="result__card">
-      <h2 id="result-title">{{ title }}</h2>
+  <div class="result summary" :class="`summary--${outcome}`" role="dialog" aria-modal="true" aria-labelledby="result-title">
+    <div class="result__card summary__card">
+      <h2 id="result-title" class="summary__banner">
+        <span>{{ t(`result.banner.${outcome}`) }}</span>
+      </h2>
+
+      <p class="summary__headline">
+        {{ headline }}
+        <small v-if="how">{{ how }}</small>
+      </p>
 
       <template v-if="result.type === 'win'">
-        <div class="result__hand">
+        <div class="summary__hand">
           <MeldGroup v-for="(m, i) in view.melds[result.winner]" :key="i" :meld="m" />
-          <span class="result__concealed">
-            <TileFace v-for="tile in winningTiles" :key="tile.id" :kind="tile.kind" size="sm" :highlight="tile.id === winTileId" />
+          <span class="summary__concealed">
+            <span v-for="tile in winningTiles" :key="tile.id" class="summary__tile" :class="{ 'is-win': tile.id === winTileId }">
+              <span v-if="tile.id === winTileId" class="summary__tag">{{ t('result.winningTile') }}</span>
+              <TileFace :kind="tile.kind" pose="stand" :highlight="tile.id === winTileId" />
+            </span>
           </span>
         </div>
 
-        <table class="result__fans">
-          <tbody>
-            <tr v-for="f in result.score.fans" :key="f.id">
-              <td>
-                <button class="linklike" :title="t('result.fanHelp')" @click="$emit('explain', f.id)">{{ fanName(f.id) }}</button>
-                <span v-if="f.count > 1"> ×{{ f.count }}</span>
-              </td>
-              <td class="num">{{ f.points * f.count }}</td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <tr>
-              <th>{{ t('result.totalFan') }}</th>
-              <th class="num">{{ result.score.total }}</th>
-            </tr>
-          </tfoot>
-        </table>
-
-        <ul class="result__deltas">
-          <li v-for="(d, seat) in result.deltas" :key="seat">
-            <span>{{ names[seat] }}</span>
-            <strong :class="{ pos: d > 0, neg: d < 0 }">{{ d > 0 ? '+' : '' }}{{ d }}</strong>
+        <ul class="summary__fans">
+          <li v-for="f in result.score.fans" :key="f.id">
+            <button class="linklike" :title="t('result.fanHelp')" @click="$emit('explain', f.id)">{{ fanName(f.id) }}</button>
+            <span v-if="f.count > 1" class="summary__times">×{{ f.count }}</span>
+            <strong>{{ f.points * f.count }}</strong>
           </li>
         </ul>
+        <div class="summary__totals">
+          <p class="summary__total">
+            {{ t('result.totalFan') }} <strong>{{ result.score.total }}</strong>
+          </p>
+          <button class="summary__how" @click="explaining = true">{{ t('result.howScored') }}</button>
+        </div>
       </template>
-      <p v-else class="result__note">{{ t('result.noPoints') }}</p>
+
+      <ul class="summary__players">
+        <li
+          v-for="p in players"
+          :key="p.seat"
+          :class="{ 'is-me': p.seat === view.seat, 'is-winner': result.type === 'win' && p.seat === result.winner }"
+        >
+          <span class="summary__face" v-html="p.avatar" />
+          <span class="summary__name">{{ p.name }}</span>
+          <strong class="summary__delta" :class="{ pos: p.delta > 0, neg: p.delta < 0 }">{{ signed(p.delta) }}</strong>
+          <span class="summary__running">{{ t('result.runningTotal', { n: p.total }) }}</span>
+        </li>
+      </ul>
 
       <template v-if="matchOver">
         <h3>{{ t('result.finalStandings') }}</h3>
-        <ol class="result__standings">
+        <ol class="summary__standings">
           <li v-for="s in standings" :key="s.seat" :class="{ 'is-me': s.seat === view.seat }">
-            <span>{{ s.name }}</span><strong>{{ s.score }}</strong>
+            <span>{{ s.name }}</span><strong>{{ s.total }}</strong>
           </li>
         </ol>
-        <button class="action action--primary" @click="$emit('newMatch')">{{ t('result.newMatch') }}</button>
+        <button class="action action--primary summary__continue" @click="$emit('newMatch')">{{ t('result.newMatch') }}</button>
       </template>
-      <button v-else class="action action--primary" autofocus @click="$emit('next')">{{ t('result.nextHand') }}</button>
+      <button v-else class="action action--primary summary__continue" autofocus @click="$emit('next')">{{ t('result.continue') }}</button>
     </div>
+
+    <ScoreExplain
+      v-if="explaining && result.type === 'win'"
+      :result="result"
+      :rules="view.rules"
+      :names="names"
+      :seat="view.seat"
+      @close="explaining = false"
+    />
   </div>
 </template>
