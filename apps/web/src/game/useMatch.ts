@@ -19,7 +19,7 @@ import {
 import { BotClient } from './botClient'
 import { timeoutAction } from './keyboard'
 import { useSettings } from './settings'
-import { calloutFor, speakCallout } from './callout'
+import { calloutFor, calloutsDone, speakCallout } from './callout'
 import { playSound, soundFor } from './sound'
 
 /** The human is always player 0; their table seat changes between rounds. */
@@ -90,9 +90,8 @@ export function useMatch() {
       if (kind) playSound(kind)
     }
     if (voice.value) {
-      // Only the bots speak; the human makes their own calls.
       const call = calloutFor(prev ?? null, next ?? null)
-      if (call && call.seat !== humanSeat.value) speakCallout(call)
+      if (call) speakCallout(call)
     }
   })
   // Claim timer: counts down while the human may claim; on expiry it passes (only if legal).
@@ -137,6 +136,9 @@ export function useMatch() {
     const gen = generation
     try {
       while (gen === generation) {
+        // Let the last call finish before anyone moves on, as players would at a real table.
+        await calloutsDone()
+        if (gen !== generation) return
         const s = match.value.current
         if (!s || s.phase.kind === 'ended') return
         const me = seatOf(match.value, HUMAN_PLAYER)

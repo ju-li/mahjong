@@ -72,9 +72,18 @@ if (typeof speechSynthesis !== 'undefined') {
   })
 }
 
-/** Each seat gets a slightly different voice so you can tell the bots apart by ear. */
+/** Each seat gets a slightly different voice so you can tell the players apart by ear. */
 const PITCH = [1, 0.8, 1.2, 0.95] as const
 const RATE = [1.1, 1.05, 1.15, 1] as const
+/** Upper bound on waiting for one call, in case the browser never reports the end of speech. */
+const MAX_CALL_MS = 2500
+
+let lastCall: Promise<void> = Promise.resolve()
+
+/** Resolves once every callout spoken so far has finished. */
+export function calloutsDone(): Promise<void> {
+  return lastCall
+}
 
 /** Speak a callout. Silently does nothing where speech synthesis or a Chinese voice is unavailable. */
 export function speakCallout({ seat, text }: Callout): void {
@@ -82,13 +91,16 @@ export function speakCallout({ seat, text }: Callout): void {
   try {
     const v = chineseVoice(speechSynthesis)
     if (v === null) return // no Chinese voice: English voices would mangle the characters
-    // Drop stale calls rather than letting the table fall behind the speech.
-    if (speechSynthesis.pending) speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(text)
     u.lang = v?.lang ?? 'zh-CN'
     if (v) u.voice = v
     u.pitch = PITCH[seat]
     u.rate = RATE[seat]
+    // Utterances play in order, so the latest one ending means the table has gone quiet.
+    lastCall = new Promise((resolve) => {
+      u.onend = u.onerror = () => resolve()
+      setTimeout(resolve, MAX_CALL_MS)
+    })
     speechSynthesis.speak(u)
   } catch {
     // Speech is decoration; never let it break play.

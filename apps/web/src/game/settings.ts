@@ -55,7 +55,7 @@ const needsOnboarding = ref(read(STORAGE_KEY) === null)
 /** App-wide player preferences, persisted per browser. */
 const claimSeconds = ref<ClaimSeconds>(initial.claimSeconds)
 const sound = ref(initial.sound)
-/** Bots call out their moves (吃, 碰, 北风…) with speech synthesis. */
+/** Every player's moves are called out (吃, 碰, 北风…) with speech synthesis. */
 const voice = ref(initial.voice)
 const difficulty = ref<Difficulty>(initial.difficulty)
 /** Rule set for new matches; a match in progress keeps the rules it started with. */
