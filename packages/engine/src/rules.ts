@@ -1,5 +1,6 @@
 import { replaceFlowers } from './deal'
-import { scoreHand, type ScoringMeld, type WinContext } from './scoring'
+import { meetsMinimum, scoreHand, type ScoringMeld, type WinContext } from './scoring'
+import { settle } from './settle'
 import type { Action, ClaimWindow, GameState, HandScore, Meld, Seat } from './state'
 import { nextSeat, seatWind } from './state'
 import { kindIndex, sameKind, type Tile } from './tiles'
@@ -67,9 +68,10 @@ export function winContext(state: GameState, seat: Seat, tile: Tile, source: Win
   }
 }
 
-/** Score if `seat` may win on `tile`, else null. */
+/** Score if `seat` may win on `tile` (complete shape worth at least 8 fan before flowers), else null. */
 function evaluateWin(state: GameState, seat: Seat, tile: Tile, source: WinSource): HandScore | null {
-  return scoreHand(winContext(state, seat, tile, source))
+  const score = scoreHand(winContext(state, seat, tile, source))
+  return score && meetsMinimum(score) ? score : null
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +254,7 @@ function winOnTile(s: GameState, seat: Seat, tile: Tile, from: Seat): void {
   else takeDiscard(s, from, tile)
   s.hands[seat]!.push(tile)
   s.turn = seat
-  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from, tileId: tile.id, score, deltas: [0, 0, 0, 0] } }
+  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from, tileId: tile.id, score, deltas: settle({ winner: seat, from }, score) } }
 }
 
 function applyClaim(s: GameState, claim: Action, window: ClaimWindow): void {
@@ -310,7 +312,7 @@ function selfDrawWin(s: GameState, seat: Seat): void {
   const tile = s.hands[seat]!.find((t) => t.id === phase.drawnTileId)!
   const score = evaluateWin(s, seat, tile, 'selfDraw')
   if (!score) throw new Error('win accepted without a valid score')
-  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from: null, tileId: tile.id, score, deltas: [0, 0, 0, 0] } }
+  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from: null, tileId: tile.id, score, deltas: settle({ winner: seat, from: null }, score) } }
 }
 
 function doDraw(s: GameState, seat: Seat): void {
