@@ -645,3 +645,11 @@ button:focus-visible {
     max-width: 100%;
   }
 }
+
+.action--quiet-light {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--tile-edge);
+  min-width: 3.2em;
+  justify-content: center;
+}

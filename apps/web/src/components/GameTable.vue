@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { kindIndex, type Action, type PlayerView, type Seat, type Tile } from '@mahjong/engine'
+import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
 import TileFace from './TileFace.vue'
 
@@ -12,7 +13,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ act: [action: Action] }>()
 
-const WIND_NAME = { E: 'East', S: 'South', W: 'West', N: 'North' } as const
+const { t } = useI18n()
+const windName = (w: string) => t(`wind.${w}` as 'wind.E')
 
 /** Opponent seats by screen position; play passes counter-clockwise, so the next seat sits on the right. */
 const positions = computed(() => {
@@ -51,15 +53,15 @@ function discard(tile: Tile) {
 function actionLabel(a: Action): string {
   switch (a.type) {
     case 'win':
-      return 'Mahjong!'
+      return t('action.win')
     case 'pung':
-      return 'Pung'
+      return t('action.pung')
     case 'kong':
-      return a.tileIds && a.tileIds.length === 4 ? 'Concealed kong' : a.tileIds ? 'Add to kong' : 'Kong'
+      return a.tileIds && a.tileIds.length === 4 ? t('action.concealedKong') : a.tileIds ? t('action.addKong') : t('action.kong')
     case 'chow':
-      return 'Chow'
+      return t('action.chow')
     case 'pass':
-      return 'Pass'
+      return t('action.pass')
     default:
       return a.type
   }
@@ -72,20 +74,21 @@ function actionTiles(a: Action): Tile[] {
 }
 
 function seatLabel(seat: Seat): string {
-  const wind = WIND_NAME[props.view.seatWinds[seat] as keyof typeof WIND_NAME]
-  return `${props.names[seat]} · ${wind}${seat === props.view.dealer ? ' · dealer' : ''}`
+  const params = { name: props.names[seat]!, wind: windName(props.view.seatWinds[seat]!) }
+  return seat === props.view.dealer ? t('table.seatDealer', params) : t('table.seat', params)
 }
 
 const status = computed(() => {
   const p = phase.value
   const me = props.view.seat
   if (p.kind === 'ended') {
-    if (p.result.type === 'drawn') return 'Wall exhausted — drawn hand.'
-    return `${props.names[p.result.winner]} wins${p.result.from === null ? ' by self-draw' : ` on ${props.names[p.result.from]}'s discard`}.`
+    if (p.result.type === 'drawn') return t('status.drawn')
+    const name = props.names[p.result.winner]!
+    return p.result.from === null ? t('status.winSelf', { name }) : t('status.winDiscard', { name, from: props.names[p.result.from]! })
   }
-  if (p.kind === 'claim' || p.kind === 'robKong') return p.awaiting ? 'Claim this tile?' : 'Waiting for claims…'
-  if (props.view.turn === me) return p.kind === 'discard' ? 'Your turn — pick a tile to discard.' : 'Drawing…'
-  return `${props.names[props.view.turn]} to play…`
+  if (p.kind === 'claim' || p.kind === 'robKong') return p.awaiting ? t('status.claim') : t('status.waitingClaims')
+  if (props.view.turn === me) return p.kind === 'discard' ? t('status.yourDiscard') : t('status.drawing')
+  return t('status.toPlay', { name: props.names[props.view.turn]! })
 })
 </script>
 
@@ -109,12 +112,12 @@ const status = computed(() => {
 
     <section class="center">
       <div class="center__info">
-        <span>Prevailing {{ WIND_NAME[view.prevailingWind] }}</span>
-        <span>Wall {{ view.wallCount }}</span>
+        <span>{{ t('table.prevailing', { wind: windName(view.prevailingWind) }) }}</span>
+        <span>{{ t('table.wall', { n: view.wallCount }) }}</span>
       </div>
       <div class="ponds">
         <div v-for="seat in [positions.top, positions.left, positions.right, view.seat]" :key="seat" class="pond" :class="`pond--${seat === view.seat ? 'me' : seat === positions.top ? 'top' : seat === positions.left ? 'left' : 'right'}`">
-          <TileFace v-for="t in view.discards[seat]" :key="t.id" :kind="t.kind" size="sm" :highlight="t.id === lastDiscardId" />
+          <TileFace v-for="tile in view.discards[seat]" :key="tile.id" :kind="tile.kind" size="sm" :highlight="tile.id === lastDiscardId" />
         </div>
       </div>
     </section>
@@ -131,7 +134,7 @@ const status = computed(() => {
           @click="emit('act', a)"
         >
           {{ actionLabel(a) }}
-          <TileFace v-for="t in actionTiles(a)" :key="t.id" :kind="t.kind" size="sm" />
+          <TileFace v-for="tile in actionTiles(a)" :key="tile.id" :kind="tile.kind" size="sm" />
         </button>
       </div>
 
@@ -143,11 +146,11 @@ const status = computed(() => {
 
       <div class="hand">
         <TileFace
-          v-for="t in handTiles.main"
-          :key="t.id"
-          :kind="t.kind"
-          :selectable="discardIds.has(t.id)"
-          @select="discard(t)"
+          v-for="tile in handTiles.main"
+          :key="tile.id"
+          :kind="tile.kind"
+          :selectable="discardIds.has(tile.id)"
+          @select="discard(tile)"
         />
         <span v-if="handTiles.drawn" class="hand__gap" />
         <TileFace

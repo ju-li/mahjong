@@ -125,7 +125,7 @@ T24|x|source ≥ 20 scored MCR example hands (official rulebook / WMO / reputabl
 T25|x|V1 enforcement test: scan engine src for browser/Node globals (web vitest, `import.meta.glob` raw); rename `window` locals in `rules.ts`|V1,V33
 T26|x|engine official re-seating: `Match.seating`, `seatOf`, `playerAt`; scores per player; UI maps human by player not seat|V27,V13,V23,I.api
 T27|x|test last-discard rule explicitly (claims ⊆ win/pass when wall empty)|V28
-T28|.|i18n: `en` + `zh-Hans` dictionaries, toggle, persistence, locale default; engine fan table gains zh descriptions; key-parity test|V29,I.ui
+T28|x|i18n: `en` + `zh-Hans` dictionaries, toggle, persistence, locale default; engine fan table gains zh descriptions; key-parity test|V29,I.ui
 T29|.|fan reference page (81 fans, points, description, exclusions, bilingual), linked from result dialog|V29,I.ui
 T30|.|claim timer (setting, auto-pass) + keyboard play (tile focus/arrow keys, action shortcuts)|V31,V32,I.ui
 T31|.|tile animations + sound effects, toggle, reduced-motion respected|I.ui

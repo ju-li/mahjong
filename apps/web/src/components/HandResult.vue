@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { kindIndex, type HandResult, type PlayerView } from '@mahjong/engine'
+import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
 import TileFace from './TileFace.vue'
 
@@ -14,11 +15,14 @@ const props = defineProps<{
 
 defineEmits<{ next: []; newMatch: [] }>()
 
+const { t, fanName } = useI18n()
+
 const title = computed(() => {
   const r = props.result
-  if (r.type === 'drawn') return 'Drawn hand'
-  const who = r.winner === props.view.seat ? 'You win' : `${props.names[r.winner]} wins`
-  return r.from === null ? `${who} by self-draw` : `${who} on ${r.from === props.view.seat ? 'your' : `${props.names[r.from]}'s`} discard`
+  if (r.type === 'drawn') return t('result.drawn')
+  const who = r.winner === props.view.seat ? t('result.youWin') : t('result.theyWin', { name: props.names[r.winner]! })
+  if (r.from === null) return t('result.bySelfDraw', { who })
+  return r.from === props.view.seat ? t('result.onYourDiscard', { who }) : t('result.onDiscard', { who, from: props.names[r.from]! })
 })
 
 const winningTiles = computed(() => {
@@ -44,20 +48,20 @@ const standings = computed(() =>
         <div class="result__hand">
           <MeldGroup v-for="(m, i) in view.melds[result.winner]" :key="i" :meld="m" />
           <span class="result__concealed">
-            <TileFace v-for="t in winningTiles" :key="t.id" :kind="t.kind" size="sm" :highlight="t.id === winTileId" />
+            <TileFace v-for="tile in winningTiles" :key="tile.id" :kind="tile.kind" size="sm" :highlight="tile.id === winTileId" />
           </span>
         </div>
 
         <table class="result__fans">
           <tbody>
             <tr v-for="f in result.score.fans" :key="f.id">
-              <td>{{ f.name }}<span v-if="f.count > 1"> ×{{ f.count }}</span></td>
+              <td>{{ fanName(f.id) }}<span v-if="f.count > 1"> ×{{ f.count }}</span></td>
               <td class="num">{{ f.points * f.count }}</td>
             </tr>
           </tbody>
           <tfoot>
             <tr>
-              <th>Total fan</th>
+              <th>{{ t('result.totalFan') }}</th>
               <th class="num">{{ result.score.total }}</th>
             </tr>
           </tfoot>
@@ -70,18 +74,18 @@ const standings = computed(() =>
           </li>
         </ul>
       </template>
-      <p v-else class="result__note">The wall ran out. No points change hands.</p>
+      <p v-else class="result__note">{{ t('result.noPoints') }}</p>
 
       <template v-if="matchOver">
-        <h3>Final standings</h3>
+        <h3>{{ t('result.finalStandings') }}</h3>
         <ol class="result__standings">
           <li v-for="s in standings" :key="s.seat" :class="{ 'is-me': s.seat === view.seat }">
             <span>{{ s.name }}</span><strong>{{ s.score }}</strong>
           </li>
         </ol>
-        <button class="action action--primary" @click="$emit('newMatch')">New match</button>
+        <button class="action action--primary" @click="$emit('newMatch')">{{ t('result.newMatch') }}</button>
       </template>
-      <button v-else class="action action--primary" autofocus @click="$emit('next')">Next hand</button>
+      <button v-else class="action action--primary" autofocus @click="$emit('next')">{{ t('result.nextHand') }}</button>
     </div>
   </div>
 </template>

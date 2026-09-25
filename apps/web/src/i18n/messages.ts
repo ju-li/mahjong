@@ -1,0 +1,161 @@
+/**
+ * UI strings. Both dictionaries must have exactly the same keys (checked by a test).
+ * `{name}` placeholders are filled by `t(key, { name })`.
+ */
+export const en = {
+  'app.title': 'Mahjong',
+  'app.subtitle': 'MCR',
+  'app.bots': 'Bots',
+  'app.botDifficulty': 'Bot difficulty',
+  'app.newMatch': 'New match',
+  'app.confirmNewMatch': 'Abandon this match and start a new one?',
+  'app.matchFinished': 'Match finished',
+  'app.language': 'Language',
+  'app.switchLanguage': '中文',
+  'app.fanReference': 'Fan list',
+  'app.settings': 'Settings',
+
+  'level.easy': 'Easy',
+  'level.medium': 'Medium',
+  'level.hard': 'Hard',
+
+  'player.you': 'You',
+  'player.bot': 'Bot {n}',
+
+  'wind.E': 'East',
+  'wind.S': 'South',
+  'wind.W': 'West',
+  'wind.N': 'North',
+
+  'score.hand': 'Hand {n} / {total}',
+  'score.dealer': 'dealer',
+  'score.scores': 'Scores',
+
+  'table.prevailing': 'Prevailing {wind}',
+  'table.wall': 'Wall {n}',
+  'table.seat': '{name} · {wind}',
+  'table.seatDealer': '{name} · {wind} · dealer',
+
+  'status.drawn': 'Wall exhausted — drawn hand.',
+  'status.winSelf': '{name} wins by self-draw.',
+  'status.winDiscard': "{name} wins on {from}'s discard.",
+  'status.claim': 'Claim this tile?',
+  'status.waitingClaims': 'Waiting for claims…',
+  'status.yourDiscard': 'Your turn — pick a tile to discard.',
+  'status.drawing': 'Drawing…',
+  'status.toPlay': '{name} to play…',
+
+  'action.win': 'Mahjong!',
+  'action.pung': 'Pung',
+  'action.kong': 'Kong',
+  'action.concealedKong': 'Concealed kong',
+  'action.addKong': 'Add to kong',
+  'action.chow': 'Chow',
+  'action.pass': 'Pass',
+
+  'result.drawn': 'Drawn hand',
+  'result.youWin': 'You win',
+  'result.theyWin': '{name} wins',
+  'result.bySelfDraw': '{who} by self-draw',
+  'result.onYourDiscard': '{who} on your discard',
+  'result.onDiscard': "{who} on {from}'s discard",
+  'result.totalFan': 'Total fan',
+  'result.noPoints': 'The wall ran out. No points change hands.',
+  'result.finalStandings': 'Final standings',
+  'result.nextHand': 'Next hand',
+  'result.newMatch': 'New match',
+
+  'tile.faceDown': 'face-down tile',
+  'tile.suited': '{rank} {suit}',
+  'tile.characters': 'characters',
+  'tile.dots': 'dots',
+  'tile.bamboo': 'bamboo',
+  'tile.wind': '{wind} wind',
+  'tile.dragon.red': 'red dragon',
+  'tile.dragon.green': 'green dragon',
+  'tile.dragon.white': 'white dragon',
+  'tile.flower': 'flower {n}',
+  'tile.season': 'season {n}',
+}
+
+export type MessageKey = keyof typeof en
+
+export const zhHans: Record<MessageKey, string> = {
+  'app.title': '麻将',
+  'app.subtitle': '国标',
+  'app.bots': '电脑',
+  'app.botDifficulty': '电脑难度',
+  'app.newMatch': '新比赛',
+  'app.confirmNewMatch': '放弃当前比赛并开始新比赛？',
+  'app.matchFinished': '比赛结束',
+  'app.language': '语言',
+  'app.switchLanguage': 'EN',
+  'app.fanReference': '番种表',
+  'app.settings': '设置',
+
+  'level.easy': '简单',
+  'level.medium': '中等',
+  'level.hard': '困难',
+
+  'player.you': '你',
+  'player.bot': '电脑 {n}',
+
+  'wind.E': '东',
+  'wind.S': '南',
+  'wind.W': '西',
+  'wind.N': '北',
+
+  'score.hand': '第 {n} / {total} 盘',
+  'score.dealer': '庄',
+  'score.scores': '得分',
+
+  'table.prevailing': '{wind}风圈',
+  'table.wall': '牌墙 {n}',
+  'table.seat': '{name} · {wind}',
+  'table.seatDealer': '{name} · {wind} · 庄',
+
+  'status.drawn': '牌墙摸完，荒庄。',
+  'status.winSelf': '{name}自摸和牌。',
+  'status.winDiscard': '{name}和{from}打出的牌。',
+  'status.claim': '要这张牌吗？',
+  'status.waitingClaims': '等待其他玩家…',
+  'status.yourDiscard': '轮到你了，请选择要打出的牌。',
+  'status.drawing': '摸牌中…',
+  'status.toPlay': '{name}出牌中…',
+
+  'action.win': '和！',
+  'action.pung': '碰',
+  'action.kong': '杠',
+  'action.concealedKong': '暗杠',
+  'action.addKong': '加杠',
+  'action.chow': '吃',
+  'action.pass': '过',
+
+  'result.drawn': '荒庄',
+  'result.youWin': '你和牌了',
+  'result.theyWin': '{name}和牌',
+  'result.bySelfDraw': '{who}（自摸）',
+  'result.onYourDiscard': '{who}（你点和）',
+  'result.onDiscard': '{who}（{from}点和）',
+  'result.totalFan': '合计番数',
+  'result.noPoints': '牌墙摸完，本盘不计分。',
+  'result.finalStandings': '最终排名',
+  'result.nextHand': '下一盘',
+  'result.newMatch': '新比赛',
+
+  'tile.faceDown': '背面朝上的牌',
+  'tile.suited': '{rank}{suit}',
+  'tile.characters': '万',
+  'tile.dots': '饼',
+  'tile.bamboo': '条',
+  'tile.wind': '{wind}风',
+  'tile.dragon.red': '红中',
+  'tile.dragon.green': '发财',
+  'tile.dragon.white': '白板',
+  'tile.flower': '花 {n}',
+  'tile.season': '季 {n}',
+}
+
+export const MESSAGES = { en, 'zh-Hans': zhHans } as const
+export type Locale = keyof typeof MESSAGES
+export const LOCALES: Locale[] = ['en', 'zh-Hans']

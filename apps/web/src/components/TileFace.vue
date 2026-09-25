@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { TileKind } from '@mahjong/engine'
+import { useI18n } from '../i18n/useI18n'
 
 const props = defineProps<{
   kind?: TileKind | null
@@ -38,18 +39,20 @@ const face = computed(() => {
   }
 })
 
+const { t } = useI18n()
+
 const label = computed(() => {
   const k = props.kind
-  if (!k || props.back) return 'face-down tile'
+  if (!k || props.back) return t('tile.faceDown')
   switch (k.suit) {
     case 'winds':
-      return `${k.wind} wind`
+      return t('tile.wind', { wind: t(`wind.${k.wind}`) })
     case 'dragons':
-      return `${k.dragon} dragon`
+      return t(`tile.dragon.${k.dragon}`)
     case 'flowers':
-      return `flower ${k.flower}`
+      return k.flower <= 4 ? t('tile.flower', { n: k.flower }) : t('tile.season', { n: k.flower - 4 })
     default:
-      return `${k.rank} ${k.suit}`
+      return t('tile.suited', { rank: k.rank, suit: t(`tile.${k.suit}`) })
   }
 })
 </script>
