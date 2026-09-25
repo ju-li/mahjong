@@ -7,7 +7,7 @@ import GameTable from './components/GameTable.vue'
 import HandResult from './components/HandResult.vue'
 import RulesReference from './components/RulesReference.vue'
 import { avatarSeeds, avatarSvg } from './game/avatar'
-import { CLAIM_TIMER_OPTIONS, useSettings } from './game/settings'
+import { CLAIM_TIMER_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useI18n } from './i18n/useI18n'
 
@@ -29,7 +29,7 @@ const RULE_OPTIONS = [
   { id: 'taiwan', playable: false },
 ] as const
 
-const { claimSeconds, sound } = useSettings()
+const { claimSeconds, sound, textSize } = useSettings()
 const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, rules, act, continueToNextHand, startNewMatch } = useMatch()
 
 const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.phase.result : null))
@@ -104,6 +104,12 @@ function changeRules(e: Event) {
               <span>{{ t('app.claimTimer') }}</span>
               <select v-model.number="claimSeconds" :aria-label="t('app.claimTimer')">
                 <option v-for="s in CLAIM_TIMER_OPTIONS" :key="s" :value="s">{{ s === 0 ? t('timer.off') : t('timer.seconds', { n: s }) }}</option>
+              </select>
+            </label>
+            <label class="select">
+              <span>{{ t('app.textSize') }}</span>
+              <select v-model="textSize" :aria-label="t('app.textSize')">
+                <option v-for="s in TEXT_SIZE_OPTIONS" :key="s" :value="s">{{ t(`textSize.${s}`) }}</option>
               </select>
             </label>
             <label class="select toggle">

@@ -29,10 +29,27 @@
   --tile-xs-w: clamp(12px, calc(min(100vw, 1240px) * 0.017), 22px);
   --tile-sm-h: calc(var(--tile-sm-w) * 1.36);
 
+  /* Type scale. Every text size in the app is one of these; all are in rem, so the
+     Text size setting (which changes the root size below) scales them together.
+     Nothing goes below --fs-xs: the game is meant to be easy to read. */
+  --fs-xs: 0.875rem; /* tags, key hints, names under the avatars */
+  --fs-sm: 1rem; /* secondary text: notes, labels, status line */
+  --fs-md: 1.125rem; /* body text and buttons */
+  --fs-lg: 1.375rem; /* emphasis: scores, claim buttons, headings */
+  --fs-xl: 1.75rem; /* dialog titles */
+
   font: 16px/1.4 system-ui, 'Segoe UI', Roboto, 'PingFang SC', 'Noto Sans CJK SC', sans-serif;
   color: var(--text);
   background: var(--bg);
   color-scheme: light dark;
+}
+
+:root[data-text-size='large'] {
+  font-size: 19px;
+}
+
+:root[data-text-size='larger'] {
+  font-size: 22px;
 }
 
 @media (max-width: 640px) {
@@ -76,6 +93,7 @@ body {
 }
 
 .app {
+  font-size: var(--fs-md);
   max-width: 1240px;
   margin: 0 auto;
   padding: 12px 16px 24px;
@@ -91,7 +109,7 @@ body {
 
 .topbar h1 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--fs-lg);
 }
 
 .topbar small {
@@ -163,7 +181,7 @@ body {
   padding: 6px 10px;
   border-radius: 10px;
   background: rgb(0 0 0 / 0.22);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--felt-text);
   white-space: nowrap;
@@ -287,6 +305,8 @@ body {
   animation: glow 1.4s ease-in-out infinite;
 }
 
+/* The wind and dealer markers and the compass letters are part of the table art and
+   scale with it (vw), not with the type scale. */
 .badge__wind {
   position: absolute;
   left: -6px;
@@ -299,7 +319,7 @@ body {
   background: #1c2b28;
   border: 2px solid #fff;
   color: #fff;
-  font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+  font-size: clamp(11px, 1.2vw, 14px);
   font-weight: 800;
 }
 
@@ -312,7 +332,7 @@ body {
   place-items: center;
   width: 1.9em;
   height: 1.9em;
-  font-size: clamp(0.65rem, 1.1vw, 0.85rem);
+  font-size: clamp(10px, 1.1vw, 14px);
   font-weight: 800;
   color: #c0282d;
   background: #ffd23a;
@@ -328,7 +348,7 @@ body {
 }
 
 .badge__name {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--felt-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -337,7 +357,7 @@ body {
 }
 
 .badge__score {
-  font-size: clamp(0.95rem, 1.8vw, 1.35rem);
+  font-size: var(--fs-md);
   font-variant-numeric: tabular-nums;
   color: #fff;
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
@@ -531,7 +551,7 @@ body {
 
 .compass__wind {
   position: absolute;
-  font-size: clamp(0.7rem, 1.3vw, 1rem);
+  font-size: clamp(11px, 1.3vw, 16px);
   font-weight: 800;
   color: rgb(255 255 255 / 0.55);
   transition: color 0.2s ease, text-shadow 0.2s ease;
@@ -568,7 +588,7 @@ body {
   box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9), 0 3px 8px rgb(0 0 0 / 0.4);
   color: #fff;
   font-weight: 800;
-  font-size: clamp(0.8rem, 1.7vw, 1.25rem);
+  font-size: clamp(13px, 1.7vw, 20px);
   font-variant-numeric: tabular-nums;
 }
 
@@ -624,7 +644,7 @@ body {
   padding: 3px 14px;
   border-radius: 999px;
   background: rgb(0 0 0 / 0.28);
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   min-height: 1.4em;
   text-align: center;
@@ -643,6 +663,32 @@ body {
   width: calc(var(--tile-w) * 0.35);
 }
 
+/* ---- Buttons ---- */
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--tile-edge);
+  background: var(--button);
+  color: var(--button-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.action:hover {
+  filter: brightness(1.05);
+}
+
+.action--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1d2521;
+}
+
 /* ---- Claim buttons ---- */
 
 .actions {
@@ -657,7 +703,7 @@ body {
   padding: 10px 18px;
   border: 2px solid rgb(255 255 255 / 0.85);
   color: #fff;
-  font-size: 1.05rem;
+  font-size: var(--fs-lg);
   text-shadow: 0 1px 1px rgb(0 0 0 / 0.35);
   box-shadow: 0 4px 0 rgb(0 0 0 / 0.25), 0 6px 14px rgb(0 0 0 / 0.3);
   transition: transform 0.1s ease;
@@ -861,9 +907,9 @@ body {
     padding-top: 4px;
   }
 
+  /* Clear the avatar and the name/score beside it, whatever the text size. */
   .status {
-    margin-left: 56px;
-    font-size: 0.78rem;
+    margin-left: calc(var(--avatar) + 2.75em);
   }
 
   .action--claim {
@@ -883,7 +929,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
   color: var(--muted);
 }
 
@@ -941,6 +987,11 @@ body {
 
 .menu__panel .select {
   justify-content: space-between;
+}
+
+.menu__panel select {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ---- Switch ---- */
@@ -1035,6 +1086,14 @@ body {
   margin: 0;
 }
 
+.result__card h2:not(.summary__banner) {
+  font-size: var(--fs-xl);
+}
+
+.result__card h3 {
+  font-size: var(--fs-md);
+}
+
 .result__note {
   margin: 0;
   color: var(--muted);
@@ -1103,7 +1162,7 @@ body {
 
 .summary__headline {
   margin: 0;
-  font-size: clamp(1.05rem, 2.6vw, 1.45rem);
+  font-size: var(--fs-lg);
   font-weight: 700;
   text-wrap: balance;
   display: flex;
@@ -1112,7 +1171,7 @@ body {
 }
 
 .summary__headline small {
-  font-size: 0.8em;
+  font-size: var(--fs-md);
   font-weight: 400;
   color: var(--felt-muted);
 }
@@ -1159,7 +1218,7 @@ body {
   transform: translateX(-50%);
   padding: 2px 7px;
   border-radius: 6px;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   white-space: nowrap;
   color: var(--ink);
@@ -1175,7 +1234,7 @@ body {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: clamp(0.95rem, 2.2vw, 1.2rem);
+  font-size: var(--fs-md);
 }
 
 .summary__fans li {
@@ -1190,7 +1249,7 @@ body {
 
 .summary__times {
   color: var(--felt-muted);
-  font-size: 0.85em;
+  font-size: var(--fs-sm);
 }
 
 .summary__totals {
@@ -1209,7 +1268,7 @@ body {
   background: transparent;
   color: var(--felt-text);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
   cursor: pointer;
 }
 
@@ -1242,7 +1301,7 @@ body {
 }
 
 .explain h3 {
-  font-size: 1rem;
+  font-size: var(--fs-md);
 }
 
 .explain p {
@@ -1252,7 +1311,7 @@ body {
 
 .explain__muted {
   color: var(--muted);
-  font-size: 0.9em;
+  font-size: var(--fs-sm);
 }
 
 .explain__table {
@@ -1286,10 +1345,6 @@ body {
   color: var(--red);
 }
 
-.explain__table tbody td:first-child {
-  white-space: nowrap;
-}
-
 .explain__table tr.is-me td:first-child {
   font-weight: 700;
 }
@@ -1311,7 +1366,7 @@ body {
   border-radius: 6px;
   border: 1px solid var(--tile-edge);
   text-align: center;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .explain__scale li span {
@@ -1327,7 +1382,7 @@ body {
   margin: 0;
   padding: 3px 14px;
   border-radius: 999px;
-  font-size: clamp(0.95rem, 2.2vw, 1.15rem);
+  font-size: var(--fs-md);
   color: var(--accent);
   background: rgb(242 182 50 / 0.12);
 }
@@ -1382,12 +1437,12 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   color: var(--felt-muted);
 }
 
 .summary__delta {
-  font-size: 1.2rem;
+  font-size: var(--fs-lg);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1401,7 +1456,7 @@ body {
 
 .summary__running {
   grid-column: 2;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--felt-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -1431,7 +1486,7 @@ body {
   padding: 12px 34px;
   border-radius: 999px;
   border: 2px solid #fff6a8;
-  font-size: 1.15rem;
+  font-size: var(--fs-lg);
   font-weight: 800;
   letter-spacing: 0.06em;
   color: #5a3a06;
@@ -1467,7 +1522,25 @@ body {
 
 @media (max-width: 640px) {
   .topbar h1 {
-    font-size: 1.05rem;
+    font-size: var(--fs-md);
+  }
+
+  .topbar {
+    position: relative;
+  }
+
+  .menu {
+    position: static;
+  }
+
+  .menu__panel {
+    left: 0;
+    right: 0;
+    top: calc(100% + 2px);
+  }
+
+  .result__card h2:not(.summary__banner) {
+    font-size: var(--fs-lg);
   }
 
   .topbar__controls > .select span {
@@ -1522,7 +1595,7 @@ body {
 
 .fans__group h3 {
   margin: 8px 0 4px;
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--muted);
 }
 
@@ -1548,6 +1621,7 @@ body {
 }
 
 .fans__item dt small {
+  font-size: var(--fs-sm);
   font-weight: 400;
   color: var(--muted);
   margin-left: 6px;
@@ -1561,13 +1635,13 @@ body {
 
 .fans__excludes,
 .fans__extra {
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   color: var(--muted);
 }
 
 .guide__section h3 {
   margin: 8px 0 4px;
-  font-size: 1rem;
+  font-size: var(--fs-md);
 }
 
 .guide__section p {
@@ -1602,7 +1676,7 @@ body {
 }
 
 .action kbd {
-  font: 600 0.72rem/1 var(--mono, ui-monospace, monospace);
+  font: 600 var(--fs-xs)/1 var(--mono, ui-monospace, monospace);
   padding: 2px 5px;
   border-radius: 4px;
   border: 1px solid currentColor;
@@ -1611,7 +1685,7 @@ body {
 
 .keys-help {
   margin: 8px 0 0;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   color: var(--muted);
   text-align: center;
 }
