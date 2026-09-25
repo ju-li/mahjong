@@ -1,5 +1,5 @@
-import type { Action, GameState, Seat } from './state'
-import { isFlower } from './tiles'
+import type { Action, GameState, Meld, Seat } from './state'
+import { createWall, isFlower, kindIndex, type Tile } from './tiles'
 import { mulberry32 } from './rng'
 import { applyAction, legalActions } from './rules'
 import { newHand } from './deal'
@@ -72,4 +72,83 @@ export function deepFreeze<T>(value: T): T {
     for (const v of Object.values(value)) deepFreeze(v)
   }
   return value
+}
+
+/**
+ * Parse compact tile notation into kind indices: `123m 456p 789s` (characters/dots/bamboo),
+ * winds `E S W N`, dragons `C` (red) `F` (green) `P` (white). Whitespace ignored.
+ */
+export function parseKinds(notation: string): number[] {
+  const out: number[] = []
+  let digits: number[] = []
+  const honors: Record<string, number> = { E: 27, S: 28, W: 29, N: 30, C: 31, F: 32, P: 33 }
+  for (const ch of notation.replace(/\s+/g, '')) {
+    if (ch >= '1' && ch <= '9') digits.push(Number(ch))
+    else if (ch === 'm' || ch === 'p' || ch === 's') {
+      const base = ch === 'm' ? 0 : ch === 'p' ? 9 : 18
+      out.push(...digits.map((d) => base + d - 1))
+      digits = []
+    } else if (ch in honors) out.push(honors[ch]!)
+    else throw new Error(`bad tile notation: ${ch}`)
+  }
+  if (digits.length) throw new Error('digits without suit')
+  return out
+}
+
+export type BuildOptions = {
+  hands: string[]
+  melds?: { seat: Seat; type: 'chow' | 'pung' | 'kong'; tiles: string; exposed?: boolean }[]
+  discards?: string[]
+  /** Tiles at the front of the wall, drawn first. */
+  wallFront?: string
+  /** Tiles at the back of the wall, used for replacement draws (last listed = first drawn). */
+  wallBack?: string
+  /** Leave only this many tiles in the wall (front + back kept). */
+  wallSize?: number
+  dealer?: Seat
+  turn?: Seat
+  phase?: GameState['phase']
+}
+
+/** Build an arbitrary but conserving state: listed tiles are taken from the 144-tile set, the rest fill the wall. */
+export function buildState(o: BuildOptions): GameState {
+  const pool = createWall()
+  const take = (index: number) => {
+    const at = pool.findIndex((t) => kindIndex(t.kind) === index)
+    if (at < 0) throw new Error(`no tile left for kind ${index}`)
+    return pool.splice(at, 1)[0]!
+  }
+  const takeAll = (notation: string) => parseKinds(notation).map(take)
+  const hands = o.hands.map(takeAll)
+  const melds: Meld[][] = [[], [], [], []]
+  for (const m of o.melds ?? []) {
+    melds[m.seat]!.push({ type: m.type, tiles: takeAll(m.tiles), exposed: m.exposed ?? true })
+  }
+  const discards = (o.discards ?? ['', '', '', '']).map(takeAll)
+  const front = takeAll(o.wallFront ?? '')
+  const back = takeAll(o.wallBack ?? '')
+  const flowers = pool.filter((t) => isFlower(t.kind))
+  const rest = pool.filter((t) => !isFlower(t.kind))
+  const flowerSink: Tile[][] = [[], [], [], []]
+  let middle = [...rest, ...flowers]
+  if (o.wallSize !== undefined) {
+    const keep = Math.max(0, o.wallSize - front.length - back.length)
+    // Move surplus tiles into seat 3's discards so every tile stays accounted for.
+    const surplus = middle.slice(keep)
+    middle = middle.slice(0, keep)
+    for (const t of surplus) (isFlower(t.kind) ? flowerSink[3]! : discards[3]!).push(t)
+  }
+  while (hands.length < 4) hands.push([])
+  return {
+    seed: 0,
+    dealer: o.dealer ?? 0,
+    prevailingWind: 'E',
+    wall: [...front, ...middle, ...back],
+    hands,
+    melds,
+    discards,
+    flowers: flowerSink,
+    turn: o.turn ?? 0,
+    phase: o.phase ?? { kind: 'discard', drawnTileId: null, afterKong: false },
+  }
 }

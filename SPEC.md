@@ -87,7 +87,7 @@ T8|x|verify: `pnpm test`, `pnpm typecheck`, `pnpm build` exit 0; `apps/web/dist`
 T9|x|rm `apps/web/railway.json` (dead: service can't use Config as Code)|I.deploy
 T10|x|engine state types: `Seat`, `Meld`, `GameState`, `Action`; `newHand` deal + flower replacement|V12,V13,V19,V20,I.api
 T11|x|engine turn loop: `legalActions` + `applyAction` for draw, discard, pass, wall exhaustion. win stub = never legal|V12,V13,V14,V15,V19
-T12|.|engine claims: chow/pung/exposed kong on discard, concealed & promoted kong, replacement draw, claim window & priority|V12,V15,V17,V18,V19,V20
+T12|x|engine claims: chow/pung/exposed kong on discard, concealed & promoted kong, replacement draw, claim window & priority|V12,V15,V17,V18,V19,V20
 T13|.|engine `viewFor` + `replay`; property test: random legal play ∀ 200 seeds keeps V12, V19, V20|V12,V13,V16,V19,V20
 T14|.|worker protocol → `{ view, legal, difficulty, seed }` → `{ action }`; placeholder bot = seeded random legal action|V25,V26,I.worker
 T15|.|UI playable slice: table, own hand, click-to-discard, claim buttons from `legalActions`, bots via worker, hand ends on exhaustion|V26,I.ui
