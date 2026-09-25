@@ -103,9 +103,20 @@ function changeRules(e: Event) {
                 <option v-for="s in CLAIM_TIMER_OPTIONS" :key="s" :value="s">{{ s === 0 ? t('timer.off') : t('timer.seconds', { n: s }) }}</option>
               </select>
             </label>
-            <button class="action action--quiet-light" :aria-pressed="sound" @click="sound = !sound">
-              {{ sound ? t('app.soundOn') : t('app.soundOff') }}
-            </button>
+            <label class="select toggle">
+              <span class="toggle__label">
+                <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
+                  <template v-if="sound">
+                    <path d="M16 9a4 4 0 0 1 0 6" />
+                    <path d="M18.5 6.5a7.5 7.5 0 0 1 0 11" />
+                  </template>
+                  <path v-else d="M16 9l5 6M21 9l-5 6" />
+                </svg>
+                {{ t('app.sound') }}
+              </span>
+              <input v-model="sound" class="toggle__input" type="checkbox" role="switch" />
+            </label>
             <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle">{{ t('app.switchLanguage') }}</button>
           </div>
         </details>
