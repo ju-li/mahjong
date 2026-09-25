@@ -179,55 +179,103 @@ export function isComplete(counts: readonly number[], meldCount = 0): boolean {
 // Shanten
 // ---------------------------------------------------------------------------
 
-/** Standard-form shanten for `need` sets + pair. −1 = complete. */
-function standardShanten(counts: readonly number[], need: number): number {
-  const work = [...counts]
-  let best = 2 * need
+/** (sets, partials, pair-as-head) combinations one suit (or the honors) can form. Cached by content. */
+type BlockCount = [sets: number, partials: number, pair: number]
+const groupCache = new Map<string, BlockCount[]>()
 
-  const search = (i: number, sets: number, partials: number, pair: number): void => {
-    while (i < KIND_COUNT && work[i] === 0) i++
-    if (i >= KIND_COUNT) {
-      const usable = Math.min(partials, need - sets)
-      best = Math.min(best, 2 * (need - sets) - usable - pair)
+function groupOptions(counts: readonly number[], from: number, length: number, sequences: boolean): BlockCount[] {
+  const work = counts.slice(from, from + length)
+  const key = (sequences ? 's' : 'h') + work.join('')
+  const cached = groupCache.get(key)
+  if (cached) return cached
+
+  const found = new Set<string>()
+  const out: BlockCount[] = []
+  const search = (i: number, m: number, t: number, p: number): void => {
+    while (i < length && work[i] === 0) i++
+    if (i >= length) {
+      const k = `${m},${t},${p}`
+      if (!found.has(k)) {
+        found.add(k)
+        out.push([m, t, p])
+      }
       return
     }
-    if (sets < need) {
-      if (work[i]! >= 3) {
-        work[i]! -= 3
-        search(i, sets + 1, partials, pair)
-        work[i]! += 3
-      }
-      if (i < 27 && i % 9 <= 6 && work[i + 1]! > 0 && work[i + 2]! > 0) {
-        work[i]!--, work[i + 1]!--, work[i + 2]!--
-        search(i, sets + 1, partials, pair)
-        work[i]!++, work[i + 1]!++, work[i + 2]!++
-      }
+    if (work[i]! >= 3) {
+      work[i]! -= 3
+      search(i, m + 1, t, p)
+      work[i]! += 3
+    }
+    if (sequences && i <= 6 && work[i + 1]! > 0 && work[i + 2]! > 0) {
+      work[i]!--, work[i + 1]!--, work[i + 2]!--
+      search(i, m + 1, t, p)
+      work[i]!++, work[i + 1]!++, work[i + 2]!++
     }
     if (work[i]! >= 2) {
       work[i]! -= 2
-      if (!pair) search(i, sets, partials, 1)
-      if (sets + partials < need) search(i, sets, partials + 1, pair)
+      if (!p) search(i, m, t, 1)
+      search(i, m, t + 1, p)
       work[i]! += 2
     }
-    if (sets + partials < need && i < 27) {
-      if (i % 9 <= 7 && work[i + 1]! > 0) {
+    if (sequences) {
+      if (i <= 7 && work[i + 1]! > 0) {
         work[i]!--, work[i + 1]!--
-        search(i, sets, partials + 1, pair)
+        search(i, m, t + 1, p)
         work[i]!++, work[i + 1]!++
       }
-      if (i % 9 <= 6 && work[i + 2]! > 0) {
+      if (i <= 6 && work[i + 2]! > 0) {
         work[i]!--, work[i + 2]!--
-        search(i, sets, partials + 1, pair)
+        search(i, m, t + 1, p)
         work[i]!++, work[i + 2]!++
       }
     }
     // Treat one copy as an isolated tile.
     work[i]!--
-    search(i, sets, partials, pair)
+    search(i, m, t, p)
     work[i]!++
   }
-
   search(0, 0, 0, 0)
+  if (groupCache.size > 50_000) groupCache.clear()
+  groupCache.set(key, out)
+  return out
+}
+
+/**
+ * Standard-form shanten for `need` sets + pair (−1 = complete): 2·need − 2·sets − partials − pair,
+ * with sets + partials capped at `need`. Each suit and the honors are solved separately, then
+ * combined over a small capped state table.
+ */
+export function standardShanten(counts: readonly number[], need: number): number {
+  const groups = [
+    groupOptions(counts, 0, 9, true),
+    groupOptions(counts, 9, 9, true),
+    groupOptions(counts, 18, 9, true),
+    groupOptions(counts, 27, 7, false),
+  ]
+  // States as m*20 + t*2 + p with m, t ≤ need and p ≤ 1.
+  let states = new Set<number>([0])
+  for (const options of groups) {
+    const next = new Set<number>()
+    for (const st of states) {
+      const m0 = Math.floor(st / 20)
+      const t0 = Math.floor((st % 20) / 2)
+      const p0 = st % 2
+      for (const [m, t, p] of options) {
+        if (p0 + p > 1) continue
+        const mm = Math.min(need, m0 + m)
+        const tt = Math.min(need - mm, t0 + t)
+        next.add(mm * 20 + tt * 2 + p0 + p)
+      }
+    }
+    states = next
+  }
+  let best = 2 * need
+  for (const st of states) {
+    const m = Math.floor(st / 20)
+    const t = Math.floor((st % 20) / 2)
+    const p = st % 2
+    best = Math.min(best, 2 * need - 2 * m - Math.min(t, need - m) - p)
+  }
   return best
 }
 

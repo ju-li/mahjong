@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countsOf, createWall, decompose, isFlower, kindIndex, mulberry32, shanten, shuffle, waitingKinds } from './index'
+import { countsOf, createWall, decompose, isFlower, kindIndex, mulberry32, shanten, shuffle, standardShanten, waitingKinds } from './index'
 import { parseKinds } from './testing'
 
 const sh = (n: string, melds = 0) => shanten(parseKinds(n), melds)
@@ -114,5 +114,71 @@ describe('shanten input checks', () => {
   it('rejects impossible tile counts', () => {
     expect(() => sh('147p 258s 36m ESWNCFP')).toThrow(RangeError)
     expect(() => sh('123m 456m 789m 123p')).toThrow(RangeError)
+  })
+})
+
+/** The original whole-hand search, kept as an oracle for the per-suit implementation. */
+function referenceStandardShanten(counts: readonly number[], need: number): number {
+  const work = [...counts]
+  let best = 2 * need
+  const search = (i: number, sets: number, partials: number, pair: number): void => {
+    while (i < 34 && work[i] === 0) i++
+    if (i >= 34) {
+      best = Math.min(best, 2 * (need - sets) - Math.min(partials, need - sets) - pair)
+      return
+    }
+    if (sets < need) {
+      if (work[i]! >= 3) {
+        work[i]! -= 3
+        search(i, sets + 1, partials, pair)
+        work[i]! += 3
+      }
+      if (i < 27 && i % 9 <= 6 && work[i + 1]! > 0 && work[i + 2]! > 0) {
+        work[i]!--, work[i + 1]!--, work[i + 2]!--
+        search(i, sets + 1, partials, pair)
+        work[i]!++, work[i + 1]!++, work[i + 2]!++
+      }
+    }
+    if (work[i]! >= 2) {
+      work[i]! -= 2
+      if (!pair) search(i, sets, partials, 1)
+      if (sets + partials < need) search(i, sets, partials + 1, pair)
+      work[i]! += 2
+    }
+    if (sets + partials < need && i < 27) {
+      if (i % 9 <= 7 && work[i + 1]! > 0) {
+        work[i]!--, work[i + 1]!--
+        search(i, sets, partials + 1, pair)
+        work[i]!++, work[i + 1]!++
+      }
+      if (i % 9 <= 6 && work[i + 2]! > 0) {
+        work[i]!--, work[i + 2]!--
+        search(i, sets, partials + 1, pair)
+        work[i]!++, work[i + 2]!++
+      }
+    }
+    work[i]!--
+    search(i, sets, partials, pair)
+    work[i]!++
+  }
+  search(0, 0, 0, 0)
+  return best
+}
+
+describe('standardShanten (per-suit) matches the whole-hand search', () => {
+  it('agrees on random hands of every legal size', () => {
+    const deck = createWall().filter((t) => !isFlower(t.kind)).map((t) => kindIndex(t.kind))
+    for (let i = 0; i < 1500; i++) {
+      const melds = i % 5 === 4 ? 0 : i % 4
+      const size = (4 - melds) * 3 + 1 + (i % 2)
+      const counts = countsOf(shuffle(deck, 5000 + i).slice(0, size))
+      expect(standardShanten(counts, 4 - melds), `hand ${i}`).toBe(referenceStandardShanten(counts, 4 - melds))
+    }
+    // Suit-heavy hands stress the per-suit search.
+    for (let i = 0; i < 300; i++) {
+      const suit = deck.filter((k) => k < 9 || k >= 27)
+      const counts = countsOf(shuffle(suit, 9000 + i).slice(0, 14))
+      expect(standardShanten(counts, 4)).toBe(referenceStandardShanten(counts, 4))
+    }
   })
 })
