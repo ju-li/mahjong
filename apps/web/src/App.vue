@@ -5,9 +5,10 @@ import type { Difficulty } from './bots/protocol'
 import FanReference from './components/FanReference.vue'
 import GameTable from './components/GameTable.vue'
 import HandResult from './components/HandResult.vue'
+import Onboarding from './components/Onboarding.vue'
 import RulesReference from './components/RulesReference.vue'
 import { avatarSeeds, avatarSvg } from './game/avatar'
-import { CLAIM_TIMER_OPTIONS, useSettings } from './game/settings'
+import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useI18n } from './i18n/useI18n'
 
@@ -21,16 +22,9 @@ const rulesOpen = ref(false)
 /** Per player. Bots are numbered by where they sit relative to you at the start of the match. */
 const NAMES = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
 const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
-/** Rule sets in the picker; only those the engine implements can be chosen. */
-const RULE_OPTIONS = [
-  { id: 'mcr', playable: true },
-  { id: 'hk', playable: true },
-  { id: 'riichi', playable: false },
-  { id: 'taiwan', playable: false },
-] as const
 
-const { claimSeconds, sound } = useSettings()
-const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, rules, act, continueToNextHand, startNewMatch } = useMatch()
+const { claimSeconds, sound, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
+const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, rules, resumed, act, continueToNextHand, startNewMatch } = useMatch()
 
 const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.phase.result : null))
 /** Names in table-seat order for this round. */
@@ -67,6 +61,18 @@ const inProgress = () => match.value.history.length > 0 || (match.value.current 
 
 function confirmNewMatch() {
   if (!inProgress() || window.confirm(t('app.confirmNewMatch'))) startNewMatch()
+}
+
+/**
+ * First visit: deal again under the chosen rules. A match restored from an older
+ * version is only abandoned if the player agrees.
+ */
+function onboardingDone() {
+  const next = preferredRules.value
+  finishOnboarding()
+  if (next === rules.value) return
+  if (!resumed || !inProgress() || window.confirm(t('app.confirmRules'))) startNewMatch(next)
+  else preferredRules.value = rules.value
 }
 
 /** Switching rules starts a new match, after confirming if one is under way. */
@@ -158,6 +164,8 @@ function changeRules(e: Event) {
 
     <RulesReference v-if="rulesOpen" :rules="rules" @close="rulesOpen = false" @fans="rulesOpen = false; fanList = ''" />
     <FanReference v-if="fanList !== null" :focus="fanList || null" :rules="rules" @close="fanList = null" />
+
+    <Onboarding v-if="needsOnboarding" @done="onboardingDone" />
 
     <section v-if="!view" class="result__card result__card--inline">
       <h2>{{ t('app.matchFinished') }}</h2>

@@ -1699,3 +1699,151 @@ body {
     transition: none !important;
   }
 }
+
+/* ---- Onboarding ---- */
+
+.onboard {
+  z-index: 40;
+}
+
+.onboard__card {
+  gap: 10px;
+}
+
+.onboard__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.onboard__welcome {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.onboard__dots {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboard__dots li {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tile-edge);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+
+.onboard__dots li.is-done {
+  background: var(--felt-glow);
+}
+
+.onboard__dots li.is-current {
+  width: 22px;
+  border-radius: 4px;
+  background: var(--felt);
+}
+
+.onboard__options {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.onboard__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 8px;
+}
+
+.onboard__option {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--tile-edge);
+  background: var(--button);
+  color: var(--button-text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.onboard__option:hover {
+  border-color: var(--felt-glow);
+}
+
+.onboard__option.is-selected {
+  border-color: var(--felt);
+  box-shadow: 0 0 0 2px var(--felt);
+}
+
+.onboard__option:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.onboard__option input {
+  margin: 0;
+  accent-color: var(--felt);
+}
+
+.onboard__option-title {
+  font-weight: 700;
+}
+
+.onboard__option-desc {
+  grid-column: 2;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.onboard__option--compact {
+  justify-content: center;
+  padding: 10px;
+}
+
+.onboard__option.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.onboard__hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.onboard__nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.result .onboard__nav .action {
+  align-self: auto;
+}
+
+.onboard__next {
+  padding: 8px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--felt-edge);
+  background: var(--felt);
+  color: var(--felt-text);
+  font-weight: 700;
+}
+
+.onboard__next:hover {
+  background: var(--felt-edge);
+}
