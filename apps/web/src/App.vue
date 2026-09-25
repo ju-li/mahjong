@@ -23,7 +23,7 @@ const rulesOpen = ref(false)
 const NAMES = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
 const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
 
-const { claimSeconds, sound, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
+const { claimSeconds, sound, voice, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
 const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, rules, resumed, act, continueToNextHand, startNewMatch } = useMatch()
 
 const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.phase.result : null))
@@ -131,6 +131,15 @@ function changeRules(e: Event) {
                 {{ t('app.sound') }}
               </span>
               <input v-model="sound" class="toggle__input" type="checkbox" role="switch" />
+            </label>
+            <label class="select toggle">
+              <span class="toggle__label">
+                <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" :fill="voice ? 'currentColor' : 'none'" />
+                </svg>
+                {{ t('app.voice') }}
+              </span>
+              <input v-model="voice" class="toggle__input" type="checkbox" role="switch" />
             </label>
             <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle">{{ t('app.switchLanguage') }}</button>
           </div>
