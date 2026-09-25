@@ -49,7 +49,7 @@ V11: engine ⊥ TS `enum`/`namespace`; type-only imports use `import type`.
 id|status|task|cites
 T1|x|verify user steps 1–5 (git, root `package.json`, `.gitignore`, `pnpm-workspace.yaml`, vite app, engine `package.json`/`tsconfig.json`); report diffs. known: root `package.json` has placeholder `test`, stray `main: index.js`; engine has 0 devDeps & empty `src/`; engine `test: vitest` = watch in TTY ∴ change → `vitest run`|V2,I.cmd
 T2|x|engine tile model: `src/tiles.ts` (`Suit`, `TileKind`, `Tile`, `PLAYABLE_KINDS`, `FLOWER_KINDS`, `tileKey`, `createWall`)|V1,V3,V4,V5,V6,V11,I.api
-T3|.|engine PRNG: `src/rng.ts` (`mulberry32`, `shuffle` Fisher–Yates)|V1,V7,V8,V9,V11,I.api
+T3|x|engine PRNG: `src/rng.ts` (`mulberry32`, `shuffle` Fisher–Yates)|V1,V7,V8,V9,V11,I.api
 T4|.|`src/index.ts` re-export all; `src/tiles.test.ts` + `src/rng.test.ts` cover V3–V9|V3,V4,V5,V6,V7,V8,V9
 T5|x|deps: engine devDeps `vitest`, `typescript`; web dep `"@mahjong/engine": "workspace:*"`; `pnpm install`|V2,I.pkg
 T6|.|`apps/web/src/bots/bot.worker.ts` import engine, reply `{ echo, wallSize }`; `App.vue` spawn worker & render reply; drop `HelloWorld` scaffold|C.worker,I.worker,I.ui
