@@ -24,9 +24,15 @@
   --button-text: #1d2521;
   --focus: #f2b632;
 
-  --tile-w: clamp(20px, calc((min(100vw, 1240px) - 240px) / 15), 58px);
-  --tile-sm-w: clamp(15px, calc(min(100vw, 1240px) * 0.024), 30px);
-  --tile-xs-w: clamp(12px, calc(min(100vw, 1240px) * 0.017), 22px);
+  /*
+   * The small-tile width at which the whole table fits the viewport height: the side ponds,
+   * the ponds above and below them, the hand and the chrome stack up to roughly
+   * 22 small-tile widths plus 430px. Tile sizes take the smaller of this and the width-based size.
+   */
+  --fit-h: calc((100vh - 430px) / 22);
+  --tile-w: clamp(20px, min(calc((min(100vw, 1240px) - 240px) / 15), calc(var(--fit-h) * 2.1)), 58px);
+  --tile-sm-w: clamp(13px, min(calc(min(100vw, 1240px) * 0.024), var(--fit-h)), 30px);
+  --tile-xs-w: clamp(10px, min(calc(min(100vw, 1240px) * 0.017), calc(var(--fit-h) * 0.72)), 22px);
   --tile-sm-h: calc(var(--tile-sm-w) * 1.36);
 
   /* Type scale. Every text size in the app is one of these; all are in rem, so the
@@ -50,6 +56,12 @@
 
 :root[data-text-size='larger'] {
   font-size: 22px;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --fit-h: calc((100dvh - 430px) / 22);
+  }
 }
 
 @media (max-width: 640px) {
@@ -123,7 +135,7 @@ body {
 .board {
   --rim: clamp(6px, 1.2vw, 14px);
   --wall-t: clamp(7px, 1.2vw, 14px);
-  --avatar: clamp(44px, 6.5vw, 76px);
+  --avatar: clamp(40px, min(6.5vw, calc(var(--fit-h) * 2.6)), 76px);
   --edge-w: calc(var(--tile-sm-h) * 0.62);
   --edge-h: calc(var(--tile-sm-w) * 0.56);
   padding: var(--rim);
@@ -146,7 +158,9 @@ body {
     'left middle right'
     'me me me';
   gap: 10px clamp(6px, 1.4vw, 18px);
-  min-height: min(82vh, 820px);
+  /* Fill the viewport below the top bar (and above the key hints), up to a comfortable height. */
+  min-height: min(calc(100vh - 150px), 820px);
+  min-height: min(calc(100dvh - 150px), 820px);
   padding: clamp(8px, 1.4vw, 16px);
   border-radius: 14px;
   background:
@@ -687,6 +701,21 @@ body {
   background: var(--accent);
   border-color: var(--accent);
   color: #1d2521;
+}
+
+/* On wider screens the claim buttons sit beside the status, so they don't push the hand down. */
+@media (min-width: 641px) {
+  .me__main {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    column-gap: 14px;
+  }
+
+  .me__row {
+    flex-basis: 100%;
+  }
 }
 
 /* ---- Claim buttons ---- */
@@ -1743,4 +1772,152 @@ body {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ---- Onboarding ---- */
+
+.onboard {
+  z-index: 40;
+}
+
+.onboard__card {
+  gap: 10px;
+}
+
+.onboard__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.onboard__welcome {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.onboard__dots {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboard__dots li {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tile-edge);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+
+.onboard__dots li.is-done {
+  background: var(--felt-glow);
+}
+
+.onboard__dots li.is-current {
+  width: 22px;
+  border-radius: 4px;
+  background: var(--felt);
+}
+
+.onboard__options {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.onboard__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 8px;
+}
+
+.onboard__option {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--tile-edge);
+  background: var(--button);
+  color: var(--button-text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.onboard__option:hover {
+  border-color: var(--felt-glow);
+}
+
+.onboard__option.is-selected {
+  border-color: var(--felt);
+  box-shadow: 0 0 0 2px var(--felt);
+}
+
+.onboard__option:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.onboard__option input {
+  margin: 0;
+  accent-color: var(--felt);
+}
+
+.onboard__option-title {
+  font-weight: 700;
+}
+
+.onboard__option-desc {
+  grid-column: 2;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.onboard__option--compact {
+  justify-content: center;
+  padding: 10px;
+}
+
+.onboard__option.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.onboard__hint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.onboard__nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.result .onboard__nav .action {
+  align-self: auto;
+}
+
+.onboard__next {
+  padding: 8px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--felt-edge);
+  background: var(--felt);
+  color: var(--felt-text);
+  font-weight: 700;
+}
+
+.onboard__next:hover {
+  background: var(--felt-edge);
 }
