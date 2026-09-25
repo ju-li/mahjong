@@ -1,7 +1,7 @@
 # SPEC
 
 ## §G GOAL
-MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human vs 3 bots, adjustable difficulty. Current phase: playable v0 → engine state machine, win detection, 81-fan scoring, bots, game UI.
+MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human vs 3 bots, adjustable difficulty. Current phase: v0 hardening → verified scoring, official seating, bilingual UI (en / zh-Hans), play polish, offline PWA.
 
 ## §C CONSTRAINTS
 - pnpm workspace monorepo. `pnpm-workspace.yaml` → `apps/*`, `packages/*`.
@@ -13,9 +13,14 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - bots run in Web Worker inside `apps/web`, import engine.
 - Vitest for engine tests.
 - engine src also typechecked by web's vue-tsc (`verbatimModuleSyntax`, `erasableSyntaxOnly`, `noUnusedLocals`) ∴ engine ! use `import type` for types, ⊥ `enum`, ⊥ `namespace`.
-- scope now: full single-player v0. ⊥ accounts, ⊥ network play, ⊥ mobile shell.
+- scope now: v0 hardening. ⊥ accounts, ⊥ network play, ⊥ mobile shell.
+- roadmap order (fixed): hardening → multiplayer (Colyseus) → accounts & leaderboards (PocketBase) → Capacitor apps.
+- leaderboards ! multiplayer only (server-authoritative results). ⊥ single-player / bot results on leaderboards.
 - rules: MCR (Chinese Official, 81 fan). win ! ≥ 8 fan excl flower fan. no dead wall; replacement draws (flower, kong) from wall back end. wall empty → drawn hand, 0 payment.
-- v0 simplifications: seats fixed ∀ 16 hands (⊥ seat re-draw between rounds); dealer rotates every hand; ⊥ false-win penalty (UI offers only legal actions).
+- seating: official MCR re-seating at each prevailing-wind round boundary (pattern per rulebook, source cited in code). dealer rotates every hand, ⊥ dealer repeat.
+- final discard (wall empty) → claimable only for win.
+- v0 simplification: ⊥ false-win penalty (UI offers only legal actions).
+- i18n: UI languages `en` & `zh-Hans`. tile faces stay traditional glyphs (萬 筒 條 東 發). engine holds fan names in both; ⊥ other UI strings in engine.
 - engine = single source of truth for rules. web & bots ⊥ reimplement rules; call engine only. same reducer → future Colyseus server.
 - future (not now): Capacitor iOS/Android, PocketBase accounts/leaderboards, Colyseus authoritative multiplayer.
 
@@ -41,9 +46,14 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - api: `viewFor(state, seat): PlayerView` → own concealed tiles; others' melds, discards, flowers, concealed counts; wall count only.
 - api: `decompose(tiles)` → standard (4 sets + pair) | seven pairs | thirteen orphans | knitted forms. `shanten(tiles, melds): number` (-1 = complete).
 - api: `scoreHand(winCtx): { fans: {name, points, count}[], total, flowerPoints }`. `settle(winCtx, score): number[4]` point deltas.
-- api: `Match` (16 hands, 4 prevailing winds × 4): `newMatch(seed)`, `nextHand(match, result)`, cumulative scores.
+- api: `Match` (16 hands, 4 prevailing winds × 4): `newMatch(seed)`, `nextHand(match, result)`, cumulative scores per player.
+- api: `Match.seating` / `seatOf(match, player)` / `playerAt(match, seat)`: player ↔ table seat for current round. players 0..3 fixed identities; seats change per round.
 - worker: `apps/web/src/bots/bot.worker.ts`. in `{ view: PlayerView, legal: Action[], difficulty: 'easy'|'medium'|'hard', seed }` → out `{ action }`.
 - ui: table (4 seats, discards, melds, flowers), own hand, claim prompts, win screen w/ fan breakdown, difficulty picker, new match. match saved to `localStorage`.
+- ui: language toggle `en` ↔ `zh-Hans`, persisted; defaults from `navigator.language`.
+- ui: fan reference page: all 81 fans, points, description, exclusions, both languages.
+- ui: claim timer (default 10 s, setting incl off) → auto-pass. keyboard play for every human action. tile animations & sound (toggle; respect `prefers-reduced-motion`).
+- pwa: web app manifest + service worker; installable; plays offline after first load.
 - deploy: `apps/web/Dockerfile` (repo-root context, Caddy serves `dist` on `$PORT`). Railway service `web` configured manually in dashboard; ⊥ Config as Code, ⊥ IaC.
 
 ## §V INVARIANTS
@@ -73,6 +83,13 @@ V23: `settle` deltas sum = 0. discard win: discarder −(8+fan), other two −8.
 V24: `shanten` = −1 ⇔ `decompose` finds ≥1 complete form.
 V25: bots see only `PlayerView`; bot action ∈ `legal`; same (view, legal, difficulty, seed) → same action.
 V26: web & worker ⊥ own rule logic; legality & scoring only via engine.
+V27: ∀ prevailing-wind round → each player deals exactly once; seating changes only at round boundaries; each player sits each seat wind exactly once per match.
+V28: wall empty → claim options on a discard ⊆ {win, pass}.
+V29: en & zh-Hans dictionaries have identical key sets; ∀ UI string rendered via dictionary; ∀ 81 fans have en & zh names + descriptions.
+V30: engine totals match ≥ 20 externally sourced scored example hands; each example cites its source.
+V31: claim-timer expiry issues only `pass`, and only when `pass` ∈ `legalActions`.
+V32: ∀ human action reachable by keyboard alone.
+V33: engine src ⊥ browser/Node globals, enforced by automated test (not manual grep).
 
 ## §T TASKS
 id|status|task|cites
@@ -99,6 +116,15 @@ T20|x|reference-hand suite (≥30 hands from official rules/examples); enforce 8
 T21|x|engine `Match`: 16 hands, prevailing wind progression, dealer rotation, cumulative scores|V13,V23,I.api
 T22|x|bots easy/medium/hard: shanten-based discard, useful-tile count, claim heuristics, 8-fan awareness, defense (hard)|V25,V26
 T23|x|UI full: win screen fan breakdown, scores, difficulty picker, new match, `localStorage` resume|V26,I.ui
+T24|.|source ≥ 20 scored MCR example hands (official rulebook / WMO / reputable calculator), cite each; add to reference suite; mismatches → `/ck:spec bug:`|V22,V30
+T25|.|V1 enforcement test: scan engine src for browser/Node globals (web vitest, `import.meta.glob` raw); rename `window` locals in `rules.ts`|V1,V33
+T26|.|engine official re-seating: `Match.seating`, `seatOf`, `playerAt`; scores per player; UI maps human by player not seat|V27,V13,V23,I.api
+T27|.|test last-discard rule explicitly (claims ⊆ win/pass when wall empty)|V28
+T28|.|i18n: `en` + `zh-Hans` dictionaries, toggle, persistence, locale default; engine fan table gains zh descriptions; key-parity test|V29,I.ui
+T29|.|fan reference page (81 fans, points, description, exclusions, bilingual), linked from result dialog|V29,I.ui
+T30|.|claim timer (setting, auto-pass) + keyboard play (tile focus/arrow keys, action shortcuts)|V31,V32,I.ui
+T31|.|tile animations + sound effects, toggle, reduced-motion respected|I.ui
+T32|.|PWA: manifest, icons, service worker precache; offline smoke test|I.pwa
 
 ## §B BUGS
 id|date|cause|fix
