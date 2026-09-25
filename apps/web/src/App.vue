@@ -5,6 +5,7 @@ import FanReference from './components/FanReference.vue'
 import GameTable from './components/GameTable.vue'
 import HandResult from './components/HandResult.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
+import { CLAIM_TIMER_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useI18n } from './i18n/useI18n'
 
@@ -17,7 +18,8 @@ const fanList = ref<string | null>(null)
 const NAMES = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
 const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
 
-const { match, seatPlayers, view, humanActions, handOver, matchOver, difficulty, act, continueToNextHand, startNewMatch } = useMatch()
+const { claimSeconds } = useSettings()
+const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, act, continueToNextHand, startNewMatch } = useMatch()
 
 const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.phase.result : null))
 /** Names in table-seat order for this round. */
@@ -44,6 +46,12 @@ function confirmNewMatch() {
             <option v-for="l in LEVELS" :key="l" :value="l">{{ t(`level.${l}`) }}</option>
           </select>
         </label>
+        <label class="select">
+          <span>{{ t('app.claimTimer') }}</span>
+          <select v-model.number="claimSeconds" :aria-label="t('app.claimTimer')">
+            <option v-for="s in CLAIM_TIMER_OPTIONS" :key="s" :value="s">{{ s === 0 ? t('timer.off') : t('timer.seconds', { n: s }) }}</option>
+          </select>
+        </label>
         <button class="action action--quiet-light" @click="fanList = ''">{{ t('app.fanReference') }}</button>
         <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle">{{ t('app.switchLanguage') }}</button>
         <button class="action" @click="confirmNewMatch">{{ t('app.newMatch') }}</button>
@@ -52,7 +60,8 @@ function confirmNewMatch() {
 
     <ScoreBoard :match="match" :names="NAMES" :seat-winds="view?.seatWinds ?? null" />
 
-    <GameTable v-if="view" :view="view" :actions="humanActions" :names="seatNames" @act="act" />
+    <GameTable v-if="view" :view="view" :actions="humanActions" :names="seatNames" :claim-remaining="claimRemaining" @act="act" />
+    <p v-if="view" class="keys-help">{{ t('keys.help') }}</p>
 
     <HandResult
       v-if="view && result"

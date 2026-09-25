@@ -735,3 +735,51 @@ button:focus-visible {
   text-underline-offset: 3px;
   cursor: help;
 }
+
+/* ---- Timer, shortcuts ---- */
+
+.topbar {
+  flex-wrap: wrap;
+}
+
+.topbar__controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.status__timer {
+  display: inline-block;
+  min-width: 2.6em;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.25);
+  font-variant-numeric: tabular-nums;
+}
+
+.status__timer.is-urgent {
+  background: var(--red);
+  color: #fff;
+}
+
+.action kbd {
+  font: 600 0.72rem/1 var(--mono, ui-monospace, monospace);
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  opacity: 0.6;
+}
+
+.keys-help {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (hover: none) {
+  .keys-help,
+  .action kbd {
+    display: none;
+  }
+}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { kindIndex, type Action, type PlayerView, type Seat, type Tile } from '@mahjong/engine'
+import { actionForKey, shortcutFor } from '../game/keyboard'
 import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
 import TileFace from './TileFace.vue'
@@ -9,11 +10,45 @@ const props = defineProps<{
   view: PlayerView
   actions: Action[]
   names: string[]
+  /** Seconds left to claim, or null when no timer is running. */
+  claimRemaining?: number | null
 }>()
 
 const emit = defineEmits<{ act: [action: Action] }>()
 
 const { t } = useI18n()
+
+// ---- Keyboard play (V32) ----
+const handEl = ref<HTMLElement | null>(null)
+let lastKey = ''
+let repeat = 0
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return
+  const target = e.target as HTMLElement | null
+  if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
+  if (document.querySelector('[role="dialog"]')) return
+  const key = e.key.toLowerCase()
+  repeat = key === lastKey ? repeat + 1 : 0
+  lastKey = key
+  const action = actionForKey(key, props.actions, repeat)
+  if (action) {
+    e.preventDefault()
+    emit('act', action)
+    return
+  }
+  if (key === 'arrowleft' || key === 'arrowright') {
+    const tiles = [...(handEl.value?.querySelectorAll<HTMLButtonElement>('button.tile') ?? [])]
+    if (tiles.length === 0) return
+    e.preventDefault()
+    const at = tiles.indexOf(document.activeElement as HTMLButtonElement)
+    const next = at < 0 ? (key === 'arrowright' ? 0 : tiles.length - 1) : (at + (key === 'arrowright' ? 1 : -1) + tiles.length) % tiles.length
+    tiles[next]!.focus()
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 const windName = (w: string) => t(`wind.${w}` as 'wind.E')
 
 /** Opponent seats by screen position; play passes counter-clockwise, so the next seat sits on the right. */
@@ -123,7 +158,10 @@ const status = computed(() => {
     </section>
 
     <section class="me" :class="{ 'seat--active': view.turn === view.seat && phase.kind !== 'ended' }">
-      <p class="status" role="status">{{ status }}</p>
+      <p class="status" role="status">
+        {{ status }}
+        <span v-if="claimRemaining" class="status__timer" :class="{ 'is-urgent': claimRemaining <= 3 }">{{ t('status.timer', { n: claimRemaining }) }}</span>
+      </p>
 
       <div v-if="otherActions.length" class="actions">
         <button
@@ -131,9 +169,11 @@ const status = computed(() => {
           :key="i"
           class="action"
           :class="{ 'action--primary': a.type === 'win', 'action--quiet': a.type === 'pass' }"
+          :title="shortcutFor(a) ? t('keys.hint', { key: shortcutFor(a)! }) : undefined"
           @click="emit('act', a)"
         >
           {{ actionLabel(a) }}
+          <kbd v-if="shortcutFor(a)">{{ shortcutFor(a) }}</kbd>
           <TileFace v-for="tile in actionTiles(a)" :key="tile.id" :kind="tile.kind" size="sm" />
         </button>
       </div>
@@ -144,7 +184,7 @@ const status = computed(() => {
         <TileFace v-for="f in view.flowers[view.seat]" :key="f.id" :kind="f.kind" size="sm" />
       </div>
 
-      <div class="hand">
+      <div ref="handEl" class="hand" :aria-label="t('keys.help')">
         <TileFace
           v-for="tile in handTiles.main"
           :key="tile.id"

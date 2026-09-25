@@ -86,6 +86,13 @@ export const en = {
   'fans.extra': 'Combination used in competition scoring (not one of the 81).',
   'fans.minimum': 'A win needs at least 8 fan, not counting flowers.',
   'result.fanHelp': 'What does this fan mean?',
+
+  'app.claimTimer': 'Claim timer',
+  'timer.off': 'Off',
+  'timer.seconds': '{n} s',
+  'status.timer': '{n}s',
+  'keys.hint': 'Shortcut: {key}',
+  'keys.help': 'Keys: ← → choose a tile, Enter discards, W win, P pung, K kong, C chow (again for the next option), X pass.',
 }
 
 export type MessageKey = keyof typeof en
@@ -174,6 +181,13 @@ export const zhHans: Record<MessageKey, string> = {
   'fans.extra': '竞赛计分中使用的组合（不属于 81 番）。',
   'fans.minimum': '和牌至少 8 番，花牌不计入。',
   'result.fanHelp': '这个番种是什么意思？',
+
+  'app.claimTimer': '吃碰计时',
+  'timer.off': '关闭',
+  'timer.seconds': '{n} 秒',
+  'status.timer': '{n}秒',
+  'keys.hint': '快捷键：{key}',
+  'keys.help': '按键：← → 选牌，回车出牌，W 和，P 碰，K 杠，C 吃（再按切换），X 过。',
 }
 
 export const MESSAGES = { en, 'zh-Hans': zhHans } as const

@@ -16,6 +16,8 @@ import {
 } from '@mahjong/engine'
 import type { Difficulty } from '../bots/protocol'
 import { BotClient } from './botClient'
+import { timeoutAction } from './keyboard'
+import { useSettings } from './settings'
 
 /** The human is always player 0; their table seat changes between rounds. */
 export const HUMAN_PLAYER: Player = 0
@@ -75,6 +77,32 @@ export function useMatch() {
   const view = computed(() => (state.value ? viewFor(state.value, humanSeat.value) : null))
   const humanActions = computed(() => (state.value ? legalActions(state.value, humanSeat.value) : []))
   const handOver = computed(() => state.value?.phase.kind === 'ended')
+
+  // Claim timer: counts down while the human may claim; on expiry it passes (only if legal).
+  const { claimSeconds } = useSettings()
+  const claimRemaining = ref<number | null>(null)
+  let claimTimer: ReturnType<typeof setInterval> | undefined
+  /** Identifies one claim window for the human, so bot replies inside it do not restart the clock. */
+  const claimKey = computed(() => {
+    const s = state.value
+    if (!s || (s.phase.kind !== 'claim' && s.phase.kind !== 'robKong')) return null
+    if (!timeoutAction(humanActions.value)) return null
+    return `${match.value.handIndex}:${s.phase.kind}:${s.phase.tile.id}:${claimSeconds.value}`
+  })
+  watch(claimKey, (key) => {
+    clearInterval(claimTimer)
+    claimRemaining.value = null
+    if (key === null || claimSeconds.value === 0) return
+    claimRemaining.value = claimSeconds.value
+    claimTimer = setInterval(() => {
+      claimRemaining.value = (claimRemaining.value ?? 1) - 1
+      if (claimRemaining.value > 0) return
+      clearInterval(claimTimer)
+      claimRemaining.value = null
+      const pass = timeoutAction(humanActions.value)
+      if (pass) act(pass)
+    }, 1000)
+  })
   const matchOver = computed(() => isMatchOver(match.value))
 
   watch([match, difficulty], () => save({ match: match.value, difficulty: difficulty.value }), { immediate: true })
@@ -153,6 +181,7 @@ export function useMatch() {
 
   onBeforeUnmount(() => {
     generation++
+    clearInterval(claimTimer)
     bots.dispose()
   })
 
@@ -164,6 +193,7 @@ export function useMatch() {
     seatPlayers,
     view,
     humanActions,
+    claimRemaining,
     handOver,
     matchOver,
     difficulty,
