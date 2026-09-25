@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { kindIndex, type HandResult, type PlayerView } from '@mahjong/engine'
 import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
+import ScoreExplain from './ScoreExplain.vue'
 import TileFace from './TileFace.vue'
 
 const props = defineProps<{
@@ -17,6 +18,9 @@ const props = defineProps<{
 defineEmits<{ next: []; newMatch: []; explain: [fanId: string] }>()
 
 const { t, fanName } = useI18n()
+
+/** The step-by-step scoring breakdown, opened from the total. */
+const explaining = ref(false)
 
 /** How the hand went for you: decides the banner. */
 const outcome = computed<'win' | 'loss' | 'draw'>(() => {
@@ -98,9 +102,12 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
             <strong>{{ f.points * f.count }}</strong>
           </li>
         </ul>
-        <p class="summary__total">
-          {{ t('result.totalFan') }} <strong>{{ result.score.total }}</strong>
-        </p>
+        <div class="summary__totals">
+          <p class="summary__total">
+            {{ t('result.totalFan') }} <strong>{{ result.score.total }}</strong>
+          </p>
+          <button class="summary__how" @click="explaining = true">{{ t('result.howScored') }}</button>
+        </div>
       </template>
 
       <ul class="summary__players">
@@ -127,5 +134,14 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
       </template>
       <button v-else class="action action--primary summary__continue" autofocus @click="$emit('next')">{{ t('result.continue') }}</button>
     </div>
+
+    <ScoreExplain
+      v-if="explaining && result.type === 'win'"
+      :result="result"
+      :rules="view.rules"
+      :names="names"
+      :seat="view.seat"
+      @close="explaining = false"
+    />
   </div>
 </template>

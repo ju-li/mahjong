@@ -1136,8 +1136,138 @@ body {
   font-size: 0.85em;
 }
 
+.summary__totals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: -4px;
+}
+
+.summary__how {
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  background: transparent;
+  color: var(--felt-text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.summary__how:hover,
+.summary__how:focus-visible {
+  background: rgb(255 255 255 / 0.1);
+}
+
+/* ---- Scoring breakdown, over the summary ---- */
+
+.explain {
+  z-index: 20;
+  text-align: left;
+}
+
+.explain__card {
+  width: min(560px, 100%);
+}
+
+.explain__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.explain section {
+  display: grid;
+  gap: 6px;
+}
+
+.explain h3 {
+  font-size: 1rem;
+}
+
+.explain p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.explain__muted {
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+.explain__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.explain__table td,
+.explain__table th {
+  padding: 4px 6px 4px 0;
+  border-bottom: 1px solid var(--tile-edge);
+  text-align: left;
+}
+
+.explain__table tfoot td,
+.explain__table tfoot th {
+  border-bottom: none;
+}
+
+.explain__table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.explain__table .pos {
+  color: var(--green);
+}
+
+.explain__table .neg {
+  color: var(--red);
+}
+
+.explain__table tbody td:first-child {
+  white-space: nowrap;
+}
+
+.explain__table tr.is-me td:first-child {
+  font-weight: 700;
+}
+
+.explain__scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.explain__scale li {
+  display: grid;
+  min-width: 2.8em;
+  padding: 3px 5px;
+  border-radius: 6px;
+  border: 1px solid var(--tile-edge);
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.explain__scale li span {
+  color: var(--muted);
+}
+
+.explain__scale li.is-current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
 .summary__total {
-  margin: -4px 0 0;
+  margin: 0;
   padding: 3px 14px;
   border-radius: 999px;
   font-size: clamp(0.95rem, 2.2vw, 1.15rem);
