@@ -53,7 +53,7 @@ T3|x|engine PRNG: `src/rng.ts` (`mulberry32`, `shuffle` Fisher–Yates)|V1,V7,V8
 T4|x|`src/index.ts` re-export all; `src/tiles.test.ts` + `src/rng.test.ts` cover V3–V9|V3,V4,V5,V6,V7,V8,V9
 T5|x|deps: engine devDeps `vitest`, `typescript`; web dep `"@mahjong/engine": "workspace:*"`; `pnpm install`|V2,I.pkg
 T6|x|`apps/web/src/bots/bot.worker.ts` import engine, reply `{ echo, wallSize }`; `App.vue` spawn worker & render reply; drop `HelloWorld` scaffold|C.worker,I.worker,I.ui
-T7|.|root scripts `dev`/`build`/`test`/`typecheck`; web `typecheck: vue-tsc -b`; clean root `package.json` placeholders|V10,I.cmd
+T7|x|root scripts `dev`/`build`/`test`/`typecheck`; web `typecheck: vue-tsc -b`; clean root `package.json` placeholders|V10,I.cmd
 T8|.|verify: `pnpm test`, `pnpm typecheck`, `pnpm build` exit 0; `apps/web/dist` exists; dev page shows worker reply (headless check)|V10
 
 ## §B BUGS
