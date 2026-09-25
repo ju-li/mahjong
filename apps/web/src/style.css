@@ -1214,6 +1214,20 @@ body {
   color: var(--muted);
 }
 
+.guide__section h3 {
+  margin: 8px 0 4px;
+  font-size: 1rem;
+}
+
+.guide__section p {
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.guide__more .linklike {
+  cursor: pointer;
+}
+
 .linklike {
   padding: 0;
   border: none;
