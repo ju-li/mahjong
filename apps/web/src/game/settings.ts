@@ -17,8 +17,8 @@ export const RULE_OPTIONS = [
 ] as const
 const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard']
 
-type Settings = { claimSeconds: ClaimSeconds; sound: boolean; difficulty: Difficulty; rules: RuleSet }
-const DEFAULTS: Settings = { claimSeconds: 10, sound: true, difficulty: 'medium', rules: 'mcr' }
+type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean; difficulty: Difficulty; rules: RuleSet }
+const DEFAULTS: Settings = { claimSeconds: 10, sound: true, voice: true, difficulty: 'medium', rules: 'mcr' }
 
 function read(key: string): Record<string, unknown> | null {
   try {
@@ -38,6 +38,7 @@ export function load(): Settings {
   return {
     claimSeconds: CLAIM_TIMER_OPTIONS.includes(raw?.claimSeconds as ClaimSeconds) ? (raw!.claimSeconds as ClaimSeconds) : DEFAULTS.claimSeconds,
     sound: typeof raw?.sound === 'boolean' ? raw.sound : DEFAULTS.sound,
+    voice: typeof raw?.voice === 'boolean' ? raw.voice : DEFAULTS.voice,
     difficulty: DIFFICULTIES.includes(difficulty as Difficulty) ? (difficulty as Difficulty) : DEFAULTS.difficulty,
     rules: isRuleSet(rules) ? rules : DEFAULTS.rules,
   }
@@ -49,15 +50,17 @@ const needsOnboarding = ref(read(STORAGE_KEY) === null)
 /** App-wide player preferences, persisted per browser. */
 const claimSeconds = ref<ClaimSeconds>(initial.claimSeconds)
 const sound = ref(initial.sound)
+/** Bots call out their moves (吃, 碰, 北风…) with speech synthesis. */
+const voice = ref(initial.voice)
 const difficulty = ref<Difficulty>(initial.difficulty)
 /** Rule set for new matches; a match in progress keeps the rules it started with. */
 const rules = ref<RuleSet>(initial.rules)
 
 watch(
-  [claimSeconds, sound, difficulty, rules, needsOnboarding],
+  [claimSeconds, sound, voice, difficulty, rules, needsOnboarding],
   () => {
     if (needsOnboarding.value) return
-    const settings: Settings = { claimSeconds: claimSeconds.value, sound: sound.value, difficulty: difficulty.value, rules: rules.value }
+    const settings: Settings = { claimSeconds: claimSeconds.value, sound: sound.value, voice: voice.value, difficulty: difficulty.value, rules: rules.value }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
     } catch {
@@ -71,5 +74,5 @@ export function useSettings() {
   const finishOnboarding = () => {
     needsOnboarding.value = false
   }
-  return { claimSeconds, sound, difficulty, rules, needsOnboarding, finishOnboarding }
+  return { claimSeconds, sound, voice, difficulty, rules, needsOnboarding, finishOnboarding }
 }
