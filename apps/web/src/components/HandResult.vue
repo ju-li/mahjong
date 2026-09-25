@@ -13,7 +13,7 @@ const props = defineProps<{
   finalScores: number[]
 }>()
 
-defineEmits<{ next: []; newMatch: [] }>()
+defineEmits<{ next: []; newMatch: []; explain: [fanId: string] }>()
 
 const { t, fanName } = useI18n()
 
@@ -55,7 +55,10 @@ const standings = computed(() =>
         <table class="result__fans">
           <tbody>
             <tr v-for="f in result.score.fans" :key="f.id">
-              <td>{{ fanName(f.id) }}<span v-if="f.count > 1"> ×{{ f.count }}</span></td>
+              <td>
+                <button class="linklike" :title="t('result.fanHelp')" @click="$emit('explain', f.id)">{{ fanName(f.id) }}</button>
+                <span v-if="f.count > 1"> ×{{ f.count }}</span>
+              </td>
               <td class="num">{{ f.points * f.count }}</td>
             </tr>
           </tbody>

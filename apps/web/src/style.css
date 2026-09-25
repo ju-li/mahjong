@@ -653,3 +653,85 @@ button:focus-visible {
   min-width: 3.2em;
   justify-content: center;
 }
+
+/* ---- Fan reference ---- */
+
+.fans {
+  z-index: 20;
+}
+
+.fans__card {
+  width: min(720px, 100%);
+}
+
+.fans__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fans__search {
+  font: inherit;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--tile-edge);
+  background: var(--button);
+  color: var(--button-text);
+}
+
+.fans__group h3 {
+  margin: 8px 0 4px;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+.fans__group dl {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.fans__item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--tile-edge);
+}
+
+.fans__item.is-focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.fans__item dt {
+  font-weight: 700;
+}
+
+.fans__item dt small {
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+.fans__item dd {
+  margin: 4px 0 0;
+  display: grid;
+  gap: 4px;
+}
+
+.fans__excludes,
+.fans__extra {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.linklike {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}

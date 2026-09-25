@@ -76,6 +76,16 @@ export const en = {
   'tile.dragon.white': 'white dragon',
   'tile.flower': 'flower {n}',
   'tile.season': 'season {n}',
+
+  'fans.title': 'Fan list',
+  'fans.close': 'Close',
+  'fans.points': '{n} fan',
+  'fans.excludes': 'Not combined with: {list}',
+  'fans.search': 'Search fans',
+  'fans.noMatch': 'No fan matches.',
+  'fans.extra': 'Combination used in competition scoring (not one of the 81).',
+  'fans.minimum': 'A win needs at least 8 fan, not counting flowers.',
+  'result.fanHelp': 'What does this fan mean?',
 }
 
 export type MessageKey = keyof typeof en
@@ -154,6 +164,16 @@ export const zhHans: Record<MessageKey, string> = {
   'tile.dragon.white': '白板',
   'tile.flower': '花 {n}',
   'tile.season': '季 {n}',
+
+  'fans.title': '番种表',
+  'fans.close': '关闭',
+  'fans.points': '{n} 番',
+  'fans.excludes': '不计：{list}',
+  'fans.search': '搜索番种',
+  'fans.noMatch': '没有匹配的番种。',
+  'fans.extra': '竞赛计分中使用的组合（不属于 81 番）。',
+  'fans.minimum': '和牌至少 8 番，花牌不计入。',
+  'result.fanHelp': '这个番种是什么意思？',
 }
 
 export const MESSAGES = { en, 'zh-Hans': zhHans } as const

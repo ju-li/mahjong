@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Difficulty } from './bots/protocol'
+import FanReference from './components/FanReference.vue'
 import GameTable from './components/GameTable.vue'
 import HandResult from './components/HandResult.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
@@ -8,6 +9,9 @@ import { useMatch } from './game/useMatch'
 import { useI18n } from './i18n/useI18n'
 
 const { t, toggle } = useI18n()
+
+/** Fan list dialog: `null` = closed, '' = open at the top, otherwise the fan to show. */
+const fanList = ref<string | null>(null)
 
 /** Per player. Bots are numbered by where they sit relative to you at the start of the match. */
 const NAMES = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
@@ -40,6 +44,7 @@ function confirmNewMatch() {
             <option v-for="l in LEVELS" :key="l" :value="l">{{ t(`level.${l}`) }}</option>
           </select>
         </label>
+        <button class="action action--quiet-light" @click="fanList = ''">{{ t('app.fanReference') }}</button>
         <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle">{{ t('app.switchLanguage') }}</button>
         <button class="action" @click="confirmNewMatch">{{ t('app.newMatch') }}</button>
       </div>
@@ -58,7 +63,10 @@ function confirmNewMatch() {
       :final-scores="seatTotals"
       @next="continueToNextHand"
       @new-match="startNewMatch"
+      @explain="(id: string) => (fanList = id)"
     />
+
+    <FanReference v-if="fanList !== null" :focus="fanList || null" @close="fanList = null" />
 
     <section v-if="!view" class="result__card result__card--inline">
       <h2>{{ t('app.matchFinished') }}</h2>
