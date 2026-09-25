@@ -1,9 +1,8 @@
-import { createWall } from '@mahjong/engine'
+import type { BotRequest, BotResponse } from './protocol'
+import { chooseAction } from './strategy'
 
-export type BotReply = { echo: unknown; wallSize: number }
-
-// Placeholder: echoes the message and proves the engine loads inside the worker.
-self.onmessage = (event: MessageEvent<unknown>) => {
-  const reply: BotReply = { echo: event.data, wallSize: createWall().length }
+self.onmessage = (event: MessageEvent<BotRequest>) => {
+  const { id } = event.data
+  const reply: BotResponse = { id, action: chooseAction(event.data) }
   self.postMessage(reply)
 }
