@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { HANDS_PER_MATCH } from '@mahjong/engine'
 import type { Difficulty } from './bots/protocol'
 import FanReference from './components/FanReference.vue'
 import GameTable from './components/GameTable.vue'
 import HandResult from './components/HandResult.vue'
-import ScoreBoard from './components/ScoreBoard.vue'
+import { avatarSeeds, avatarSvg } from './game/avatar'
 import { CLAIM_TIMER_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useI18n } from './i18n/useI18n'
@@ -28,6 +29,13 @@ const seatNames = computed(() => seatPlayers.value.map((p) => NAMES.value[p]!))
 const seatTotals = computed(() =>
   seatPlayers.value.map((p, seat) => match.value.scores[p]! + (result.value?.type === 'win' ? result.value.deltas[seat]! : 0)),
 )
+
+/** Match totals in seat order, before the hand in play. */
+const seatScores = computed(() => seatPlayers.value.map((p) => match.value.scores[p]!))
+/** A random face per player, fixed for the whole match. */
+const playerAvatars = computed(() => avatarSeeds(match.value.seed).map(avatarSvg))
+const seatAvatars = computed(() => seatPlayers.value.map((p) => playerAvatars.value[p]!))
+const handLabel = computed(() => t('score.hand', { n: Math.min(match.value.handIndex + 1, HANDS_PER_MATCH), total: HANDS_PER_MATCH }))
 
 function confirmNewMatch() {
   const inProgress = match.value.history.length > 0 || (match.value.current && !handOver.value)
@@ -61,9 +69,18 @@ function confirmNewMatch() {
       </div>
     </header>
 
-    <ScoreBoard :match="match" :names="NAMES" :seat-winds="view?.seatWinds ?? null" />
-
-    <GameTable v-if="view" :view="view" :actions="humanActions" :names="seatNames" :claim-remaining="claimRemaining" @act="act" />
+    <GameTable
+      v-if="view"
+      :key="`${match.seed}:${match.handIndex}`"
+      :view="view"
+      :actions="humanActions"
+      :names="seatNames"
+      :scores="seatScores"
+      :avatars="seatAvatars"
+      :hand-label="handLabel"
+      :claim-remaining="claimRemaining"
+      @act="act"
+    />
     <p v-if="view" class="keys-help">{{ t('keys.help') }}</p>
 
     <HandResult
