@@ -98,7 +98,7 @@ T19|x|engine fans 4 → 1 pt + flowers|V22
 T20|x|reference-hand suite (≥30 hands from official rules/examples); enforce 8-fan min; `settle`|V21,V22,V23
 T21|x|engine `Match`: 16 hands, prevailing wind progression, dealer rotation, cumulative scores|V13,V23,I.api
 T22|x|bots easy/medium/hard: shanten-based discard, useful-tile count, claim heuristics, 8-fan awareness, defense (hard)|V25,V26
-T23|.|UI full: win screen fan breakdown, scores, difficulty picker, new match, `localStorage` resume|V26,I.ui
+T23|x|UI full: win screen fan breakdown, scores, difficulty picker, new match, `localStorage` resume|V26,I.ui
 
 ## §B BUGS
 id|date|cause|fix
