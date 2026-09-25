@@ -34,7 +34,7 @@ export type ActionType = Action['type']
 
 /** Filled in by scoring; kept structural here so `state.ts` has no scoring dependency. */
 export type HandScore = {
-  fans: { name: string; points: number; count: number }[]
+  fans: { id: string; name: string; points: number; count: number }[]
   total: number
   flowerPoints: number
 }

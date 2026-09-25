@@ -3,6 +3,7 @@ import { createWall, isFlower, kindIndex, type Tile } from './tiles'
 import { mulberry32 } from './rng'
 import { applyAction, legalActions } from './rules'
 import { newHand } from './deal'
+import { scoreHand, type ScoringMeld, type WinContext } from './scoring'
 
 /** Every tile id 0..143 appears exactly once across wall, hands, melds, discards, flowers and any pending claim tile. */
 export function tileIdsInPlay(state: GameState): number[] {
@@ -151,4 +152,40 @@ export function buildState(o: BuildOptions): GameState {
     turn: o.turn ?? 0,
     phase: o.phase ?? { kind: 'discard', drawnTileId: null, afterKong: false },
   }
+}
+
+export type ScoreOptions = Partial<Omit<WinContext, 'concealed' | 'melds' | 'winTile'>> & {
+  /** Declared melds, e.g. `['pung 555m', 'chow 123p', 'kong 9s', 'ckong EEEE']` (`ckong` = concealed kong). */
+  melds?: string[]
+}
+
+/** Score a hand from notation. `hand` is the concealed part including the winning tile `win`. */
+export function scoreNotation(hand: string, win: string, o: ScoreOptions = {}) {
+  const melds: ScoringMeld[] = (o.melds ?? []).map((m) => {
+    const [type, tiles] = m.split(' ') as [string, string]
+    const kinds = parseKinds(tiles)
+    return {
+      type: type === 'ckong' ? 'kong' : (type as ScoringMeld['type']),
+      index: Math.min(...kinds),
+      exposed: type !== 'ckong',
+    }
+  })
+  return scoreHand({
+    concealed: parseKinds(hand),
+    melds,
+    winTile: parseKinds(win)[0]!,
+    selfDrawn: o.selfDrawn ?? false,
+    seatWind: o.seatWind ?? 'S',
+    prevailingWind: o.prevailingWind ?? 'E',
+    flowers: o.flowers ?? 0,
+    lastTileOfWall: o.lastTileOfWall ?? false,
+    replacement: o.replacement ?? false,
+    robbingKong: o.robbingKong ?? false,
+    winTileVisible: o.winTileVisible ?? 0,
+  })
+}
+
+/** Fan ids with counts, e.g. `{ fullFlush: 1, pureStraight: 1 }`. */
+export function fanMap(score: ReturnType<typeof scoreHand>): Record<string, number> {
+  return Object.fromEntries((score?.fans ?? []).map((f) => [f.id, f.count]))
 }

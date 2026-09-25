@@ -18,7 +18,7 @@ const FILL_C = '234s 678s 23m 89m 88p 3p'
 describe('claims', () => {
   it('pung beats chow; only the next seat may chow', () => {
     let s = buildState({
-      hands: ['5m 123p 456p 789p 11s 99s', '46m 123s 456s 789s EE', '55m 123p 456s 789s CC', '46m 234p 567s FFF PP'],
+      hands: ['5m 123p 456p 789p 11s 99s', '46m 123s 456s 78s EE N', '55m 123p 456s 78s CC F', '46m 234p 567s FFF P N'],
       turn: 0,
     })
     s = applyAction(s, discardOf(s, 0, 4))
@@ -86,7 +86,7 @@ describe('claims', () => {
   })
 
   it('the final discard (empty wall) cannot be claimed except to win', () => {
-    let s = buildState({ hands: ['5m 123p 456p 789p 11s 99s', '46m 123s 456s 789s PP', '55m 123p 456s 789s FF', FILL_A], wallSize: 0 })
+    let s = buildState({ hands: ['5m 123p 456p 789p 11s 99s', '46m 123s 456s 78s PP N', '55m 123p 456s 78s FF P', FILL_A], wallSize: 0 })
     s = applyAction(s, discardOf(s, 0, 4))
     expect(s.phase).toEqual({ kind: 'ended', result: { type: 'drawn' } })
   })

@@ -1,6 +1,7 @@
 import { replaceFlowers } from './deal'
-import type { Action, ClaimWindow, GameState, HandScore, Seat } from './state'
-import { nextSeat } from './state'
+import { scoreHand, type ScoringMeld, type WinContext } from './scoring'
+import type { Action, ClaimWindow, GameState, HandScore, Meld, Seat } from './state'
+import { nextSeat, seatWind } from './state'
 import { kindIndex, sameKind, type Tile } from './tiles'
 
 /** Deep copy of a JSON-only state. Portable (no structuredClone). */
@@ -28,13 +29,47 @@ export function sameAction(a: Action, b: Action): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Win evaluation hook. Scoring is wired in later; until then no hand can win.
+// Win evaluation
 // ---------------------------------------------------------------------------
 
 export type WinSource = 'selfDraw' | 'discard' | 'robKong'
 
-function evaluateWin(_state: GameState, _seat: Seat, _tile: Tile, _source: WinSource): HandScore | null {
-  return null
+export function scoringMeld(meld: Meld): ScoringMeld {
+  return { type: meld.type, index: Math.min(...meld.tiles.map((t) => kindIndex(t.kind))), exposed: meld.exposed }
+}
+
+/** Build the scoring context for `seat` winning on `tile`. */
+export function winContext(state: GameState, seat: Seat, tile: Tile, source: WinSource): WinContext {
+  const hand = state.hands[seat]!
+  const concealed = hand.map((t) => kindIndex(t.kind))
+  if (!hand.some((t) => t.id === tile.id)) concealed.push(kindIndex(tile.kind))
+  const kind = kindIndex(tile.kind)
+  let visible = 0
+  for (let s = 0; s < 4; s++) {
+    for (const t of state.discards[s]!) if (t.id !== tile.id && kindIndex(t.kind) === kind) visible++
+    for (const m of state.melds[s]!) {
+      if (m.exposed) for (const t of m.tiles) if (t.id !== tile.id && kindIndex(t.kind) === kind) visible++
+    }
+  }
+  const phase = state.phase
+  return {
+    concealed,
+    melds: state.melds[seat]!.map(scoringMeld),
+    winTile: kind,
+    selfDrawn: source === 'selfDraw',
+    seatWind: seatWind(state, seat),
+    prevailingWind: state.prevailingWind,
+    flowers: state.flowers[seat]!.length,
+    lastTileOfWall: state.wall.length === 0,
+    replacement: source === 'selfDraw' && phase.kind === 'discard' && phase.afterKong,
+    robbingKong: source === 'robKong',
+    winTileVisible: visible,
+  }
+}
+
+/** Score if `seat` may win on `tile`, else null. */
+function evaluateWin(state: GameState, seat: Seat, tile: Tile, source: WinSource): HandScore | null {
+  return scoreHand(winContext(state, seat, tile, source))
 }
 
 // ---------------------------------------------------------------------------
