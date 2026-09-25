@@ -2,6 +2,9 @@
  * The 81 fan of Mahjong Competition Rules (Chinese Official), with the exclusions each fan
  * imposes. Exclusions follow the rulebook's "does not combine with" notes plus the
  * non-identical principle (a fan implied by a bigger one is not counted again).
+ *
+ * One extra combination, Concealed Kong and Melded Kong (明暗杠, 5), follows the reference
+ * calculator used in competition (ChineseOfficialMahjongHelper / PyMahjongGB).
  */
 
 export type FanId =
@@ -84,6 +87,8 @@ export type FanId =
   | 'twoConcealedPungs'
   | 'concealedKong'
   | 'allSimples'
+  // Combination scored by the reference calculator (not one of the 81)
+  | 'concealedKongAndMeldedKong'
   // 1
   | 'pureDoubleChow'
   | 'mixedDoubleChow'
@@ -119,7 +124,7 @@ export const FANS: readonly FanDef[] = [
   f('bigFourWinds', 88, 'Big Four Winds', '大四喜', ['bigThreeWinds', 'littleFourWinds', 'allPungs', 'prevalentWind', 'seatWind', 'pungOfTerminalsOrHonors']),
   f('bigThreeDragons', 88, 'Big Three Dragons', '大三元', ['littleThreeDragons', 'twoDragonPungs', 'dragonPung']),
   f('allGreen', 88, 'All Green', '绿一色', ['halfFlush', 'oneVoidedSuit']),
-  f('nineGates', 88, 'Nine Gates', '九莲宝灯', ['fullFlush', 'concealedHand', 'fullyConcealedHand', 'pungOfTerminalsOrHonors', 'noHonors', 'oneVoidedSuit']),
+  f('nineGates', 88, 'Nine Gates', '九莲宝灯', ['fullFlush', 'concealedHand', 'fullyConcealedHand', 'noHonors', 'oneVoidedSuit']),
   f('fourKongs', 88, 'Four Kongs', '四杠', ['threeKongs', 'twoConcealedKongs', 'twoMeldedKongs', 'meldedKong', 'concealedKong', 'allPungs', 'singleWait']),
   f('sevenShiftedPairs', 88, 'Seven Shifted Pairs', '连七对', ['sevenPairs', 'fullFlush', 'concealedHand', 'fullyConcealedHand', 'singleWait', 'noHonors', 'oneVoidedSuit']),
   f('thirteenOrphans', 88, 'Thirteen Orphans', '十三幺', ['allTypes', 'concealedHand', 'fullyConcealedHand', 'singleWait', 'allTerminalsAndHonors']),
@@ -128,7 +133,7 @@ export const FANS: readonly FanDef[] = [
   f('littleFourWinds', 64, 'Little Four Winds', '小四喜', ['bigThreeWinds']),
   f('littleThreeDragons', 64, 'Little Three Dragons', '小三元', ['twoDragonPungs', 'dragonPung']),
   f('allHonors', 64, 'All Honors', '字一色', ['allTerminalsAndHonors', 'allPungs', 'outsideHand', 'pungOfTerminalsOrHonors']),
-  f('fourConcealedPungs', 64, 'Four Concealed Pungs', '四暗刻', ['allPungs', 'concealedHand', 'threeConcealedPungs', 'twoConcealedPungs']),
+  f('fourConcealedPungs', 64, 'Four Concealed Pungs', '四暗刻', ['allPungs', 'concealedHand', 'fullyConcealedHand', 'threeConcealedPungs', 'twoConcealedPungs']),
   f('pureTerminalChows', 64, 'Pure Terminal Chows', '一色双龙会', ['allChows', 'sevenPairs', 'fullFlush', 'pureDoubleChow', 'twoTerminalChows', 'noHonors', 'oneVoidedSuit']),
 
   f('quadrupleChow', 48, 'Quadruple Chow', '一色四同顺', ['pureShiftedPungs', 'pureTripleChow', 'tileHog', 'pureDoubleChow']),
@@ -178,6 +183,8 @@ export const FANS: readonly FanDef[] = [
   f('meldedHand', 6, 'Melded Hand', '全求人', ['singleWait']),
   f('twoConcealedKongs', 6, 'Two Concealed Kongs', '双暗杠', ['concealedKong', 'twoConcealedPungs']),
   f('twoDragonPungs', 6, 'Two Dragon Pungs', '双箭刻', ['dragonPung']),
+
+  f('concealedKongAndMeldedKong', 5, 'Concealed Kong and Melded Kong', '明暗杠', ['concealedKong', 'meldedKong']),
 
   f('outsideHand', 4, 'Outside Hand', '全带幺'),
   f('fullyConcealedHand', 4, 'Fully Concealed Hand', '不求人', ['concealedHand', 'selfDrawn']),

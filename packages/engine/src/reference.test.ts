@@ -19,8 +19,8 @@ const REFERENCE: { name: string; hand: string; win: string; opts?: ScoreOptions;
   // sevenPairs 24, allTypes 6
   { name: 'seven pairs', hand: '11m 33m 55p 77p 99s EE CC', win: 'C', total: 30 },
   { name: 'thirteen orphans', hand: '19m 19p 19s ESWN CFP 1m', win: '1m', total: 88 },
-  // nineGates 88, twoConcealedPungs 2 (111m, 999m)
-  { name: 'nine gates', hand: '1112345678999m 5m', win: '5m', total: 90 },
+  // nineGates 88, twoConcealedPungs 2 (111m, 999m), pungOfTerminalsOrHonors 1 (one of the two, V38)
+  { name: 'nine gates', hand: '1112345678999m 5m', win: '5m', total: 91 },
   // bigThreeDragons 88, threeConcealedPungs 16, concealedHand 2, singleWait 1, oneVoidedSuit 1
   { name: 'big three dragons', hand: 'CCC FFF PPP 234m 55p', win: '5p', total: 108 },
   // allPungs 6, twoConcealedPungs 2, pungOfTerminalsOrHonors 1 (999m), singleWait 1

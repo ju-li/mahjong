@@ -360,3 +360,18 @@ export function waitingKinds(counts: readonly number[], meldCount = 0, alsoHeld?
   }
   return waits
 }
+
+/**
+ * Kinds that would complete the hand by shape alone, ignoring how many copies exist
+ * (used to decide whether a wait is unique for edge/closed/single-wait fans).
+ */
+export function waitingKindsByShape(counts: readonly number[], meldCount = 0): number[] {
+  const waits: number[] = []
+  const work = [...counts]
+  for (let k = 0; k < KIND_COUNT; k++) {
+    work[k]!++
+    if (isComplete(work, meldCount)) waits.push(k)
+    work[k]!--
+  }
+  return waits
+}

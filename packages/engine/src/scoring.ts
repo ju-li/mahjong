@@ -1,5 +1,5 @@
 import { applyExclusions, FAN_BY_ID, type FanHit, type FanId } from './fans'
-import { countsOf, decomposeCounts, knittedKinds, waitingKinds, type Form } from './shapes'
+import { countsOf, decomposeCounts, knittedKinds, waitingKindsByShape, type Form } from './shapes'
 import type { HandScore } from './state'
 import { KIND_COUNT, type Wind } from './tiles'
 
@@ -194,9 +194,10 @@ function groupFans(
     const fans: FanId[] = [id]
     if (rest !== null) {
       // The leftover set may combine once with one set of the trio.
+      // Skip pairings the trio fan cancels (e.g. a straight cancels short straight).
       const extra = trio
         .map((i) => pair(groups[rest]!, groups[i]!))
-        .filter((x): x is FanId => x !== null)
+        .filter((x): x is FanId => x !== null && !FAN_BY_ID[id].excludes.includes(x))
         .sort((a, b) => FAN_BY_ID[b].points - FAN_BY_ID[a].points)[0]
       if (extra) fans.push(extra)
     }
@@ -292,7 +293,11 @@ function arrangementFans(a: Arrangement, ctx: WinContext, all: number[], singleW
   // Standard or knitted-straight arrangement.
   const sets = a.sets
   const pair = a.pair
-  if (a.form === 'knittedStraight') out.push('knittedStraight')
+  if (a.form === 'knittedStraight') {
+    out.push('knittedStraight')
+    // The knitted straight counts as three chows (V37).
+    if (sets.every((s) => s.type === 'chow') && !isHonor(pair)) out.push('allChows')
+  }
 
   const pungs = sets.filter((s) => s.type !== 'chow')
   const chows = sets.filter((s) => s.type === 'chow')
@@ -323,6 +328,7 @@ function arrangementFans(a: Arrangement, ctx: WinContext, all: number[], singleW
   else if (kongs === 3) out.push('threeKongs')
   else if (concealedKongs === 2) out.push('twoConcealedKongs')
   else if (melded === 2) out.push('twoMeldedKongs')
+  else if (melded === 1 && concealedKongs === 1) out.push('concealedKongAndMeldedKong')
   else {
     if (melded === 1) out.push('meldedKong')
     if (concealedKongs === 1) out.push('concealedKong')
@@ -376,7 +382,12 @@ function arrangementFans(a: Arrangement, ctx: WinContext, all: number[], singleW
       const suit = suitOf(ctx.winTile)
       if (suit < 3) {
         const pattern = [3, 1, 1, 1, 1, 1, 1, 1, 3]
-        if (before.every((c, k) => (suitOf(k) === suit ? c === pattern[rankOf(k) - 1] : c === 0))) out.push('nineGates')
+        if (before.every((c, k) => (suitOf(k) === suit ? c === pattern[rankOf(k) - 1] : c === 0))) {
+          out.push('nineGates')
+          // Nine Gates cancels one terminal pung (the 111 or 999 of the pattern), not both (V38).
+          const at = out.indexOf('pungOfTerminalsOrHonors')
+          if (at >= 0) out.splice(at, 1)
+        }
       }
     }
 
@@ -448,8 +459,8 @@ export function scoreHand(ctx: WinContext): ScoreResult | null {
   const all = [...ctx.concealed, ...meldTiles(ctx.melds)]
   const before = [...counts]
   before[ctx.winTile]!--
-  const held = countsOf(meldTiles(ctx.melds))
-  const singleWaitKind = waitingKinds(before, ctx.melds.length, held).length === 1
+  // Wait fans need a single completing kind by shape, even if some other kind is fully held (V36).
+  const singleWaitKind = waitingKindsByShape(before, ctx.melds.length).length === 1
 
   let best: FanHit[] | null = null
   let bestPoints = -1

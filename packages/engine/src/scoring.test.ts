@@ -4,11 +4,13 @@ import { buildState, fanMap, playRandomHand, scoreNotation } from './testing'
 import { kindIndex } from './tiles'
 
 describe('fan table', () => {
-  it('has the 81 MCR fans with the official point spread', () => {
-    expect(FANS).toHaveLength(81)
-    expect(new Set(FANS.map((f) => f.id)).size).toBe(81)
+  it('has the 81 MCR fans with the official point spread, plus the kong combination', () => {
+    const official = FANS.filter((f) => f.id !== 'concealedKongAndMeldedKong')
+    expect(official).toHaveLength(81)
+    expect(FANS).toHaveLength(82)
+    expect(new Set(FANS.map((f) => f.id)).size).toBe(82)
     const spread: Record<number, number> = {}
-    for (const f of FANS) spread[f.points] = (spread[f.points] ?? 0) + 1
+    for (const f of official) spread[f.points] = (spread[f.points] ?? 0) + 1
     expect(spread).toEqual({ 88: 7, 64: 6, 48: 2, 32: 3, 24: 9, 16: 6, 12: 5, 8: 9, 6: 7, 4: 4, 2: 10, 1: 13 })
   })
 

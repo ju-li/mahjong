@@ -90,6 +90,11 @@ V30: engine totals match ≥ 20 externally sourced scored example hands; each ex
 V31: claim-timer expiry issues only `pass`, and only when `pass` ∈ `legalActions`.
 V32: ∀ human action reachable by keyboard alone.
 V33: engine src ⊥ browser/Node globals, enforced by automated test (not manual grep).
+V34: 1 concealed kong + 1 melded kong → `concealedKongAndMeldedKong` 5 (replaces `concealedKong` + `meldedKong`), per reference calculator.
+V35: `fourConcealedPungs` excludes `fullyConcealedHand`; self-drawn 4 concealed pungs score `selfDrawn` 1.
+V36: wait fans (edge/closed/single) need exactly one completing kind by shape; kinds whose 4 copies the player holds still count as waits.
+V37: knitted straight + chow(s) + suited pair → `allChows` (knitted straight counts as chows).
+V38: `nineGates` cancels exactly one `pungOfTerminalsOrHonors`; others still count.
 
 ## §T TASKS
 id|status|task|cites
@@ -116,7 +121,7 @@ T20|x|reference-hand suite (≥30 hands from official rules/examples); enforce 8
 T21|x|engine `Match`: 16 hands, prevailing wind progression, dealer rotation, cumulative scores|V13,V23,I.api
 T22|x|bots easy/medium/hard: shanten-based discard, useful-tile count, claim heuristics, 8-fan awareness, defense (hard)|V25,V26
 T23|x|UI full: win screen fan breakdown, scores, difficulty picker, new match, `localStorage` resume|V26,I.ui
-T24|.|source ≥ 20 scored MCR example hands (official rulebook / WMO / reputable calculator), cite each; add to reference suite; mismatches → `/ck:spec bug:`|V22,V30
+T24|x|source ≥ 20 scored MCR example hands (official rulebook / WMO / reputable calculator), cite each; add to reference suite; mismatches → `/ck:spec bug:`|V22,V30
 T25|.|V1 enforcement test: scan engine src for browser/Node globals (web vitest, `import.meta.glob` raw); rename `window` locals in `rules.ts`|V1,V33
 T26|.|engine official re-seating: `Match.seating`, `seatOf`, `playerAt`; scores per player; UI maps human by player not seat|V27,V13,V23,I.api
 T27|.|test last-discard rule explicitly (claims ⊆ win/pass when wall empty)|V28
@@ -128,3 +133,8 @@ T32|.|PWA: manifest, icons, service worker precache; offline smoke test|I.pwa
 
 ## §B BUGS
 id|date|cause|fix
+B1|2026-09-25|1 concealed + 1 melded kong scored 2+1; reference scores combination 5 (明暗杠)|V34
+B2|2026-09-25|`fourConcealedPungs` kept `fullyConcealedHand` (4); reference gives `selfDrawn` (1)|V35
+B3|2026-09-25|wait uniqueness ignored kinds fully held by player ∴ extra `singleWait`; reference counts shape waits|V36
+B4|2026-09-25|`allChows` only checked standard form; reference counts knitted straight as chows|V37
+B5|2026-09-25|`nineGates` excluded every terminal pung; reference cancels one|V38

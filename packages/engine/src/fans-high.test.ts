@@ -19,7 +19,8 @@ const CASES: Case[] = [
   { fan: 'bigFourWinds', hand: 'EEE SSS WWW NNN 11m', win: '1m', not: ['bigThreeWinds', 'littleFourWinds', 'allPungs', 'prevalentWind', 'seatWind', 'pungOfTerminalsOrHonors'], with: ['fourConcealedPungs', 'allTerminalsAndHonors'] },
   { fan: 'bigThreeDragons', hand: 'CCC FFF PPP 234m 55p', win: '5p', not: ['littleThreeDragons', 'twoDragonPungs', 'dragonPung'] },
   { fan: 'allGreen', hand: '234s 234s 666s 888s FF', win: 'F', not: ['halfFlush', 'oneVoidedSuit'] },
-  { fan: 'nineGates', hand: '1112345678999m 5m', win: '5m', not: ['fullFlush', 'concealedHand', 'noHonors', 'oneVoidedSuit', 'pungOfTerminalsOrHonors'] },
+  // One of the two terminal pungs is cancelled by Nine Gates, the other still counts (V38).
+  { fan: 'nineGates', hand: '1112345678999m 5m', win: '5m', not: ['fullFlush', 'concealedHand', 'noHonors', 'oneVoidedSuit'], with: ['pungOfTerminalsOrHonors'] },
   { fan: 'fourKongs', hand: 'EE', win: 'E', opts: { melds: ['kong 1111m', 'kong 9999p', 'kong 5555s', 'kong NNNN'] }, not: ['threeKongs', 'meldedKong', 'twoMeldedKongs', 'allPungs', 'singleWait'] },
   { fan: 'sevenShiftedPairs', hand: '11223344556677m', win: '7m', not: ['sevenPairs', 'fullFlush', 'concealedHand', 'singleWait', 'noHonors'] },
   { fan: 'thirteenOrphans', hand: '19m 19p 19s ESWN CFP 1m', win: '1m', not: ['allTerminalsAndHonors', 'allTypes', 'concealedHand', 'singleWait'] },
