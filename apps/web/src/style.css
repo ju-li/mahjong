@@ -24,15 +24,27 @@
   --button-text: #1d2521;
   --focus: #f2b632;
 
-  --tile-w: clamp(20px, calc((min(100vw, 1240px) - 240px) / 15), 58px);
-  --tile-sm-w: clamp(15px, calc(min(100vw, 1240px) * 0.024), 30px);
-  --tile-xs-w: clamp(12px, calc(min(100vw, 1240px) * 0.017), 22px);
+  /*
+   * The small-tile width at which the whole table fits the viewport height: the side ponds,
+   * the ponds above and below them, the hand and the chrome stack up to roughly
+   * 22 small-tile widths plus 430px. Tile sizes take the smaller of this and the width-based size.
+   */
+  --fit-h: calc((100vh - 430px) / 22);
+  --tile-w: clamp(20px, min(calc((min(100vw, 1240px) - 240px) / 15), calc(var(--fit-h) * 2.1)), 58px);
+  --tile-sm-w: clamp(13px, min(calc(min(100vw, 1240px) * 0.024), var(--fit-h)), 30px);
+  --tile-xs-w: clamp(10px, min(calc(min(100vw, 1240px) * 0.017), calc(var(--fit-h) * 0.72)), 22px);
   --tile-sm-h: calc(var(--tile-sm-w) * 1.36);
 
   font: 16px/1.4 system-ui, 'Segoe UI', Roboto, 'PingFang SC', 'Noto Sans CJK SC', sans-serif;
   color: var(--text);
   background: var(--bg);
   color-scheme: light dark;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --fit-h: calc((100dvh - 430px) / 22);
+  }
 }
 
 @media (max-width: 640px) {
@@ -105,7 +117,7 @@ body {
 .board {
   --rim: clamp(6px, 1.2vw, 14px);
   --wall-t: clamp(7px, 1.2vw, 14px);
-  --avatar: clamp(44px, 6.5vw, 76px);
+  --avatar: clamp(40px, min(6.5vw, calc(var(--fit-h) * 2.6)), 76px);
   --edge-w: calc(var(--tile-sm-h) * 0.62);
   --edge-h: calc(var(--tile-sm-w) * 0.56);
   padding: var(--rim);
@@ -128,7 +140,9 @@ body {
     'left middle right'
     'me me me';
   gap: 10px clamp(6px, 1.4vw, 18px);
-  min-height: min(82vh, 820px);
+  /* Fill the viewport below the top bar (and above the key hints), up to a comfortable height. */
+  min-height: min(calc(100vh - 150px), 820px);
+  min-height: min(calc(100dvh - 150px), 820px);
   padding: clamp(8px, 1.4vw, 16px);
   border-radius: 14px;
   background:
@@ -641,6 +655,21 @@ body {
 
 .hand__gap {
   width: calc(var(--tile-w) * 0.35);
+}
+
+/* On wider screens the claim buttons sit beside the status, so they don't push the hand down. */
+@media (min-width: 641px) {
+  .me__main {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    column-gap: 14px;
+  }
+
+  .me__row {
+    flex-basis: 100%;
+  }
 }
 
 /* ---- Claim buttons ---- */
