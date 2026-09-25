@@ -1,41 +1,78 @@
 import { ref, watch } from 'vue'
+import { isRuleSet, type RuleSet } from '@mahjong/engine'
+import type { Difficulty } from '../bots/protocol'
 
 const STORAGE_KEY = 'mahjong.settings.v1'
+/** Older builds kept difficulty and rules only inside the saved match. */
+const LEGACY_MATCH_KEY = 'mahjong.match.v2'
 
 export const CLAIM_TIMER_OPTIONS = [0, 5, 10, 20] as const
 export type ClaimSeconds = (typeof CLAIM_TIMER_OPTIONS)[number]
+/** Rule sets in the pickers; only those the engine implements can be chosen. */
+export const RULE_OPTIONS = [
+  { id: 'mcr', playable: true },
+  { id: 'hk', playable: true },
+  { id: 'riichi', playable: false },
+  { id: 'taiwan', playable: false },
+] as const
+const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard']
 
-type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean }
-const DEFAULTS: Settings = { claimSeconds: 10, sound: true, voice: true }
+type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean; difficulty: Difficulty; rules: RuleSet }
+const DEFAULTS: Settings = { claimSeconds: 10, sound: true, voice: true, difficulty: 'medium', rules: 'mcr' }
 
-function load(): Settings {
+function read(key: string): Record<string, unknown> | null {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Partial<Settings> | null
-    return {
-      claimSeconds: CLAIM_TIMER_OPTIONS.includes(raw?.claimSeconds as ClaimSeconds) ? (raw!.claimSeconds as ClaimSeconds) : DEFAULTS.claimSeconds,
-      sound: typeof raw?.sound === 'boolean' ? raw.sound : DEFAULTS.sound,
-      voice: typeof raw?.voice === 'boolean' ? raw.voice : DEFAULTS.voice,
-    }
+    const raw = JSON.parse(localStorage.getItem(key) ?? 'null') as unknown
+    return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
   } catch {
-    return { ...DEFAULTS }
+    return null
+  }
+}
+
+export function load(): Settings {
+  const raw = read(STORAGE_KEY)
+  const legacy = read(LEGACY_MATCH_KEY)
+  const legacyRules = (legacy?.match as { rules?: unknown } | undefined)?.rules
+  const difficulty = raw?.difficulty ?? legacy?.difficulty
+  const rules = raw?.rules ?? legacyRules
+  return {
+    claimSeconds: CLAIM_TIMER_OPTIONS.includes(raw?.claimSeconds as ClaimSeconds) ? (raw!.claimSeconds as ClaimSeconds) : DEFAULTS.claimSeconds,
+    sound: typeof raw?.sound === 'boolean' ? raw.sound : DEFAULTS.sound,
+    voice: typeof raw?.voice === 'boolean' ? raw.voice : DEFAULTS.voice,
+    difficulty: DIFFICULTIES.includes(difficulty as Difficulty) ? (difficulty as Difficulty) : DEFAULTS.difficulty,
+    rules: isRuleSet(rules) ? rules : DEFAULTS.rules,
   }
 }
 
 const initial = load()
+/** True until a first-time player finishes onboarding; nothing is saved before then. */
+const needsOnboarding = ref(read(STORAGE_KEY) === null)
 /** App-wide player preferences, persisted per browser. */
 const claimSeconds = ref<ClaimSeconds>(initial.claimSeconds)
 const sound = ref(initial.sound)
 /** Bots call out their moves (吃, 碰, 北风…) with speech synthesis. */
 const voice = ref(initial.voice)
+const difficulty = ref<Difficulty>(initial.difficulty)
+/** Rule set for new matches; a match in progress keeps the rules it started with. */
+const rules = ref<RuleSet>(initial.rules)
 
-watch([claimSeconds, sound, voice], () => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ claimSeconds: claimSeconds.value, sound: sound.value, voice: voice.value }))
-  } catch {
-    // Not persisted; settings still apply for this visit.
-  }
-})
+watch(
+  [claimSeconds, sound, voice, difficulty, rules, needsOnboarding],
+  () => {
+    if (needsOnboarding.value) return
+    const settings: Settings = { claimSeconds: claimSeconds.value, sound: sound.value, voice: voice.value, difficulty: difficulty.value, rules: rules.value }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+    } catch {
+      // Not persisted; settings still apply for this visit.
+    }
+  },
+  { immediate: true },
+)
 
 export function useSettings() {
-  return { claimSeconds, sound, voice }
+  const finishOnboarding = () => {
+    needsOnboarding.value = false
+  }
+  return { claimSeconds, sound, voice, difficulty, rules, needsOnboarding, finishOnboarding }
 }

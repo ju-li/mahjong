@@ -16,7 +16,6 @@ import {
   type Player,
   type Seat,
 } from '@mahjong/engine'
-import type { Difficulty } from '../bots/protocol'
 import { BotClient } from './botClient'
 import { timeoutAction } from './keyboard'
 import { useSettings } from './settings'
@@ -33,7 +32,8 @@ const QUICK_DELAY_MS = 120
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-type Saved = { match: Match; difficulty: Difficulty }
+/** Difficulty and preferred rules live in settings; older saves also carry a `difficulty` field, now ignored. */
+type Saved = { match: Match }
 
 function load(): Saved | null {
   try {
@@ -42,7 +42,6 @@ function load(): Saved | null {
     const saved = JSON.parse(raw) as Saved
     const m = saved?.match
     if (typeof m?.seed !== 'number' || typeof m.handIndex !== 'number' || !Array.isArray(m.scores) || !Array.isArray(m.seating)) return null
-    if (!['easy', 'medium', 'hard'].includes(saved.difficulty)) return null
     // Matches saved before rule sets existed are MCR.
     if (!isRuleSet(m.rules)) m.rules = 'mcr'
     if (m.current && !isRuleSet(m.current.rules)) m.current.rules = m.rules
@@ -71,8 +70,8 @@ function randomSeed(): number {
 export function useMatch() {
   const bots = new BotClient()
   const saved = load()
-  const match = shallowRef<Match>(saved?.match ?? newMatch(randomSeed()))
-  const difficulty = ref<Difficulty>(saved?.difficulty ?? 'medium')
+  const { claimSeconds, sound, voice, difficulty, rules: preferredRules, needsOnboarding } = useSettings()
+  const match = shallowRef<Match>(saved?.match ?? newMatch(randomSeed(), preferredRules.value))
   let generation = 0
   let step = 0
   let running = false
@@ -85,9 +84,6 @@ export function useMatch() {
   const humanActions = computed(() => (state.value ? legalActions(state.value, humanSeat.value) : []))
   const handOver = computed(() => state.value?.phase.kind === 'ended')
 
-  // Claim timer: counts down while the human may claim; on expiry it passes (only if legal).
-  const { claimSeconds, sound, voice } = useSettings()
-
   watch(state, (next, prev) => {
     if (sound.value) {
       const kind = soundFor(prev ?? null, next ?? null, humanSeat.value)
@@ -99,11 +95,13 @@ export function useMatch() {
       if (call && call.seat !== humanSeat.value) speakCallout(call)
     }
   })
+  // Claim timer: counts down while the human may claim; on expiry it passes (only if legal).
   const claimRemaining = ref<number | null>(null)
   let claimTimer: ReturnType<typeof setInterval> | undefined
   /** Identifies one claim window for the human, so bot replies inside it do not restart the clock. */
   const claimKey = computed(() => {
     const s = state.value
+    if (needsOnboarding.value) return null
     if (!s || (s.phase.kind !== 'claim' && s.phase.kind !== 'robKong')) return null
     if (!timeoutAction(humanActions.value)) return null
     return `${match.value.handIndex}:${s.phase.kind}:${s.phase.tile.id}:${claimSeconds.value}`
@@ -124,7 +122,7 @@ export function useMatch() {
   })
   const matchOver = computed(() => isMatchOver(match.value))
 
-  watch([match, difficulty], () => save({ match: match.value, difficulty: difficulty.value }), { immediate: true })
+  watch(match, () => save({ match: match.value }), { immediate: true })
 
   function commit(action: Action): void {
     const current = match.value.current!
@@ -134,7 +132,7 @@ export function useMatch() {
 
   /** Advance until the hand ends or the human must choose. */
   async function pump(): Promise<void> {
-    if (running) return
+    if (running || needsOnboarding.value) return
     running = true
     const gen = generation
     try {
@@ -197,6 +195,7 @@ export function useMatch() {
 
   /** Start a fresh match; keeps the current rule set unless another is given. */
   function startNewMatch(next: RuleSet = match.value.rules): void {
+    preferredRules.value = next
     match.value = newMatch(randomSeed(), next)
     restartPump()
   }
@@ -207,6 +206,10 @@ export function useMatch() {
     bots.dispose()
   })
 
+  // Play waits behind the onboarding dialog.
+  watch(needsOnboarding, (waiting) => {
+    if (!waiting) void pump()
+  })
   void pump()
 
   return {
@@ -220,6 +223,8 @@ export function useMatch() {
     matchOver,
     difficulty,
     rules,
+    /** A match was restored from storage rather than dealt fresh. */
+    resumed: saved !== null,
     act,
     continueToNextHand,
     startNewMatch,
