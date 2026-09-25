@@ -122,7 +122,7 @@ T21|x|engine `Match`: 16 hands, prevailing wind progression, dealer rotation, cu
 T22|x|bots easy/medium/hard: shanten-based discard, useful-tile count, claim heuristics, 8-fan awareness, defense (hard)|V25,V26
 T23|x|UI full: win screen fan breakdown, scores, difficulty picker, new match, `localStorage` resume|V26,I.ui
 T24|x|source ≥ 20 scored MCR example hands (official rulebook / WMO / reputable calculator), cite each; add to reference suite; mismatches → `/ck:spec bug:`|V22,V30
-T25|.|V1 enforcement test: scan engine src for browser/Node globals (web vitest, `import.meta.glob` raw); rename `window` locals in `rules.ts`|V1,V33
+T25|x|V1 enforcement test: scan engine src for browser/Node globals (web vitest, `import.meta.glob` raw); rename `window` locals in `rules.ts`|V1,V33
 T26|.|engine official re-seating: `Match.seating`, `seatOf`, `playerAt`; scores per player; UI maps human by player not seat|V27,V13,V23,I.api
 T27|.|test last-discard rule explicitly (claims ⊆ win/pass when wall empty)|V28
 T28|.|i18n: `en` + `zh-Hans` dictionaries, toggle, persistence, locale default; engine fan table gains zh descriptions; key-parity test|V29,I.ui

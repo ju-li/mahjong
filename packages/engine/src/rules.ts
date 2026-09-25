@@ -108,18 +108,18 @@ function chowOptions(hand: readonly Tile[], tile: Tile): [number, number][] {
   return options
 }
 
-function claimOptions(state: GameState, seat: Seat, window: ClaimWindow, robbing: boolean): Action[] {
+function claimOptions(state: GameState, seat: Seat, claimWindow: ClaimWindow, robbing: boolean): Action[] {
   const options: Action[] = []
-  if (seat === window.from) return options
-  if (evaluateWin(state, seat, window.tile, robbing ? 'robKong' : 'discard')) options.push({ type: 'win', seat })
+  if (seat === claimWindow.from) return options
+  if (evaluateWin(state, seat, claimWindow.tile, robbing ? 'robKong' : 'discard')) options.push({ type: 'win', seat })
   // Robbing a kong allows only a win; the final discard of the hand can only be claimed for a win.
   if (robbing || state.wall.length === 0) return options
   const hand = state.hands[seat]!
-  const same = matching(hand, window.tile).length
+  const same = matching(hand, claimWindow.tile).length
   if (same >= 2) options.push({ type: 'pung', seat })
   if (same >= 3) options.push({ type: 'kong', seat })
-  if (seat === nextSeat(window.from)) {
-    for (const tileIds of chowOptions(hand, window.tile)) options.push({ type: 'chow', seat, tileIds })
+  if (seat === nextSeat(claimWindow.from)) {
+    for (const tileIds of chowOptions(hand, claimWindow.tile)) options.push({ type: 'chow', seat, tileIds })
   }
   return options
 }
@@ -180,13 +180,13 @@ function endDrawn(s: GameState): void {
 
 function openWindow(s: GameState, tile: Tile, from: Seat, robKongMeld: number | null): void {
   const robbing = robKongMeld !== null
-  const window: ClaimWindow = { tile, from, responses: [null, null, null, null] }
+  const claimWindow: ClaimWindow = { tile, from, responses: [null, null, null, null] }
   for (let i = 0; i < 4; i++) {
     const seat = i as Seat
-    const auto = claimOptions(s, seat, window, robbing).length === 0
-    window.responses[seat] = auto ? { type: 'pass', seat } : null
+    const auto = claimOptions(s, seat, claimWindow, robbing).length === 0
+    claimWindow.responses[seat] = auto ? { type: 'pass', seat } : null
   }
-  s.phase = robbing ? { kind: 'robKong', meldIndex: robKongMeld, ...window } : { kind: 'claim', ...window }
+  s.phase = robbing ? { kind: 'robKong', meldIndex: robKongMeld, ...claimWindow } : { kind: 'claim', ...claimWindow }
   maybeResolveClaims(s)
 }
 
@@ -257,26 +257,26 @@ function winOnTile(s: GameState, seat: Seat, tile: Tile, from: Seat): void {
   s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from, tileId: tile.id, score, deltas: settle({ winner: seat, from }, score) } }
 }
 
-function applyClaim(s: GameState, claim: Action, window: ClaimWindow): void {
+function applyClaim(s: GameState, claim: Action, claimWindow: ClaimWindow): void {
   const seat = claim.seat
   const hand = s.hands[seat]!
   switch (claim.type) {
     case 'win':
-      return winOnTile(s, seat, window.tile, window.from)
+      return winOnTile(s, seat, claimWindow.tile, claimWindow.from)
     case 'pung':
     case 'kong': {
-      const own = matching(hand, window.tile).slice(0, claim.type === 'pung' ? 2 : 3)
+      const own = matching(hand, claimWindow.tile).slice(0, claim.type === 'pung' ? 2 : 3)
       takeFromHand(s, seat, own.map((t) => t.id))
-      const tile = takeDiscard(s, window.from, window.tile)
-      s.melds[seat]!.push({ type: claim.type, tiles: [...own, tile], exposed: true, from: window.from, claimedTileId: tile.id })
+      const tile = takeDiscard(s, claimWindow.from, claimWindow.tile)
+      s.melds[seat]!.push({ type: claim.type, tiles: [...own, tile], exposed: true, from: claimWindow.from, claimedTileId: tile.id })
       if (claim.type === 'kong') return kongReplacement(s, seat)
       break
     }
     case 'chow': {
       const own = takeFromHand(s, seat, claim.tileIds)
-      const tile = takeDiscard(s, window.from, window.tile)
+      const tile = takeDiscard(s, claimWindow.from, claimWindow.tile)
       const tiles = [...own, tile].sort((a, b) => kindIndex(a.kind) - kindIndex(b.kind))
-      s.melds[seat]!.push({ type: 'chow', tiles, exposed: true, from: window.from, claimedTileId: tile.id })
+      s.melds[seat]!.push({ type: 'chow', tiles, exposed: true, from: claimWindow.from, claimedTileId: tile.id })
       break
     }
     default:
