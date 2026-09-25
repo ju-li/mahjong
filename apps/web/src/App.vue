@@ -5,6 +5,7 @@ import type { Difficulty } from './bots/protocol'
 import FanReference from './components/FanReference.vue'
 import GameTable from './components/GameTable.vue'
 import HandResult from './components/HandResult.vue'
+import RulesReference from './components/RulesReference.vue'
 import { avatarSeeds, avatarSvg } from './game/avatar'
 import { CLAIM_TIMER_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
@@ -14,6 +15,8 @@ const { t, toggle } = useI18n()
 
 /** Fan list dialog: `null` = closed, '' = open at the top, otherwise the fan to show. */
 const fanList = ref<string | null>(null)
+/** How-to-play dialog. */
+const rulesOpen = ref(false)
 
 /** Per player. Bots are numbered by where they sit relative to you at the start of the match. */
 const NAMES = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
@@ -120,6 +123,7 @@ function changeRules(e: Event) {
             <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle">{{ t('app.switchLanguage') }}</button>
           </div>
         </details>
+        <button class="action action--quiet-light" @click="rulesOpen = true">{{ t('app.howToPlay') }}</button>
         <button class="action action--quiet-light" @click="fanList = ''">{{ t('app.fanReference') }}</button>
         <button class="action" @click="confirmNewMatch">{{ t('app.newMatch') }}</button>
       </div>
@@ -151,6 +155,7 @@ function changeRules(e: Event) {
       @explain="(id: string) => (fanList = id)"
     />
 
+    <RulesReference v-if="rulesOpen" :rules="rules" @close="rulesOpen = false" @fans="rulesOpen = false; fanList = ''" />
     <FanReference v-if="fanList !== null" :focus="fanList || null" :rules="rules" @close="fanList = null" />
 
     <section v-if="!view" class="result__card result__card--inline">
