@@ -1,30 +1,18 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { legalActions, newHand, viewFor } from '@mahjong/engine'
-import type { BotRequest, BotResponse } from './bots/protocol'
+import GameTable from './components/GameTable.vue'
+import { useGame } from './game/useGame'
 
-const reply = ref<BotResponse | null>(null)
-let worker: Worker | undefined
+const NAMES = ['You', 'Bot Right', 'Bot Across', 'Bot Left']
 
-onMounted(() => {
-  worker = new Worker(new URL('./bots/bot.worker.ts', import.meta.url), { type: 'module' })
-  worker.onmessage = (event: MessageEvent<BotResponse>) => {
-    reply.value = event.data
-  }
-  const state = newHand({ seed: 1, dealer: 0, prevailingWind: 'E' })
-  const request: BotRequest = { id: 1, view: viewFor(state, 0), legal: legalActions(state, 0), difficulty: 'easy', seed: 1 }
-  worker.postMessage(request)
-})
-
-onBeforeUnmount(() => worker?.terminate())
+const { view, humanActions, act, startHand } = useGame()
 </script>
 
 <template>
-  <main>
-    <h1>Mahjong (MCR)</h1>
-    <p v-if="reply" data-testid="worker-reply">
-      Bot worker replied: <code>{{ JSON.stringify(reply) }}</code>
-    </p>
-    <p v-else>Waiting for bot worker…</p>
+  <main class="app">
+    <header class="topbar">
+      <h1>Mahjong <small>MCR</small></h1>
+      <button class="action" @click="startHand()">New hand</button>
+    </header>
+    <GameTable :view="view" :actions="humanActions" :names="NAMES" @act="act" />
   </main>
 </template>

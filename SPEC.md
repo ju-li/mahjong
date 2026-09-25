@@ -90,7 +90,7 @@ T11|x|engine turn loop: `legalActions` + `applyAction` for draw, discard, pass, 
 T12|x|engine claims: chow/pung/exposed kong on discard, concealed & promoted kong, replacement draw, claim window & priority|V12,V15,V17,V18,V19,V20
 T13|x|engine `viewFor` + `replay`; property test: random legal play ∀ 200 seeds keeps V12, V19, V20|V12,V13,V16,V19,V20
 T14|x|worker protocol → `{ view, legal, difficulty, seed }` → `{ action }`; placeholder bot = seeded random legal action|V25,V26,I.worker
-T15|.|UI playable slice: table, own hand, click-to-discard, claim buttons from `legalActions`, bots via worker, hand ends on exhaustion|V26,I.ui
+T15|x|UI playable slice: table, own hand, click-to-discard, claim buttons from `legalActions`, bots via worker, hand ends on exhaustion|V26,I.ui
 T16|.|engine `decompose` + `shanten` (standard, seven pairs, thirteen orphans, knitted forms)|V24,I.api
 T17|.|engine fan framework: win context, fan table (81 entries), exclusion rules; wire `win` legality via shape + (temp) ⊥ 8-fan check|V21,V22
 T18|.|engine fans 88 → 6 pt|V22
