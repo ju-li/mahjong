@@ -16,6 +16,8 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - scope now: v0 hardening. ⊥ accounts, ⊥ network play, ⊥ mobile shell.
 - roadmap order (fixed): hardening → multiplayer (Colyseus) → accounts & leaderboards (PocketBase) → Capacitor apps.
 - leaderboards ! multiplayer only (server-authoritative results). ⊥ single-player / bot results on leaderboards.
+- rule sets: `mcr` (default) & `hk` playable; picker also lists Japanese Riichi & Taiwanese 16-tile as coming soon (disabled). switching rules → new match.
+- hk: faan scoring, win ! ≥ 3 faan incl flowers, cap 13 (limit hands), half-spicy base table, discarder pays 2b / others b, self-draw each 2b. ⊥ re-seating, ⊥ dealer repeat, ⊥ heavenly/earthly hands. source: en.wikipedia.org/wiki/Hong_Kong_mahjong_scoring_rules.
 - rules: MCR (Chinese Official, 81 fan). win ! ≥ 8 fan excl flower fan. no dead wall; replacement draws (flower, kong) from wall back end. wall empty → drawn hand, 0 payment.
 - seating: official MCR re-seating at each prevailing-wind round boundary (pattern per rulebook, source cited in code). dealer rotates every hand, ⊥ dealer repeat.
 - final discard (wall empty) → claimable only for win.
@@ -46,7 +48,8 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - api: `viewFor(state, seat): PlayerView` → own concealed tiles; others' melds, discards, flowers, concealed counts; wall count only.
 - api: `decompose(tiles)` → standard (4 sets + pair) | seven pairs | thirteen orphans | knitted forms. `shanten(tiles, melds): number` (-1 = complete).
 - api: `scoreHand(winCtx): { fans: {name, points, count}[], total, flowerPoints }`. `settle(winCtx, score): number[4]` point deltas.
-- api: `Match` (16 hands, 4 prevailing winds × 4): `newMatch(seed)`, `nextHand(match, result)`, cumulative scores per player.
+- api: `RuleSet` = `'mcr'|'hk'`. `GameState.rules`, `Match.rules`, `PlayerView.rules`. `scoreFor` / `meetsMinimumFor` / `settleFor` / `fansFor` / `fanDef` dispatch by rule set; hk fan ids prefixed `hk.`.
+- api: `Match` (16 hands, 4 prevailing winds × 4): `newMatch(seed, rules?)`, `nextHand(match, result)`, cumulative scores per player.
 - api: `Match.seating` / `seatOf(match, player)` / `playerAt(match, seat)`: player ↔ table seat for current round. players 0..3 fixed identities; seats change per round.
 - worker: `apps/web/src/bots/bot.worker.ts`. in `{ view: PlayerView, legal: Action[], difficulty: 'easy'|'medium'|'hard', seed }` → out `{ action }`.
 - ui: table (4 seats, discards, melds, flowers), own hand, claim prompts, win screen w/ fan breakdown, difficulty picker, new match. match saved to `localStorage`.
@@ -95,6 +98,8 @@ V35: `fourConcealedPungs` excludes `fullyConcealedHand`; self-drawn 4 concealed 
 V36: wait fans (edge/closed/single) need exactly one completing kind by shape; kinds whose 4 copies the player holds still count as waits.
 V37: knitted straight + chow(s) + suited pair → `allChows` (knitted straight counts as chows).
 V38: `nineGates` cancels exactly one `pungOfTerminalsOrHonors`; others still count.
+V39: hk `win` legal only if hk total (flowers incl) ≥ 3; hk total ≤ 13; hk settle sums to 0; hk matches keep seating fixed.
+V40: bots & UI score via rule-set dispatch (`scoreFor`, `fanDef`), ⊥ hard-coded MCR in rule-dependent paths.
 
 ## §T TASKS
 id|status|task|cites
@@ -130,6 +135,9 @@ T29|x|fan reference page (81 fans, points, description, exclusions, bilingual), 
 T30|x|claim timer (setting, auto-pass) + keyboard play (tile focus/arrow keys, action shortcuts)|V31,V32,I.ui
 T31|x|tile animations + sound effects, toggle, reduced-motion respected|I.ui
 T32|x|PWA: manifest, icons, service worker precache; offline smoke test|I.pwa
+T33|x|rule sets: engine `RuleSet` + Hong Kong scoring/settlement; settings dropdown w/ rules picker (MCR, HK; Riichi, Taiwan coming soon); fan list per rule set|V39,V40
+T34|.|Japanese Riichi rule set|
+T35|.|Taiwanese 16-tile rule set|
 
 ## §B BUGS
 id|date|cause|fix

@@ -39,6 +39,7 @@ function onKeydown(e: KeyboardEvent) {
   if (e.ctrlKey || e.metaKey || e.altKey) return
   const target = e.target as HTMLElement | null
   if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
+  if (target?.closest?.('.menu')) return // keys aimed at the settings menu
   if (document.querySelector('[role="dialog"]')) return
   const key = e.key.toLowerCase()
   repeat = key === lastKey ? repeat + 1 : 0

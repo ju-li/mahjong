@@ -1,4 +1,5 @@
 import { shuffle } from './rng'
+import { DEFAULT_RULES, type RuleSet } from './ruleset'
 import type { GameState, Seat } from './state'
 import { nextSeat } from './state'
 import { createWall, isFlower, type Tile, type Wind } from './tiles'
@@ -7,6 +8,8 @@ export type NewHandOptions = {
   seed: number
   dealer: Seat
   prevailingWind: Wind
+  /** Defaults to MCR. */
+  rules?: RuleSet
 }
 
 /** Draw from the back of the wall (replacement for flowers and kongs). */
@@ -28,9 +31,10 @@ export function replaceFlowers(state: GameState, seat: Seat): void {
 }
 
 /** Shuffle, deal 13 to each seat and a 14th to the dealer, then replace flowers starting with the dealer. */
-export function newHand({ seed, dealer, prevailingWind }: NewHandOptions): GameState {
+export function newHand({ seed, dealer, prevailingWind, rules = DEFAULT_RULES }: NewHandOptions): GameState {
   const wall = shuffle(createWall(), seed)
   const state: GameState = {
+    rules,
     seed,
     dealer,
     prevailingWind,

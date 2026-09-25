@@ -1,5 +1,5 @@
 import { computed, ref, watch } from 'vue'
-import { FAN_BY_ID, type FanId } from '@mahjong/engine'
+import { fanDef } from '@mahjong/engine'
 import { MESSAGES, type Locale, type MessageKey } from './messages'
 
 const STORAGE_KEY = 'mahjong.locale'
@@ -37,12 +37,12 @@ export function translate(l: Locale, key: MessageKey, params: Record<string, str
 export function useI18n() {
   const t = (key: MessageKey, params?: Record<string, string | number>) => translate(locale.value, key, params)
   const fanName = (id: string) => {
-    const def = FAN_BY_ID[id as FanId]
+    const def = fanDef(id)
     if (!def) return id
     return locale.value === 'zh-Hans' ? def.chinese : def.name
   }
   const fanDescription = (id: string) => {
-    const def = FAN_BY_ID[id as FanId]
+    const def = fanDef(id)
     return def ? (locale.value === 'zh-Hans' ? def.description.zh : def.description.en) : ''
   }
   const toggle = () => {

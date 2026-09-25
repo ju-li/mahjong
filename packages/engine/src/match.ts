@@ -1,9 +1,10 @@
 import { newHand } from './deal'
 import { mulberry32 } from './rng'
+import { DEFAULT_RULES, type RuleSet } from './ruleset'
 import type { GameState, HandResult, Seat } from './state'
 import { WINDS, type Wind } from './tiles'
 
-/** A full MCR match: four prevailing winds × four hands. The dealer rotates every hand. */
+/** A full match: four prevailing winds × four hands. The dealer rotates every hand. */
 export const HANDS_PER_MATCH = 16
 
 /** Fixed identity of a participant (0..3). Players change table seats between rounds; seats do not. */
@@ -39,6 +40,8 @@ export type HandRecord = {
 }
 
 export type Match = {
+  /** Rule set for every hand of the match. */
+  rules: RuleSet
   seed: number
   /** Index of the hand being played, 0..15; equals 16 once the match is over. */
   handIndex: number
@@ -56,8 +59,9 @@ export function handSeed(matchSeed: number, handIndex: number): number {
   return Math.floor(mulberry32((matchSeed ^ Math.imul(handIndex + 1, 0x9e3779b9)) >>> 0)() * 2 ** 32)
 }
 
-export function seatingFor(handIndex: number): Player[] {
-  return [...SEATING[Math.min(3, Math.floor(handIndex / 4))]!]
+/** Seating for a hand. MCR re-seats at each round boundary; Hong Kong keeps the same seats all match. */
+export function seatingFor(handIndex: number, rules: RuleSet = DEFAULT_RULES): Player[] {
+  return [...SEATING[rules === 'mcr' ? Math.min(3, Math.floor(handIndex / 4)) : 0]!]
 }
 
 /** Table seat of `player` in the current round. */
@@ -78,12 +82,12 @@ export function prevailingWindFor(handIndex: number): Wind {
   return WINDS[Math.floor(handIndex / 4)]!
 }
 
-function startHand(matchSeed: number, handIndex: number): GameState {
-  return newHand({ seed: handSeed(matchSeed, handIndex), dealer: dealerFor(handIndex), prevailingWind: prevailingWindFor(handIndex) })
+function startHand(matchSeed: number, handIndex: number, rules: RuleSet): GameState {
+  return newHand({ seed: handSeed(matchSeed, handIndex), dealer: dealerFor(handIndex), prevailingWind: prevailingWindFor(handIndex), rules })
 }
 
-export function newMatch(seed: number): Match {
-  return { seed, handIndex: 0, scores: [0, 0, 0, 0], seating: seatingFor(0), history: [], current: startHand(seed, 0) }
+export function newMatch(seed: number, rules: RuleSet = DEFAULT_RULES): Match {
+  return { rules, seed, handIndex: 0, scores: [0, 0, 0, 0], seating: seatingFor(0, rules), history: [], current: startHand(seed, 0, rules) }
 }
 
 export function isMatchOver(match: Match): boolean {
@@ -106,10 +110,11 @@ export function nextHand(match: Match, result: HandResult): Match {
   const playerDeltas = toPlayerOrder(match.seating, seatDeltas)
   const handIndex = match.handIndex + 1
   return {
+    rules: match.rules,
     seed: match.seed,
     handIndex,
     scores: match.scores.map((s, p) => s + playerDeltas[p]!),
-    seating: handIndex < HANDS_PER_MATCH ? seatingFor(handIndex) : match.seating,
+    seating: handIndex < HANDS_PER_MATCH ? seatingFor(handIndex, match.rules) : match.seating,
     history: [
       ...match.history,
       {
@@ -121,6 +126,6 @@ export function nextHand(match: Match, result: HandResult): Match {
         playerDeltas,
       },
     ],
-    current: handIndex < HANDS_PER_MATCH ? startHand(match.seed, handIndex) : null,
+    current: handIndex < HANDS_PER_MATCH ? startHand(match.seed, handIndex, match.rules) : null,
   }
 }

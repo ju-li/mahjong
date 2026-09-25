@@ -1,3 +1,4 @@
+import type { RuleSet } from './ruleset'
 import type { Tile, Wind } from './tiles'
 
 /** Seats in turn order. Play passes from seat n to seat (n + 1) % 4. */
@@ -61,8 +62,10 @@ export type Phase =
   | ({ kind: 'robKong'; meldIndex: number } & ClaimWindow)
   | { kind: 'ended'; result: HandResult }
 
-/** One hand of MCR. Plain JSON: no classes, functions or cycles. */
+/** One hand. Plain JSON: no classes, functions or cycles. */
 export type GameState = {
+  /** Which rules score and settle this hand. */
+  rules: RuleSet
   seed: number
   dealer: Seat
   prevailingWind: Wind

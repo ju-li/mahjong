@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { HANDS_PER_MATCH } from '@mahjong/engine'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { HANDS_PER_MATCH, isRuleSet } from '@mahjong/engine'
 import type { Difficulty } from './bots/protocol'
 import FanReference from './components/FanReference.vue'
 import GameTable from './components/GameTable.vue'
@@ -18,9 +18,16 @@ const fanList = ref<string | null>(null)
 /** Per player. Bots are numbered by where they sit relative to you at the start of the match. */
 const NAMES = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
 const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
+/** Rule sets in the picker; only those the engine implements can be chosen. */
+const RULE_OPTIONS = [
+  { id: 'mcr', playable: true },
+  { id: 'hk', playable: true },
+  { id: 'riichi', playable: false },
+  { id: 'taiwan', playable: false },
+] as const
 
 const { claimSeconds, sound } = useSettings()
-const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, act, continueToNextHand, startNewMatch } = useMatch()
+const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, rules, act, continueToNextHand, startNewMatch } = useMatch()
 
 const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.phase.result : null))
 /** Names in table-seat order for this round. */
@@ -37,34 +44,72 @@ const playerAvatars = computed(() => avatarSeeds(match.value.seed).map(avatarSvg
 const seatAvatars = computed(() => seatPlayers.value.map((p) => playerAvatars.value[p]!))
 const handLabel = computed(() => t('score.hand', { n: Math.min(match.value.handIndex + 1, HANDS_PER_MATCH), total: HANDS_PER_MATCH }))
 
+/** Settings dropdown; closes on a click outside it or Escape. */
+const settingsMenu = ref<HTMLDetailsElement | null>(null)
+function closeSettings(e: Event) {
+  const menu = settingsMenu.value
+  if (!menu?.open) return
+  if (e instanceof KeyboardEvent ? e.key === 'Escape' : !menu.contains(e.target as Node)) menu.open = false
+}
+onMounted(() => {
+  document.addEventListener('pointerdown', closeSettings)
+  document.addEventListener('keydown', closeSettings)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeSettings)
+  document.removeEventListener('keydown', closeSettings)
+})
+
+const inProgress = () => match.value.history.length > 0 || (match.value.current !== null && !handOver.value)
+
 function confirmNewMatch() {
-  const inProgress = match.value.history.length > 0 || (match.value.current && !handOver.value)
-  if (!inProgress || window.confirm(t('app.confirmNewMatch'))) startNewMatch()
+  if (!inProgress() || window.confirm(t('app.confirmNewMatch'))) startNewMatch()
+}
+
+/** Switching rules starts a new match, after confirming if one is under way. */
+function changeRules(e: Event) {
+  const select = e.target as HTMLSelectElement
+  const next = select.value
+  if (isRuleSet(next) && next !== rules.value && (!inProgress() || window.confirm(t('app.confirmRules')))) startNewMatch(next)
+  else select.value = rules.value
 }
 </script>
 
 <template>
   <main class="app">
     <header class="topbar">
-      <h1>{{ t('app.title') }} <small>{{ t('app.subtitle') }}</small></h1>
+      <h1>{{ t('app.title') }} <small>{{ t(`rules.short.${rules}`) }}</small></h1>
       <div class="topbar__controls">
-        <label class="select">
-          <span>{{ t('app.bots') }}</span>
-          <select v-model="difficulty" :aria-label="t('app.botDifficulty')">
-            <option v-for="l in LEVELS" :key="l" :value="l">{{ t(`level.${l}`) }}</option>
-          </select>
-        </label>
-        <label class="select">
-          <span>{{ t('app.claimTimer') }}</span>
-          <select v-model.number="claimSeconds" :aria-label="t('app.claimTimer')">
-            <option v-for="s in CLAIM_TIMER_OPTIONS" :key="s" :value="s">{{ s === 0 ? t('timer.off') : t('timer.seconds', { n: s }) }}</option>
-          </select>
-        </label>
-        <button class="action action--quiet-light" :aria-pressed="sound" @click="sound = !sound">
-          {{ sound ? t('app.soundOn') : t('app.soundOff') }}
-        </button>
+        <details ref="settingsMenu" class="menu">
+          <summary class="action action--quiet-light">{{ t('app.settings') }}</summary>
+          <div class="menu__panel">
+            <label class="select">
+              <span>{{ t('app.rules') }}</span>
+              <select :value="rules" :aria-label="t('app.rules')" @change="changeRules">
+                <option v-for="r in RULE_OPTIONS" :key="r.id" :value="r.id" :disabled="!r.playable">
+                  {{ r.playable ? t(`rules.${r.id}`) : t('rules.comingSoon', { name: t(`rules.${r.id}`) }) }}
+                </option>
+              </select>
+            </label>
+            <label class="select">
+              <span>{{ t('app.bots') }}</span>
+              <select v-model="difficulty" :aria-label="t('app.botDifficulty')">
+                <option v-for="l in LEVELS" :key="l" :value="l">{{ t(`level.${l}`) }}</option>
+              </select>
+            </label>
+            <label class="select">
+              <span>{{ t('app.claimTimer') }}</span>
+              <select v-model.number="claimSeconds" :aria-label="t('app.claimTimer')">
+                <option v-for="s in CLAIM_TIMER_OPTIONS" :key="s" :value="s">{{ s === 0 ? t('timer.off') : t('timer.seconds', { n: s }) }}</option>
+              </select>
+            </label>
+            <button class="action action--quiet-light" :aria-pressed="sound" @click="sound = !sound">
+              {{ sound ? t('app.soundOn') : t('app.soundOff') }}
+            </button>
+            <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle">{{ t('app.switchLanguage') }}</button>
+          </div>
+        </details>
         <button class="action action--quiet-light" @click="fanList = ''">{{ t('app.fanReference') }}</button>
-        <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle">{{ t('app.switchLanguage') }}</button>
         <button class="action" @click="confirmNewMatch">{{ t('app.newMatch') }}</button>
       </div>
     </header>
@@ -91,15 +136,15 @@ function confirmNewMatch() {
       :match-over="matchOver || match.handIndex === 15"
       :final-scores="seatTotals"
       @next="continueToNextHand"
-      @new-match="startNewMatch"
+      @new-match="startNewMatch()"
       @explain="(id: string) => (fanList = id)"
     />
 
-    <FanReference v-if="fanList !== null" :focus="fanList || null" @close="fanList = null" />
+    <FanReference v-if="fanList !== null" :focus="fanList || null" :rules="rules" @close="fanList = null" />
 
     <section v-if="!view" class="result__card result__card--inline">
       <h2>{{ t('app.matchFinished') }}</h2>
-      <button class="action action--primary" @click="startNewMatch">{{ t('app.newMatch') }}</button>
+      <button class="action action--primary" @click="startNewMatch()">{{ t('app.newMatch') }}</button>
     </section>
   </main>
 </template>
