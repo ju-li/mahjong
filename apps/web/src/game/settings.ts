@@ -8,6 +8,13 @@ const LEGACY_MATCH_KEY = 'mahjong.match.v2'
 
 export const CLAIM_TIMER_OPTIONS = [0, 5, 10, 20] as const
 export type ClaimSeconds = (typeof CLAIM_TIMER_OPTIONS)[number]
+/** Rule sets in the pickers; only those the engine implements can be chosen. */
+export const RULE_OPTIONS = [
+  { id: 'mcr', playable: true },
+  { id: 'hk', playable: true },
+  { id: 'riichi', playable: false },
+  { id: 'taiwan', playable: false },
+] as const
 const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard']
 
 type Settings = { claimSeconds: ClaimSeconds; sound: boolean; difficulty: Difficulty; rules: RuleSet }
@@ -37,6 +44,8 @@ export function load(): Settings {
 }
 
 const initial = load()
+/** True until a first-time player finishes onboarding; nothing is saved before then. */
+const needsOnboarding = ref(read(STORAGE_KEY) === null)
 /** App-wide player preferences, persisted per browser. */
 const claimSeconds = ref<ClaimSeconds>(initial.claimSeconds)
 const sound = ref(initial.sound)
@@ -45,8 +54,9 @@ const difficulty = ref<Difficulty>(initial.difficulty)
 const rules = ref<RuleSet>(initial.rules)
 
 watch(
-  [claimSeconds, sound, difficulty, rules],
+  [claimSeconds, sound, difficulty, rules, needsOnboarding],
   () => {
+    if (needsOnboarding.value) return
     const settings: Settings = { claimSeconds: claimSeconds.value, sound: sound.value, difficulty: difficulty.value, rules: rules.value }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
@@ -58,5 +68,8 @@ watch(
 )
 
 export function useSettings() {
-  return { claimSeconds, sound, difficulty, rules }
+  const finishOnboarding = () => {
+    needsOnboarding.value = false
+  }
+  return { claimSeconds, sound, difficulty, rules, needsOnboarding, finishOnboarding }
 }

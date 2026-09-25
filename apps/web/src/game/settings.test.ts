@@ -25,10 +25,26 @@ describe('settings', () => {
     expect(load()).toEqual({ claimSeconds: 10, sound: true, difficulty: 'medium', rules: 'mcr' })
   })
 
-  it('writes every setting to localStorage and reads it back', async () => {
+  it('asks a first-time player to onboard and saves nothing until they finish', async () => {
     const data = stubStorage()
     const { useSettings } = await importSettings()
     const s = useSettings()
+    expect(s.needsOnboarding.value).toBe(true)
+    s.difficulty.value = 'easy'
+    await nextTick()
+    expect(data.has('mahjong.settings.v1')).toBe(false)
+
+    s.finishOnboarding()
+    await nextTick()
+    expect(JSON.parse(data.get('mahjong.settings.v1')!)).toMatchObject({ difficulty: 'easy' })
+    expect((await importSettings()).useSettings().needsOnboarding.value).toBe(false)
+  })
+
+  it('writes every setting to localStorage and reads it back', async () => {
+    const data = stubStorage({ 'mahjong.settings.v1': '{}' })
+    const { useSettings } = await importSettings()
+    const s = useSettings()
+    expect(s.needsOnboarding.value).toBe(false)
     s.claimSeconds.value = 5
     s.sound.value = false
     s.difficulty.value = 'hard'

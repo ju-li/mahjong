@@ -69,7 +69,7 @@ function randomSeed(): number {
 export function useMatch() {
   const bots = new BotClient()
   const saved = load()
-  const { claimSeconds, sound, difficulty, rules: preferredRules } = useSettings()
+  const { claimSeconds, sound, difficulty, rules: preferredRules, needsOnboarding } = useSettings()
   const match = shallowRef<Match>(saved?.match ?? newMatch(randomSeed(), preferredRules.value))
   let generation = 0
   let step = 0
@@ -94,6 +94,7 @@ export function useMatch() {
   /** Identifies one claim window for the human, so bot replies inside it do not restart the clock. */
   const claimKey = computed(() => {
     const s = state.value
+    if (needsOnboarding.value) return null
     if (!s || (s.phase.kind !== 'claim' && s.phase.kind !== 'robKong')) return null
     if (!timeoutAction(humanActions.value)) return null
     return `${match.value.handIndex}:${s.phase.kind}:${s.phase.tile.id}:${claimSeconds.value}`
@@ -124,7 +125,7 @@ export function useMatch() {
 
   /** Advance until the hand ends or the human must choose. */
   async function pump(): Promise<void> {
-    if (running) return
+    if (running || needsOnboarding.value) return
     running = true
     const gen = generation
     try {
@@ -198,6 +199,10 @@ export function useMatch() {
     bots.dispose()
   })
 
+  // Play waits behind the onboarding dialog.
+  watch(needsOnboarding, (waiting) => {
+    if (!waiting) void pump()
+  })
   void pump()
 
   return {
@@ -211,6 +216,8 @@ export function useMatch() {
     matchOver,
     difficulty,
     rules,
+    /** A match was restored from storage rather than dealt fresh. */
+    resumed: saved !== null,
     act,
     continueToNextHand,
     startNewMatch,
