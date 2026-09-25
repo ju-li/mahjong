@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { kindIndex, type Action, type PlayerView, type Seat, type Tile } from '@mahjong/engine'
+import { kindIndex, type Action, type PlayerView, type Seat, type Tile, type Wind } from '@mahjong/engine'
 import { actionForKey, shortcutFor } from '../game/keyboard'
+import { useTileMotion } from '../game/useTileMotion'
 import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
+import PlayerBadge from './PlayerBadge.vue'
 import TileFace from './TileFace.vue'
 
 const props = defineProps<{
   view: PlayerView
   actions: Action[]
+  /** Per seat. */
   names: string[]
+  /** Match totals per seat. */
+  scores: number[]
+  /** Avatar SVG markup per seat. */
+  avatars: string[]
+  /** e.g. "Hand 3 / 16". */
+  handLabel: string
   /** Seconds left to claim, or null when no timer is running. */
   claimRemaining?: number | null
 }>()
@@ -17,6 +26,9 @@ const props = defineProps<{
 const emit = defineEmits<{ act: [action: Action] }>()
 
 const { t } = useI18n()
+
+const root = ref<HTMLElement | null>(null)
+useTileMotion(root)
 
 // ---- Keyboard play (V32) ----
 const handEl = ref<HTMLElement | null>(null)
@@ -50,18 +62,25 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 const windName = (w: string) => t(`wind.${w}` as 'wind.E')
+const WIND_GLYPH: Record<Wind, string> = { E: '東', S: '南', W: '西', N: '北' }
 
-/** Opponent seats by screen position; play passes counter-clockwise, so the next seat sits on the right. */
-const positions = computed(() => {
+type Side = 'bottom' | 'right' | 'top' | 'left'
+
+/** Seats by screen side; play passes counter-clockwise, so the next seat sits on the right. */
+const sides = computed(() => {
   const me = props.view.seat
   return {
+    bottom: me,
     right: ((me + 1) % 4) as Seat,
     top: ((me + 2) % 4) as Seat,
     left: ((me + 3) % 4) as Seat,
-  }
+  } satisfies Record<Side, Seat>
 })
+const opponents = computed(() => (['top', 'left', 'right'] as const).map((side) => ({ side, seat: sides.value[side] })))
+const SIDE_ORDER: Side[] = ['bottom', 'right', 'top', 'left']
 
 const phase = computed(() => props.view.phase)
+const live = computed(() => phase.value.kind !== 'ended')
 const lastDiscardId = computed(() =>
   phase.value.kind === 'claim' || phase.value.kind === 'robKong' ? phase.value.tile.id : null,
 )
@@ -108,11 +127,6 @@ function actionTiles(a: Action): Tile[] {
   return []
 }
 
-function seatLabel(seat: Seat): string {
-  const params = { name: props.names[seat]!, wind: windName(props.view.seatWinds[seat]!) }
-  return seat === props.view.dealer ? t('table.seatDealer', params) : t('table.seat', params)
-}
-
 const status = computed(() => {
   const p = phase.value
   const me = props.view.seat
@@ -125,82 +139,177 @@ const status = computed(() => {
   if (props.view.turn === me) return p.kind === 'discard' ? t('status.yourDiscard') : t('status.drawing')
   return t('status.toPlay', { name: props.names[props.view.turn]! })
 })
+
+// ---- The wall ----
+
+const WALL_STACKS = 18
+const WALL_TILES = WALL_STACKS * 2 * 4
+
+/**
+ * Stack heights (0–2) per screen side. Purely decorative: tiles leave the wall starting at the
+ * dealer's side and moving round the table, so the wall visibly shrinks as the hand goes on.
+ */
+const wall = computed(() => {
+  const taken = Math.max(0, WALL_TILES - props.view.wallCount)
+  const start = SIDE_ORDER.findIndex((s) => sides.value[s] === props.view.dealer)
+  const out = {} as Record<Side, number[]>
+  SIDE_ORDER.forEach((side, i) => {
+    const offset = ((i - start + 4) % 4) * WALL_STACKS * 2
+    out[side] = Array.from({ length: WALL_STACKS }, (_, s) => {
+      const first = offset + s * 2
+      return Math.max(0, Math.min(2, first + 2 - taken))
+    })
+  })
+  return out
+})
+
+const seatActive = (seat: Seat) => live.value && props.view.turn === seat
 </script>
 
 <template>
-  <div class="table">
-    <section
-      v-for="(seat, pos) in positions"
-      :key="pos"
-      class="seat"
-      :class="[`seat--${pos}`, { 'seat--active': view.turn === seat && phase.kind !== 'ended' }]"
-    >
-      <header class="seat__name">{{ seatLabel(seat) }}</header>
-      <div class="seat__hand">
-        <TileFace v-for="i in view.concealedCounts[seat]" :key="i" back size="sm" />
-      </div>
-      <div class="seat__melds">
-        <MeldGroup v-for="(m, i) in view.melds[seat]" :key="i" :meld="m" />
-        <TileFace v-for="f in view.flowers[seat]" :key="f.id" :kind="f.kind" size="sm" />
-      </div>
-    </section>
-
-    <section class="center">
-      <div class="center__info">
+  <div ref="root" class="board">
+    <div class="board__felt">
+      <div class="board__info">
+        <span>{{ handLabel }}</span>
         <span>{{ t('table.prevailing', { wind: windName(view.prevailingWind) }) }}</span>
-        <span>{{ t('table.wall', { n: view.wallCount }) }}</span>
       </div>
-      <div class="ponds">
-        <div v-for="seat in [positions.top, positions.left, positions.right, view.seat]" :key="seat" class="pond" :class="`pond--${seat === view.seat ? 'me' : seat === positions.top ? 'top' : seat === positions.left ? 'left' : 'right'}`">
-          <TileFace v-for="tile in view.discards[seat]" :key="tile.id" :kind="tile.kind" size="sm" :highlight="tile.id === lastDiscardId" />
+
+      <!-- Opponents -->
+      <section
+        v-for="o in opponents"
+        :key="o.side"
+        class="seat"
+        :class="`seat--${o.side}`"
+        :data-from="`hand-${o.seat}`"
+      >
+        <PlayerBadge
+          :name="names[o.seat]!"
+          :wind="WIND_GLYPH[view.seatWinds[o.seat]!]"
+          :wind-label="windName(view.seatWinds[o.seat]!)"
+          :score="scores[o.seat]!"
+          :avatar="avatars[o.seat]!"
+          :dealer="o.seat === view.dealer"
+          :dealer-label="t('score.dealer')"
+          :active="seatActive(o.seat)"
+        />
+        <div class="seat__hand" :data-origin="`hand-${o.seat}`">
+          <template v-if="o.side === 'top'">
+            <TileFace v-for="i in view.concealedCounts[o.seat]" :key="i" back size="sm" pose="stand" />
+          </template>
+          <template v-else>
+            <span v-for="i in view.concealedCounts[o.seat]" :key="i" class="edge" />
+          </template>
         </div>
-      </div>
-    </section>
+        <div class="seat__melds">
+          <MeldGroup v-for="(m, i) in view.melds[o.seat]" :key="i" :meld="m" size="xs" />
+          <TileFace v-for="f in view.flowers[o.seat]" :key="f.id" :kind="f.kind" :tile-id="f.id" size="xs" />
+        </div>
+      </section>
 
-    <section class="me" :class="{ 'seat--active': view.turn === view.seat && phase.kind !== 'ended' }">
-      <p class="status" role="status">
-        {{ status }}
-        <span v-if="claimRemaining" class="status__timer" :class="{ 'is-urgent': claimRemaining <= 3 }">{{ t('status.timer', { n: claimRemaining }) }}</span>
-      </p>
+      <!-- Wall, ponds and compass -->
+      <section class="middle">
+        <div class="middle__table">
+          <div v-for="side in SIDE_ORDER" :key="side" class="wall" :class="`wall--${side}`" aria-hidden="true">
+            <span v-for="(h, i) in wall[side]" :key="i" class="wall__stack" :class="`wall__stack--${h}`" />
+          </div>
 
-      <div v-if="otherActions.length" class="actions">
-        <button
-          v-for="(a, i) in otherActions"
-          :key="i"
-          class="action"
-          :class="{ 'action--primary': a.type === 'win', 'action--quiet': a.type === 'pass' }"
-          :title="shortcutFor(a) ? t('keys.hint', { key: shortcutFor(a)! }) : undefined"
-          @click="emit('act', a)"
-        >
-          {{ actionLabel(a) }}
-          <kbd v-if="shortcutFor(a)">{{ shortcutFor(a) }}</kbd>
-          <TileFace v-for="tile in actionTiles(a)" :key="tile.id" :kind="tile.kind" size="sm" />
-        </button>
-      </div>
+          <div class="middle__grid">
+            <div
+              v-for="side in SIDE_ORDER"
+              :key="side"
+              class="pond"
+              :class="`pond--${side}`"
+              :data-from="`hand-${sides[side]}`"
+            >
+              <TileFace
+                v-for="tile in view.discards[sides[side]]"
+                :key="tile.id"
+                :kind="tile.kind"
+                :tile-id="tile.id"
+                size="sm"
+                :highlight="tile.id === lastDiscardId"
+              />
+            </div>
 
-      <div class="me__melds">
-        <span class="seat__name">{{ seatLabel(view.seat) }}</span>
-        <MeldGroup v-for="(m, i) in view.melds[view.seat]" :key="i" :meld="m" />
-        <TileFace v-for="f in view.flowers[view.seat]" :key="f.id" :kind="f.kind" size="sm" />
-      </div>
+            <div class="compass" data-origin="wall">
+              <span
+                v-for="side in SIDE_ORDER"
+                :key="side"
+                class="compass__wind"
+                :class="[`compass__wind--${side}`, { 'is-active': seatActive(sides[side]) }]"
+                :title="windName(view.seatWinds[sides[side]]!)"
+              >{{ WIND_GLYPH[view.seatWinds[sides[side]]!] }}</span>
+              <span class="compass__core">
+                <span v-if="claimRemaining" class="compass__timer" :class="{ 'is-urgent': claimRemaining <= 3 }" :aria-label="t('status.timer', { n: claimRemaining })">{{ claimRemaining }}</span>
+                <span v-else class="compass__count" :title="t('table.wall', { n: view.wallCount })">{{ view.wallCount }}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <div ref="handEl" class="hand" :aria-label="t('keys.help')">
-        <TileFace
-          v-for="tile in handTiles.main"
-          :key="tile.id"
-          :kind="tile.kind"
-          :selectable="discardIds.has(tile.id)"
-          @select="discard(tile)"
+      <!-- Me -->
+      <section class="me" data-from="wall">
+        <PlayerBadge
+          class="me__badge"
+          :name="names[view.seat]!"
+          :wind="WIND_GLYPH[view.seatWinds[view.seat]!]"
+          :wind-label="windName(view.seatWinds[view.seat]!)"
+          :score="scores[view.seat]!"
+          :avatar="avatars[view.seat]!"
+          :dealer="view.seat === view.dealer"
+          :dealer-label="t('score.dealer')"
+          :active="seatActive(view.seat)"
         />
-        <span v-if="handTiles.drawn" class="hand__gap" />
-        <TileFace
-          v-if="handTiles.drawn"
-          :kind="handTiles.drawn.kind"
-          :selectable="discardIds.has(handTiles.drawn.id)"
-          highlight
-          @select="discard(handTiles.drawn)"
-        />
-      </div>
-    </section>
+
+        <div class="me__main">
+          <p class="status" role="status">{{ status }}</p>
+
+          <div v-if="otherActions.length" class="actions">
+            <button
+              v-for="(a, i) in otherActions"
+              :key="`${a.type}-${i}`"
+              class="action action--claim"
+              :class="[`action--${a.type}`, { 'action--primary': a.type === 'win', 'action--quiet': a.type === 'pass' }]"
+              :title="shortcutFor(a) ? t('keys.hint', { key: shortcutFor(a)! }) : undefined"
+              @click="emit('act', a)"
+            >
+              {{ actionLabel(a) }}
+              <kbd v-if="shortcutFor(a)">{{ shortcutFor(a) }}</kbd>
+              <TileFace v-for="tile in actionTiles(a)" :key="tile.id" :kind="tile.kind" size="xs" />
+            </button>
+          </div>
+
+          <div class="me__row">
+            <div class="me__melds" :data-from="`hand-${view.seat}`">
+              <MeldGroup v-for="(m, i) in view.melds[view.seat]" :key="i" :meld="m" />
+              <TileFace v-for="f in view.flowers[view.seat]" :key="f.id" :kind="f.kind" :tile-id="f.id" size="sm" />
+            </div>
+
+            <div ref="handEl" class="hand" data-deal :aria-label="t('keys.help')">
+              <TileFace
+                v-for="tile in handTiles.main"
+                :key="tile.id"
+                :kind="tile.kind"
+                :tile-id="tile.id"
+                pose="stand"
+                :selectable="discardIds.has(tile.id)"
+                @select="discard(tile)"
+              />
+              <span v-if="handTiles.drawn" class="hand__gap" />
+              <TileFace
+                v-if="handTiles.drawn"
+                :kind="handTiles.drawn.kind"
+                :tile-id="handTiles.drawn.id"
+                pose="stand"
+                :selectable="discardIds.has(handTiles.drawn.id)"
+                highlight
+                @select="discard(handTiles.drawn)"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
