@@ -6,16 +6,23 @@ import HandResult from './components/HandResult.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
 import { useMatch } from './game/useMatch'
 
-const NAMES = ['You', 'Bot Right', 'Bot Across', 'Bot Left']
+/** Per player. Bots are named by where they sit relative to you at the start of the match. */
+const NAMES = ['You', 'Bot 1', 'Bot 2', 'Bot 3']
 const LEVELS: { value: Difficulty; label: string }[] = [
   { value: 'easy', label: 'Easy' },
   { value: 'medium', label: 'Medium' },
   { value: 'hard', label: 'Hard' },
 ]
 
-const { match, view, humanActions, handOver, matchOver, difficulty, act, continueToNextHand, startNewMatch } = useMatch()
+const { match, seatPlayers, view, humanActions, handOver, matchOver, difficulty, act, continueToNextHand, startNewMatch } = useMatch()
 
 const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.phase.result : null))
+/** Names in table-seat order for this round. */
+const seatNames = computed(() => seatPlayers.value.map((p) => NAMES[p]!))
+/** Match totals in seat order, including the hand just finished. */
+const seatTotals = computed(() =>
+  seatPlayers.value.map((p, seat) => match.value.scores[p]! + (result.value?.type === 'win' ? result.value.deltas[seat]! : 0)),
+)
 
 function confirmNewMatch() {
   const inProgress = match.value.history.length > 0 || (match.value.current && !handOver.value)
@@ -40,15 +47,15 @@ function confirmNewMatch() {
 
     <ScoreBoard :match="match" :names="NAMES" :seat-winds="view?.seatWinds ?? null" />
 
-    <GameTable v-if="view" :view="view" :actions="humanActions" :names="NAMES" @act="act" />
+    <GameTable v-if="view" :view="view" :actions="humanActions" :names="seatNames" @act="act" />
 
     <HandResult
       v-if="view && result"
       :result="result"
       :view="view"
-      :names="NAMES"
+      :names="seatNames"
       :match-over="matchOver || match.handIndex === 15"
-      :final-scores="match.scores.map((s, i) => s + (result?.type === 'win' ? result.deltas[i]! : 0))"
+      :final-scores="seatTotals"
       @next="continueToNextHand"
       @new-match="startNewMatch"
     />

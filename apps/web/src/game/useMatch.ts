@@ -5,18 +5,22 @@ import {
   legalActions,
   newMatch,
   nextHand,
+  playerAt,
   sameAction,
+  seatOf,
   viewFor,
   type Action,
   type Match,
+  type Player,
   type Seat,
 } from '@mahjong/engine'
 import type { Difficulty } from '../bots/protocol'
 import { BotClient } from './botClient'
 
-export const HUMAN: Seat = 0
+/** The human is always player 0; their table seat changes between rounds. */
+export const HUMAN_PLAYER: Player = 0
 const SEATS: Seat[] = [0, 1, 2, 3]
-const STORAGE_KEY = 'mahjong.match.v1'
+const STORAGE_KEY = 'mahjong.match.v2'
 
 const BOT_DELAY_MS = 450
 const QUICK_DELAY_MS = 120
@@ -31,7 +35,7 @@ function load(): Saved | null {
     if (!raw) return null
     const saved = JSON.parse(raw) as Saved
     const m = saved?.match
-    if (typeof m?.seed !== 'number' || typeof m.handIndex !== 'number' || !Array.isArray(m.scores)) return null
+    if (typeof m?.seed !== 'number' || typeof m.handIndex !== 'number' || !Array.isArray(m.scores) || !Array.isArray(m.seating)) return null
     if (!['easy', 'medium', 'hard'].includes(saved.difficulty)) return null
     return saved
   } catch {
@@ -64,9 +68,12 @@ export function useMatch() {
   let step = 0
   let running = false
 
+  const humanSeat = computed(() => seatOf(match.value, HUMAN_PLAYER))
+  /** `seatPlayers[seat]` = player sitting there this round. */
+  const seatPlayers = computed(() => SEATS.map((seat) => playerAt(match.value, seat)))
   const state = computed(() => match.value.current)
-  const view = computed(() => (state.value ? viewFor(state.value, HUMAN) : null))
-  const humanActions = computed(() => (state.value ? legalActions(state.value, HUMAN) : []))
+  const view = computed(() => (state.value ? viewFor(state.value, humanSeat.value) : null))
+  const humanActions = computed(() => (state.value ? legalActions(state.value, humanSeat.value) : []))
   const handOver = computed(() => state.value?.phase.kind === 'ended')
   const matchOver = computed(() => isMatchOver(match.value))
 
@@ -87,14 +94,15 @@ export function useMatch() {
       while (gen === generation) {
         const s = match.value.current
         if (!s || s.phase.kind === 'ended') return
-        const human = legalActions(s, HUMAN)
+        const me = seatOf(match.value, HUMAN_PLAYER)
+        const human = legalActions(s, me)
         if (human.length === 1 && human[0]!.type === 'draw') {
           await sleep(QUICK_DELAY_MS)
           if (gen !== generation) return
           commit(human[0]!)
           continue
         }
-        const botSeat = SEATS.find((seat) => seat !== HUMAN && legalActions(s, seat).length > 0)
+        const botSeat = SEATS.find((seat) => seat !== me && legalActions(s, seat).length > 0)
         if (botSeat === undefined) return // only the human can act now
         const legal = legalActions(s, botSeat)
         const quick = legal.every((a) => a.type === 'draw' || a.type === 'pass' || a.type === 'win')
@@ -126,7 +134,7 @@ export function useMatch() {
 
   function act(action: Action): void {
     const s = match.value.current
-    if (!s || !legalActions(s, HUMAN).some((a) => sameAction(a, action))) return
+    if (!s || !legalActions(s, humanSeat.value).some((a) => sameAction(a, action))) return
     commit(action)
     void pump()
   }
@@ -152,6 +160,8 @@ export function useMatch() {
 
   return {
     match,
+    humanSeat,
+    seatPlayers,
     view,
     humanActions,
     handOver,
