@@ -9,8 +9,10 @@ import {
   sameAction,
   seatOf,
   viewFor,
+  isRuleSet,
   type Action,
   type Match,
+  type RuleSet,
   type Player,
   type Seat,
 } from '@mahjong/engine'
@@ -40,6 +42,9 @@ function load(): Saved | null {
     const m = saved?.match
     if (typeof m?.seed !== 'number' || typeof m.handIndex !== 'number' || !Array.isArray(m.scores) || !Array.isArray(m.seating)) return null
     if (!['easy', 'medium', 'hard'].includes(saved.difficulty)) return null
+    // Matches saved before rule sets existed are MCR.
+    if (!isRuleSet(m.rules)) m.rules = 'mcr'
+    if (m.current && !isRuleSet(m.current.rules)) m.current.rules = m.rules
     return saved
   } catch {
     return null
@@ -181,8 +186,11 @@ export function useMatch() {
     restartPump()
   }
 
-  function startNewMatch(): void {
-    match.value = newMatch(randomSeed())
+  const rules = computed<RuleSet>(() => match.value.rules)
+
+  /** Start a fresh match; keeps the current rule set unless another is given. */
+  function startNewMatch(next: RuleSet = match.value.rules): void {
+    match.value = newMatch(randomSeed(), next)
     restartPump()
   }
 
@@ -204,6 +212,7 @@ export function useMatch() {
     handOver,
     matchOver,
     difficulty,
+    rules,
     act,
     continueToNextHand,
     startNewMatch,

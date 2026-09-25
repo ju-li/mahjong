@@ -3,6 +3,7 @@ import { createWall, isFlower, kindIndex, type Tile } from './tiles'
 import { mulberry32 } from './rng'
 import { applyAction, legalActions } from './rules'
 import { newHand } from './deal'
+import { scoreFor, type RuleSet } from './ruleset'
 import { scoreHand, type ScoringMeld, type WinContext } from './scoring'
 
 /** Every tile id 0..143 appears exactly once across wall, hands, melds, discards, flowers and any pending claim tile. */
@@ -109,6 +110,7 @@ export type BuildOptions = {
   dealer?: Seat
   turn?: Seat
   phase?: GameState['phase']
+  rules?: RuleSet
 }
 
 /** Build an arbitrary but conserving state: listed tiles are taken from the 144-tile set, the rest fill the wall. */
@@ -141,6 +143,7 @@ export function buildState(o: BuildOptions): GameState {
   }
   while (hands.length < 4) hands.push([])
   return {
+    rules: o.rules ?? 'mcr',
     seed: 0,
     dealer: o.dealer ?? 0,
     prevailingWind: 'E',
@@ -161,6 +164,15 @@ export type ScoreOptions = Partial<Omit<WinContext, 'concealed' | 'melds' | 'win
 
 /** Score a hand from notation. `hand` is the concealed part including the winning tile `win`. */
 export function scoreNotation(hand: string, win: string, o: ScoreOptions = {}) {
+  return scoreHand(notationContext(hand, win, o))
+}
+
+/** `scoreNotation` under any rule set. */
+export function scoreNotationFor(rules: RuleSet, hand: string, win: string, o: ScoreOptions = {}) {
+  return scoreFor(rules, notationContext(hand, win, o))
+}
+
+function notationContext(hand: string, win: string, o: ScoreOptions): WinContext {
   const melds: ScoringMeld[] = (o.melds ?? []).map((m) => {
     const [type, tiles] = m.split(' ') as [string, string]
     const kinds = parseKinds(tiles)
@@ -170,22 +182,23 @@ export function scoreNotation(hand: string, win: string, o: ScoreOptions = {}) {
       exposed: type !== 'ckong',
     }
   })
-  return scoreHand({
+  return {
     concealed: parseKinds(hand),
     melds,
     winTile: parseKinds(win)[0]!,
     selfDrawn: o.selfDrawn ?? false,
     seatWind: o.seatWind ?? 'S',
     prevailingWind: o.prevailingWind ?? 'E',
-    flowers: o.flowers ?? 0,
+    flowers: o.flowers ?? o.flowerNumbers?.length ?? 0,
+    flowerNumbers: o.flowerNumbers ?? [],
     lastTileOfWall: o.lastTileOfWall ?? false,
     replacement: o.replacement ?? false,
     robbingKong: o.robbingKong ?? false,
     winTileVisible: o.winTileVisible ?? 0,
-  })
+  }
 }
 
 /** Fan ids with counts, e.g. `{ fullFlush: 1, pureStraight: 1 }`. */
-export function fanMap(score: ReturnType<typeof scoreHand>): Record<string, number> {
+export function fanMap(score: { fans: { id: string; count: number }[] } | null | undefined): Record<string, number> {
   return Object.fromEntries((score?.fans ?? []).map((f) => [f.id, f.count]))
 }

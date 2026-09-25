@@ -16,6 +16,8 @@ export type WinContext = {
   seatWind: Wind
   prevailingWind: Wind
   flowers: number
+  /** Flower numbers (1–8) held; Hong Kong scores own flowers. MCR uses only `flowers`. */
+  flowerNumbers?: number[]
   /** The wall was empty when the hand was won. */
   lastTileOfWall: boolean
   /** Self-drawn on a kong replacement tile. */

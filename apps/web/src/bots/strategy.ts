@@ -1,8 +1,8 @@
 import {
   kindIndex,
-  meetsMinimum,
+  meetsMinimumFor,
   mulberry32,
-  scoreHand,
+  scoreFor,
   shantenOfCounts,
   waitingKinds,
   type Action,
@@ -78,7 +78,7 @@ function ukeire(ctx: Ctx, counts: number[], meldCount: number, base: number): nu
   return total
 }
 
-/** Unseen tiles that would complete this ready hand for at least 8 fan (self-draw or discard). */
+/** Unseen tiles that would complete this ready hand for the rule set's minimum (self-draw or discard). */
 function validWaits(ctx: Ctx, counts: number[], melds: ScoringMeld[]): number {
   let total = 0
   const seatWind = ctx.view.seatWinds[ctx.seat]!
@@ -96,15 +96,17 @@ function validWaits(ctx: Ctx, counts: number[], melds: ScoringMeld[]): number {
       seatWind,
       prevailingWind: ctx.view.prevailingWind,
       flowers: ctx.view.flowers[ctx.seat]!.length,
+      flowerNumbers: ctx.view.flowers[ctx.seat]!.map((t) => (t.kind.suit === 'flowers' ? t.kind.flower : 0)),
       lastTileOfWall: false,
       replacement: false,
       robbingKong: false,
       winTileVisible: 4 - ctx.unseen[k]! - counts[k]!,
     }
-    const byDiscard = scoreHand({ ...base, selfDrawn: false })
-    const bySelf = scoreHand({ ...base, selfDrawn: true })
-    if (byDiscard && meetsMinimum(byDiscard)) total += ctx.unseen[k]!
-    else if (bySelf && meetsMinimum(bySelf)) total += ctx.unseen[k]! / 3 // only a third of draws are ours
+    const rules = ctx.view.rules
+    const byDiscard = scoreFor(rules, { ...base, selfDrawn: false })
+    const bySelf = scoreFor(rules, { ...base, selfDrawn: true })
+    if (byDiscard && meetsMinimumFor(rules, byDiscard)) total += ctx.unseen[k]!
+    else if (bySelf && meetsMinimumFor(rules, bySelf)) total += ctx.unseen[k]! / 3 // only a third of draws are ours
   }
   return total
 }
