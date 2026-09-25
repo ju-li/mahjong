@@ -55,6 +55,40 @@ export function tileKey(kind: TileKind): string {
   }
 }
 
+/** Number of distinct playable kinds; kind indices run 0..33 in `PLAYABLE_KINDS` order. */
+export const KIND_COUNT = 34
+
+/**
+ * Index of a playable kind: characters 0–8, dots 9–17, bamboo 18–26, winds 27–30 (E S W N),
+ * dragons 31–33 (red green white). Flowers have no index (-1).
+ */
+export function kindIndex(kind: TileKind): number {
+  switch (kind.suit) {
+    case 'characters':
+      return kind.rank - 1
+    case 'dots':
+      return 9 + kind.rank - 1
+    case 'bamboo':
+      return 18 + kind.rank - 1
+    case 'winds':
+      return 27 + WINDS.indexOf(kind.wind)
+    case 'dragons':
+      return 31 + DRAGONS.indexOf(kind.dragon)
+    case 'flowers':
+      return -1
+  }
+}
+
+export function kindAt(index: number): TileKind {
+  const kind = PLAYABLE_KINDS[index]
+  if (!kind) throw new RangeError(`no playable kind at index ${index}`)
+  return kind
+}
+
+export function sameKind(a: TileKind, b: TileKind): boolean {
+  return tileKey(a) === tileKey(b)
+}
+
 /** Full 144-tile MCR set in canonical (unshuffled) order: 4 × 34 playable kinds, then 8 flowers. */
 export function createWall(): Tile[] {
   const tiles: Tile[] = []
