@@ -128,7 +128,7 @@ T27|x|test last-discard rule explicitly (claims ⊆ win/pass when wall empty)|V2
 T28|x|i18n: `en` + `zh-Hans` dictionaries, toggle, persistence, locale default; engine fan table gains zh descriptions; key-parity test|V29,I.ui
 T29|x|fan reference page (81 fans, points, description, exclusions, bilingual), linked from result dialog|V29,I.ui
 T30|x|claim timer (setting, auto-pass) + keyboard play (tile focus/arrow keys, action shortcuts)|V31,V32,I.ui
-T31|.|tile animations + sound effects, toggle, reduced-motion respected|I.ui
+T31|x|tile animations + sound effects, toggle, reduced-motion respected|I.ui
 T32|.|PWA: manifest, icons, service worker precache; offline smoke test|I.pwa
 
 ## §B BUGS

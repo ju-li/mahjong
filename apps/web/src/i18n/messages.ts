@@ -92,6 +92,8 @@ export const en = {
   'timer.seconds': '{n} s',
   'status.timer': '{n}s',
   'keys.hint': 'Shortcut: {key}',
+  'app.soundOn': 'Sound on',
+  'app.soundOff': 'Sound off',
   'keys.help': 'Keys: ← → choose a tile, Enter discards, W win, P pung, K kong, C chow (again for the next option), X pass.',
 }
 
@@ -187,6 +189,8 @@ export const zhHans: Record<MessageKey, string> = {
   'timer.seconds': '{n} 秒',
   'status.timer': '{n}秒',
   'keys.hint': '快捷键：{key}',
+  'app.soundOn': '声音开',
+  'app.soundOff': '声音关',
   'keys.help': '按键：← → 选牌，回车出牌，W 和，P 碰，K 杠，C 吃（再按切换），X 过。',
 }
 

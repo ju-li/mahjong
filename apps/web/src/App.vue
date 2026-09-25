@@ -18,7 +18,7 @@ const fanList = ref<string | null>(null)
 const NAMES = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
 const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
 
-const { claimSeconds } = useSettings()
+const { claimSeconds, sound } = useSettings()
 const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, act, continueToNextHand, startNewMatch } = useMatch()
 
 const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.phase.result : null))
@@ -52,6 +52,9 @@ function confirmNewMatch() {
             <option v-for="s in CLAIM_TIMER_OPTIONS" :key="s" :value="s">{{ s === 0 ? t('timer.off') : t('timer.seconds', { n: s }) }}</option>
           </select>
         </label>
+        <button class="action action--quiet-light" :aria-pressed="sound" @click="sound = !sound">
+          {{ sound ? t('app.soundOn') : t('app.soundOff') }}
+        </button>
         <button class="action action--quiet-light" @click="fanList = ''">{{ t('app.fanReference') }}</button>
         <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle">{{ t('app.switchLanguage') }}</button>
         <button class="action" @click="confirmNewMatch">{{ t('app.newMatch') }}</button>
