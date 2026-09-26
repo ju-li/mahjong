@@ -2189,11 +2189,30 @@ body {
 /* ---- Online: host / join dialog, lobby ---- */
 
 .topbar__code {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   margin-left: 6px;
   padding: 2px 8px;
+  border: 0;
   border-radius: 999px;
   background: var(--button);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8em;
+  font-weight: 500;
   letter-spacing: 0.08em;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.topbar__code:hover,
+.topbar__code:focus-visible {
+  color: inherit;
+}
+
+.topbar__share {
+  flex: none;
 }
 
 .online__field {

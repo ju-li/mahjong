@@ -10,6 +10,7 @@ import ProfileDialog from './components/ProfileDialog.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import VoiceButton from './components/VoiceButton.vue'
 import { loadLatestVersion } from './game/appUpdate'
+import { shareInvite } from './game/invite'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useOnline } from './game/useOnline'
@@ -56,6 +57,13 @@ function leaveTable() {
 }
 /** Lost the table: go solo on the player's say-so, without the leave-table confirmation. */
 const playSolo = () => void online.leave()
+/** The table chip in the top bar shares the invite link, like the lobby's share button. */
+const codeCopied = ref(false)
+async function shareTable() {
+  if (!snapshot.value || (await shareInvite(snapshot.value.code, t)) !== 'copied') return
+  codeCopied.value = true
+  setTimeout(() => (codeCopied.value = false), 2000)
+}
 const pausedBy = computed(() => online.source.pausedBy?.value ?? null)
 /** On a break: someone paused the online table, or you paused your solo match. */
 const onBreak = computed(() => (atTable.value ? pausedBy.value !== null : solo.onBreak.value))
@@ -152,7 +160,20 @@ async function loadLatest() {
     <header class="topbar">
       <h1>
         {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
-        <small v-if="snapshot" class="topbar__code">{{ t('lobby.table') }} {{ snapshot.code }}</small>
+        <button
+          v-if="snapshot"
+          type="button"
+          class="topbar__code"
+          :title="codeCopied ? t('lobby.copied') : t('lobby.share')"
+          :aria-label="`${t('lobby.table')} ${snapshot.code}: ${codeCopied ? t('lobby.copied') : t('lobby.share')}`"
+          @click="shareTable"
+        >
+          {{ t('lobby.table') }} {{ snapshot.code }}
+          <svg class="topbar__share" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+            <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+          </svg>
+        </button>
       </h1>
       <div class="topbar__controls">
         <details ref="settingsMenu" class="menu">
