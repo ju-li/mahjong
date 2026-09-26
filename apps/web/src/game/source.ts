@@ -28,6 +28,8 @@ export type MatchSource = {
   waiting?: Readonly<Ref<boolean>>
   /** Who paused play, by display name; null while it runs (online only). */
   pausedBy?: Readonly<Ref<string | null>>
+  /** Player whose voice memo is playing right now (online only). */
+  speaking?: Readonly<Ref<Player | null>>
   act(action: Action): void
   continueToNextHand(): void
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { chooseAction } from '@mahjong/bots'
 import { seatOf, type GameState, type Match, type Player } from '@mahjong/engine'
-import type { Snapshot } from '@mahjong/protocol'
-import { cleanName, NEXT_HAND_MS, RESERVE_MS, Table, TURN_MS, type TableEnv } from './table'
+import { MAX_VOICE_BYTES, MAX_VOICE_MS, type Snapshot } from '@mahjong/protocol'
+import { cleanName, NEXT_HAND_MS, RESERVE_MS, Table, TURN_MS, VOICE_GAP_MS, VOICE_PER_MINUTE, type TableEnv } from './table'
 
 /** Timers that only fire when the test moves the clock. */
 class FakeEnv implements TableEnv {
@@ -369,5 +369,44 @@ describe('pause', () => {
     table.pause('c0')
     table.pause('c1')
     expect(snap('c1').match!.paused).toBe(0)
+  })
+})
+
+describe('voice memos', () => {
+  const clip = (bytes = 100, mime = 'audio/webm;codecs=opus') => ({ mime, ms: 2000, data: new Uint8Array(bytes).fill(7) })
+
+  it('stamps a seated player’s memo with who sent it', () => {
+    const { table } = setup(['Ann', 'Bo'])
+    const memo = table.voice('c1', clip())
+    expect(memo).toEqual({ from: 1, mime: 'audio/webm;codecs=opus', ms: 2000, data: new Uint8Array(100).fill(7) })
+    expect(table.voice('c0', { ...clip(), mime: 'audio/mp4', ms: 60_000 })).toMatchObject({ from: 0, mime: 'audio/mp4', ms: MAX_VOICE_MS })
+  })
+
+  it('drops memos from strangers and anything malformed or too big', () => {
+    const { table } = setup(['Ann'])
+    expect(table.voice('nobody', clip())).toBeNull()
+    expect(table.voice('c0', null)).toBeNull()
+    expect(table.voice('c0', clip(0))).toBeNull()
+    expect(table.voice('c0', clip(MAX_VOICE_BYTES + 1))).toBeNull()
+    expect(table.voice('c0', clip(10, 'text/html'))).toBeNull()
+    expect(table.voice('c0', clip(10, 'audio/<script>'))).toBeNull()
+    expect(table.voice('c0', { ...clip(), data: [1, 2, 3] })).toBeNull()
+    expect(table.voice('c0', { ...clip(), ms: Number.NaN })).toBeNull()
+    expect(table.voice('c0', clip(MAX_VOICE_BYTES))).not.toBeNull()
+  })
+
+  it('limits how often each player may talk', () => {
+    const { env, table } = setup(['Ann', 'Bo'])
+    expect(table.voice('c0', clip())).not.toBeNull()
+    expect(table.voice('c0', clip())).toBeNull() // too soon
+    expect(table.voice('c1', clip())).not.toBeNull() // others are unaffected
+    let sent = 1
+    for (let i = 0; i < 40; i++) {
+      env.advance(VOICE_GAP_MS)
+      if (table.voice('c0', clip())) sent++
+    }
+    expect(sent).toBe(VOICE_PER_MINUTE)
+    env.advance(60_000)
+    expect(table.voice('c0', clip())).not.toBeNull()
   })
 })

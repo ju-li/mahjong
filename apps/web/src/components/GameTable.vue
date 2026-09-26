@@ -21,6 +21,8 @@ const props = defineProps<{
   handLabel: string
   /** Seconds left to claim, or null when no timer is running. */
   claimRemaining?: number | null
+  /** Seat whose player's voice memo is playing. */
+  speakingSeat?: number | null
 }>()
 
 const emit = defineEmits<{ act: [action: Action] }>()
@@ -192,6 +194,7 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer="o.seat === view.dealer"
           :dealer-label="t('score.dealer')"
           :active="seatActive(o.seat)"
+          :speaking="speakingSeat === o.seat"
         />
         <div class="seat__hand" :data-origin="`hand-${o.seat}`">
           <template v-if="o.side === 'top'">
@@ -261,6 +264,7 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer="view.seat === view.dealer"
           :dealer-label="t('score.dealer')"
           :active="seatActive(view.seat)"
+          :speaking="speakingSeat === view.seat"
         />
 
         <div class="me__main">

@@ -7,6 +7,11 @@ export const ROOM_NAME = 'table'
 /** Longest display name the server keeps. */
 export const MAX_NAME_LENGTH = 16
 
+/** Longest voice memo a player may send. */
+export const MAX_VOICE_MS = 15_000
+/** Biggest voice memo the server relays; 15 s of 32 kbps Opus is about 60 KB. */
+export const MAX_VOICE_BYTES = 256 * 1024
+
 /** Claim timer choices for online tables. Unlike solo play there is no "off": one idle player would stall everyone. */
 export const ONLINE_CLAIM_SECONDS = [5, 10, 20] as const
 export type OnlineClaimSeconds = (typeof ONLINE_CLAIM_SECONDS)[number]
@@ -71,6 +76,18 @@ export type Snapshot = {
   match: MatchInfo | null
 }
 
+/** A recorded voice clip: what a player sends, minus who they are. */
+export type VoiceClip = {
+  /** Container type from the recorder, e.g. `audio/webm;codecs=opus`. */
+  mime: string
+  /** Length of the clip in milliseconds. */
+  ms: number
+  data: Uint8Array
+}
+
+/** Server → client, message type `voice`: another player's voice memo, to play straight away. */
+export type VoiceMemo = VoiceClip & { from: Player }
+
 /** Client → server messages. */
 export type ClientMessages = {
   act: { step: number; action: Action }
@@ -86,4 +103,6 @@ export type ClientMessages = {
   pause: Record<string, never>
   /** Anyone at the table: carry on. */
   resume: Record<string, never>
+  /** Anyone at the table: a push-to-talk memo for everyone else. */
+  voice: VoiceClip
 }

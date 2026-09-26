@@ -21,8 +21,8 @@ const DIFFICULTIES: readonly Difficulty[] = ['beginner', 'easy', 'medium', 'hard
 export const TEXT_SIZE_OPTIONS = ['normal', 'large', 'larger'] as const
 export type TextSize = (typeof TEXT_SIZE_OPTIONS)[number]
 
-type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean; difficulty: Difficulty; rules: RuleSet; textSize: TextSize }
-const DEFAULTS: Settings = { claimSeconds: 10, sound: true, voice: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' }
+type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean; voiceChat: boolean; difficulty: Difficulty; rules: RuleSet; textSize: TextSize }
+const DEFAULTS: Settings = { claimSeconds: 10, sound: true, voice: true, voiceChat: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' }
 
 function read(key: string): Record<string, unknown> | null {
   try {
@@ -43,6 +43,7 @@ export function load(): Settings {
     claimSeconds: CLAIM_TIMER_OPTIONS.includes(raw?.claimSeconds as ClaimSeconds) ? (raw!.claimSeconds as ClaimSeconds) : DEFAULTS.claimSeconds,
     sound: typeof raw?.sound === 'boolean' ? raw.sound : DEFAULTS.sound,
     voice: typeof raw?.voice === 'boolean' ? raw.voice : DEFAULTS.voice,
+    voiceChat: typeof raw?.voiceChat === 'boolean' ? raw.voiceChat : DEFAULTS.voiceChat,
     difficulty: DIFFICULTIES.includes(difficulty as Difficulty) ? (difficulty as Difficulty) : DEFAULTS.difficulty,
     rules: isRuleSet(rules) ? rules : DEFAULTS.rules,
     textSize: TEXT_SIZE_OPTIONS.includes(raw?.textSize as TextSize) ? (raw!.textSize as TextSize) : DEFAULTS.textSize,
@@ -57,19 +58,22 @@ const claimSeconds = ref<ClaimSeconds>(initial.claimSeconds)
 const sound = ref(initial.sound)
 /** Every player's moves are called out (吃, 碰, 北风…) with speech synthesis. */
 const voice = ref(initial.voice)
+/** Other players' push-to-talk memos play at online tables. */
+const voiceChat = ref(initial.voiceChat)
 const difficulty = ref<Difficulty>(initial.difficulty)
 /** Rule set for new matches; a match in progress keeps the rules it started with. */
 const rules = ref<RuleSet>(initial.rules)
 const textSize = ref<TextSize>(initial.textSize)
 
 watch(
-  [claimSeconds, sound, voice, difficulty, rules, textSize, needsOnboarding],
+  [claimSeconds, sound, voice, voiceChat, difficulty, rules, textSize, needsOnboarding],
   () => {
     if (needsOnboarding.value) return
     const settings: Settings = {
       claimSeconds: claimSeconds.value,
       sound: sound.value,
       voice: voice.value,
+      voiceChat: voiceChat.value,
       difficulty: difficulty.value,
       rules: rules.value,
       textSize: textSize.value,
@@ -95,5 +99,5 @@ export function useSettings() {
   const finishOnboarding = () => {
     needsOnboarding.value = false
   }
-  return { claimSeconds, sound, voice, difficulty, rules, textSize, needsOnboarding, finishOnboarding }
+  return { claimSeconds, sound, voice, voiceChat, difficulty, rules, textSize, needsOnboarding, finishOnboarding }
 }

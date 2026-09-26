@@ -7,6 +7,7 @@ import MatchScreen from './components/MatchScreen.vue'
 import Onboarding from './components/Onboarding.vue'
 import OnlineDialog from './components/OnlineDialog.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
+import VoiceButton from './components/VoiceButton.vue'
 import { loadLatestVersion } from './game/appUpdate'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
@@ -20,7 +21,7 @@ const rulesDialog = ref<{ tab: RulesTab; focus?: string } | null>(null)
 
 const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
-const { claimSeconds, sound, voice, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
+const { claimSeconds, sound, voice, voiceChat, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
 const online = useOnline()
 const { snapshot, isHost } = online
 /** At an online table (lobby or match); the solo match waits meanwhile. */
@@ -55,6 +56,11 @@ const canPause = computed(() => {
 })
 const pause = () => (atTable.value ? online.pause() : solo.pause())
 const resume = () => (atTable.value ? online.resume() : solo.resume())
+/** Name of whoever's voice memo is playing. */
+const speakingName = computed(() => {
+  const p = online.speaking.value
+  return p === null ? null : (online.playerNames.value[p] ?? null)
+})
 const hostName = computed(() => {
   const s = snapshot.value
   return s ? (s.players[s.host]?.name ?? '') : ''
@@ -191,6 +197,17 @@ async function loadLatest() {
               </span>
               <input v-model="voice" class="toggle__input" type="checkbox" role="switch" />
             </label>
+            <label v-if="atTable" class="select toggle">
+              <span class="toggle__label">
+                <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="3" width="6" height="11" rx="3" :fill="voiceChat ? 'currentColor' : 'none'" />
+                  <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+                  <path v-if="!voiceChat" d="M4 4l16 16" />
+                </svg>
+                {{ t('app.voiceChat') }}
+              </span>
+              <input v-model="voiceChat" class="toggle__input" type="checkbox" role="switch" />
+            </label>
             <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle">{{ t('app.switchLanguage') }}</button>
             <button class="action action--quiet-light" :disabled="updating" @click="loadLatest">{{ updating ? t('app.loadingLatest') : t('app.loadLatest') }}</button>
           </div>
@@ -250,6 +267,9 @@ async function loadLatest() {
         <button class="action action--primary" autofocus @click="resume">{{ t('pause.resume') }}</button>
       </div>
     </div>
+
+    <!-- Push-to-talk, at online tables only; it stays usable during a break. -->
+    <VoiceButton v-if="atTable" :speaking-name="speakingName" @send="online.sendVoice" />
 
     <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :rules="shownRules" @close="rulesDialog = null" />
 

@@ -49,6 +49,10 @@ export class TableRoom extends Room {
     this.onMessage('rematch', (client) => this.table.rematch(client.sessionId))
     this.onMessage('pause', (client) => this.table.pause(client.sessionId))
     this.onMessage('resume', (client) => this.table.resume(client.sessionId))
+    this.onMessage('voice', (client, message) => {
+      const memo = this.table.voice(client.sessionId, message)
+      if (memo) this.broadcast('voice', memo, { except: client })
+    })
     this.watchEmpty()
   }
 
