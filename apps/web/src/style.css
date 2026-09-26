@@ -1906,6 +1906,29 @@ body {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+
+/* An invisible ring around the button that also catches the press, so a finger
+   that lands or drifts a little off the circle still records. */
+.talk__button::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+}
+
+/* Touch screens (iPad, phones): a bigger target to press and hold. */
+@media (pointer: coarse) {
+  .talk__button {
+    width: 76px;
+    height: 76px;
+  }
+
+  .talk__button svg {
+    width: 34px;
+    height: 34px;
+  }
 }
 
 .talk__button:focus-visible {
