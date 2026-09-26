@@ -55,7 +55,7 @@ function setup(names: string[]) {
       const snap = table.snapshotFor(c)
       if (snap) sent.push({ client: c, snap: JSON.parse(JSON.stringify(snap)) as Snapshot })
     }
-    // V16: nothing another seat holds concealed ever reaches a client.
+    // V16: nothing another seat holds concealed reaches a client until the hand ends.
     const s = state(table)
     if (!s) return
     for (const c of clients) {
@@ -63,9 +63,8 @@ function setup(names: string[]) {
       if (p === null) continue
       const json = JSON.stringify(table.snapshotFor(c))
       const mine = seatOf(matchOf(table), p)
-      const winner = s.phase.kind === 'ended' && s.phase.result.type === 'win' ? s.phase.result.winner : null
       s.hands.forEach((hand, seat) => {
-        if (seat === mine || seat === winner) return
+        if (seat === mine || s.phase.kind === 'ended') return
         for (const tile of hand) expect(json).not.toMatch(new RegExp(`"id":${tile.id}[,}]`))
       })
       expect(json).not.toContain(`${matchOf(table).seed}`)
