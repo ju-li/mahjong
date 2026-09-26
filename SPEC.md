@@ -47,7 +47,7 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - api: `newHand({ seed, dealer, prevailingWind }): GameState` → shuffled, dealt (13 each, dealer 14), flowers replaced.
 - api: `legalActions(state, seat): Action[]`. `applyAction(state, action): GameState` (throws on illegal).
 - api: `replay(init, actions): GameState`.
-- api: `viewFor(state, seat): PlayerView` → own concealed tiles; others' melds, discards, flowers, concealed counts; wall count only.
+- api: `viewFor(state, seat): PlayerView` → own concealed tiles; others' melds, discards, flowers, concealed counts; wall count only. once the hand has ended: every seat's concealed tiles & concealed kongs (post-hand summary).
 - api: `decompose(tiles)` → standard (4 sets + pair) | seven pairs | thirteen orphans | knitted forms. `shanten(tiles, melds): number` (-1 = complete).
 - api: `scoreHand(winCtx): { fans: {name, points, count}[], total, flowerPoints }`. `settle(winCtx, score): number[4]` point deltas.
 - api: `RuleSet` = `'mcr'|'hk'`. `GameState.rules`, `Match.rules`, `PlayerView.rules`. `scoreFor` / `meetsMinimumFor` / `settleFor` / `fansFor` / `fanDef` dispatch by rule set; hk fan ids prefixed `hk.`.
@@ -87,7 +87,7 @@ V12: ∀ reachable state → wall + hands + melds + discards + flowers hold each
 V13: `replay(init, actions)` deterministic: same (seed, actions) → deep-equal state.
 V14: `applyAction` ⊥ mutate input state.
 V15: action ∉ `legalActions(state, seat)` → `applyAction` throws; state unchanged.
-V16: `viewFor(s, k)` ∌ other seats' concealed tile ids/kinds & ∌ wall order.
+V16: while the hand is live, `viewFor(s, k)` ∌ other seats' concealed tile ids/kinds; always ∌ wall order.
 V17: chow claim legal only for seat (discarder + 1) mod 4.
 V18: claim priority win > pung/kong > chow. multiple win claims → nearest seat after discarder (head bump) only.
 V19: at discard decision: concealed + melded tiles = 14, each kong counted as 3.
@@ -112,7 +112,7 @@ V37: knitted straight + chow(s) + suited pair → `allChows` (knitted straight c
 V38: `nineGates` cancels exactly one `pungOfTerminalsOrHonors`; others still count.
 V39: hk `win` legal only if hk total (flowers incl) ≥ 3; hk total ≤ 13; hk settle sums to 0; hk matches keep seating fixed.
 V40: bots & UI score via rule-set dispatch (`scoreFor`, `fanDef`), ⊥ hard-coded MCR in rule-dependent paths.
-V41: server → seat k snapshot ∌ other seats' concealed tile ids, ∌ match seed (walls derive from it); view = `viewFor(s, k)`.
+V41: server → seat k snapshot ∌ other seats' concealed tile ids while the hand is live, ∌ match seed (walls derive from it); view = `viewFor(s, k)`.
 V42: server applies only actions ∈ `legalActions(s, seatOf(match, sender))` quoting current `step`; applies its own copy of the matching legal action.
 V43: room codes unique among live rooms in the process.
 V44: join ⇔ a seat is free (bot-held, own token, or dropped > 2 min); ≤ 4 humans per table; a dropped seat is never taken within 2 min.

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { kindIndex, type HandResult, type PlayerView } from '@mahjong/engine'
+import { kindIndex, type HandResult, type PlayerView, type Seat } from '@mahjong/engine'
 import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
 import ScoreExplain from './ScoreExplain.vue'
@@ -51,18 +51,26 @@ const how = computed(() => {
   return r.from === props.view.seat ? t('result.howYourDiscard') : t('result.howDiscard', { from: props.names[r.from]! })
 })
 
-const winningTiles = computed(() => {
-  if (props.view.phase.kind !== 'ended' || !props.view.phase.winningHand) return []
-  return [...props.view.phase.winningHand].sort((a, b) => kindIndex(a.kind) - kindIndex(b.kind) || a.id - b.id)
+/** Whose tiles the summary shows: the winner's first (yours on a draw); click a player to switch. */
+const shown = ref<Seat>(props.result.type === 'win' ? props.result.winner : props.view.seat)
+
+const shownLabel = computed(() =>
+  shown.value === props.view.seat ? t('result.yourHand') : t('result.handOf', { name: props.names[shown.value]! }),
+)
+
+const shownTiles = computed(() => {
+  const phase = props.view.phase
+  if (phase.kind !== 'ended') return []
+  return [...phase.hands[shown.value]!].sort((a, b) => kindIndex(a.kind) - kindIndex(b.kind) || a.id - b.id)
 })
 
-const winTileId = computed(() => (props.result.type === 'win' ? props.result.tileId : null))
+const winTileId = computed(() => (props.result.type === 'win' && shown.value === props.result.winner ? props.result.tileId : null))
 
 /** Every seat's change this hand and running total, in seat order. */
 const players = computed(() =>
   props.names.map((name, seat) => ({
     name,
-    seat,
+    seat: seat as Seat,
     avatar: props.avatars[seat]!,
     delta: props.result.type === 'win' ? props.result.deltas[seat]! : 0,
     total: props.finalScores[seat]!,
@@ -86,17 +94,18 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
         <small v-if="how">{{ how }}</small>
       </p>
 
-      <template v-if="result.type === 'win'">
-        <div class="summary__hand">
-          <MeldGroup v-for="(m, i) in view.melds[result.winner]" :key="i" :meld="m" />
-          <span class="summary__concealed">
-            <span v-for="tile in winningTiles" :key="tile.id" class="summary__tile" :class="{ 'is-win': tile.id === winTileId }">
-              <span v-if="tile.id === winTileId" class="summary__tag">{{ t('result.winningTile') }}</span>
-              <TileFace :kind="tile.kind" pose="stand" :highlight="tile.id === winTileId" />
-            </span>
+      <p class="summary__whose">{{ shownLabel }}</p>
+      <div class="summary__hand">
+        <MeldGroup v-for="(m, i) in view.melds[shown]" :key="i" :meld="m" />
+        <span class="summary__concealed">
+          <span v-for="tile in shownTiles" :key="tile.id" class="summary__tile" :class="{ 'is-win': tile.id === winTileId }">
+            <span v-if="tile.id === winTileId" class="summary__tag">{{ t('result.winningTile') }}</span>
+            <TileFace :kind="tile.kind" pose="stand" :highlight="tile.id === winTileId" />
           </span>
-        </div>
+        </span>
+      </div>
 
+      <template v-if="result.type === 'win'">
         <ul class="summary__fans">
           <li v-for="f in result.score.fans" :key="f.id">
             <button class="linklike" :title="t('result.fanHelp')" @click="$emit('explain', f.id)">{{ fanName(f.id) }}</button>
@@ -118,10 +127,18 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
           :key="p.seat"
           :class="{ 'is-me': p.seat === view.seat, 'is-winner': result.type === 'win' && p.seat === result.winner }"
         >
-          <span class="summary__face" v-html="p.avatar" />
-          <span class="summary__name">{{ p.name }}</span>
-          <strong class="summary__delta" :class="{ pos: p.delta > 0, neg: p.delta < 0 }">{{ signed(p.delta) }}</strong>
-          <span class="summary__running">{{ t('result.runningTotal', { n: p.total }) }}</span>
+          <button
+            class="summary__player"
+            :class="{ 'is-shown': p.seat === shown }"
+            :aria-pressed="p.seat === shown"
+            :title="t('result.showHand', { name: p.name })"
+            @click="shown = p.seat"
+          >
+            <span class="summary__face" v-html="p.avatar" />
+            <span class="summary__name">{{ p.name }}</span>
+            <strong class="summary__delta" :class="{ pos: p.delta > 0, neg: p.delta < 0 }">{{ signed(p.delta) }}</strong>
+            <span class="summary__running">{{ t('result.runningTotal', { n: p.total }) }}</span>
+          </button>
         </li>
       </ul>
 

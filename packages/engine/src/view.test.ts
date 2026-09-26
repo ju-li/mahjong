@@ -39,6 +39,16 @@ describe('viewFor', () => {
     }
   })
 
+  it('reveals every hand and concealed kong once the hand ends', () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const { state } = playRandomHand(seed, { claimBias: 0.8 })
+      const view = viewFor(state, 0)
+      if (view.phase.kind !== 'ended') expect.fail('hand did not end')
+      expect(view.phase.hands).toEqual(state.hands)
+      state.melds.forEach((ms, s) => ms.forEach((m, i) => expect(view.melds[s]![i]!.tiles).toEqual(m.tiles)))
+    }
+  })
+
   it('shows the drawn tile only to the seat that drew it', () => {
     let s = newHand({ seed: 4, dealer: 0, prevailingWind: 'E' })
     s = { ...s, phase: { kind: 'discard', drawnTileId: s.hands[0]![0]!.id, afterKong: false } }

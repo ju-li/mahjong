@@ -20,10 +20,10 @@ export type ViewPhase =
   | { kind: 'discard'; drawnTileId: number | null; afterKong: boolean }
   /** `awaiting`: this seat still has to answer. Other seats' answers stay hidden. */
   | { kind: 'claim' | 'robKong'; tile: Tile; from: Seat; awaiting: boolean }
-  /** At the end of a hand the winning hand is public. */
-  | { kind: 'ended'; result: HandResult; winningHand: Tile[] | null }
+  /** At the end of a hand every hand is public: `hands` holds each seat's concealed tiles, in seat order. */
+  | { kind: 'ended'; result: HandResult; winningHand: Tile[] | null; hands: Tile[][] }
 
-/** Everything `seat` may know. Contains no other seat's concealed tiles, no wall order and no seed. */
+/** Everything `seat` may know. Contains no other seat's concealed tiles (until the hand ends), no wall order and no seed. */
 export type PlayerView = {
   rules: RuleSet
   seat: Seat
@@ -46,6 +46,7 @@ function copy<T>(value: T): T {
 
 export function viewFor(state: GameState, seat: Seat): PlayerView {
   const phase = state.phase
+  const revealed = phase.kind === 'ended'
   let viewPhase: ViewPhase
   switch (phase.kind) {
     case 'draw':
@@ -64,7 +65,7 @@ export function viewFor(state: GameState, seat: Seat): PlayerView {
       break
     case 'ended': {
       const result = phase.result
-      viewPhase = { kind: 'ended', result, winningHand: result.type === 'win' ? state.hands[result.winner]! : null }
+      viewPhase = { kind: 'ended', result, winningHand: result.type === 'win' ? state.hands[result.winner]! : null, hands: state.hands }
       break
     }
   }
@@ -79,7 +80,7 @@ export function viewFor(state: GameState, seat: Seat): PlayerView {
     hand: state.hands[seat]!,
     concealedCounts: state.hands.map((h) => h.length),
     melds: state.melds.map((melds, owner) =>
-      melds.map((m): ViewMeld => ({ ...m, tiles: m.exposed || owner === seat ? m.tiles : null })),
+      melds.map((m): ViewMeld => ({ ...m, tiles: m.exposed || owner === seat || revealed ? m.tiles : null })),
     ),
     discards: state.discards,
     flowers: state.flowers,
