@@ -3,7 +3,7 @@
  * `{name}` placeholders are filled by `t(key, { name })`.
  */
 export const en = {
-  'app.title': 'Mahjong',
+  'app.title': 'Mommy Mahjong',
   'app.rules': 'Rules',
   'app.confirmRules': 'Switch rules? This abandons the current match and starts a new one.',
   'rules.mcr': 'Chinese Official (MCR)',
@@ -173,7 +173,7 @@ export const en = {
   'guide.match.bodyHk': 'A match is 16 hands: four rounds of four, with the prevailing wind moving East → South → West → North. The dealer passes on every hand and seats stay fixed for the whole match.',
   'guide.seeFans': 'See every scoring pattern in the fan list →',
 
-  'onboarding.welcome': 'Welcome to Mahjong',
+  'onboarding.welcome': 'Welcome to Mommy Mahjong',
   'onboarding.progress': 'Step {n} of {total}',
   'onboarding.language.title': 'Choose your language',
   'onboarding.language.body': 'Menus, rules and scoring will be shown in this language.',
