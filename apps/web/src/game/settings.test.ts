@@ -22,7 +22,7 @@ describe('settings', () => {
   it('falls back to defaults without storage', async () => {
     vi.stubGlobal('localStorage', undefined)
     const { load } = await importSettings()
-    expect(load()).toEqual({ claimSeconds: 10, sound: true, voice: true, voiceChat: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' })
+    expect(load()).toEqual({ claimSeconds: 40, sound: true, voice: true, voiceChat: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' })
   })
 
   it('asks a first-time player to onboard and saves nothing until they finish', async () => {
@@ -45,26 +45,26 @@ describe('settings', () => {
     const { useSettings } = await importSettings()
     const s = useSettings()
     expect(s.needsOnboarding.value).toBe(false)
-    s.claimSeconds.value = 5
+    s.claimSeconds.value = 60
     s.sound.value = false
     s.voiceChat.value = false
     s.difficulty.value = 'hard'
     s.rules.value = 'hk'
     s.textSize.value = 'larger'
     await nextTick()
-    expect(JSON.parse(data.get('mahjong.settings.v1')!)).toEqual({ claimSeconds: 5, sound: false, voice: true, voiceChat: false, difficulty: 'hard', rules: 'hk', textSize: 'larger' })
+    expect(JSON.parse(data.get('mahjong.settings.v1')!)).toEqual({ claimSeconds: 60, sound: false, voice: true, voiceChat: false, difficulty: 'hard', rules: 'hk', textSize: 'larger' })
 
     const reloaded = await importSettings()
-    expect(reloaded.load()).toEqual({ claimSeconds: 5, sound: false, voice: true, voiceChat: false, difficulty: 'hard', rules: 'hk', textSize: 'larger' })
+    expect(reloaded.load()).toEqual({ claimSeconds: 60, sound: false, voice: true, voiceChat: false, difficulty: 'hard', rules: 'hk', textSize: 'larger' })
   })
 
   it('takes difficulty and rules from a match saved by an older version', async () => {
     stubStorage({
-      'mahjong.settings.v1': JSON.stringify({ claimSeconds: 20, sound: true }),
+      'mahjong.settings.v1': JSON.stringify({ claimSeconds: 120, sound: true }),
       'mahjong.match.v2': JSON.stringify({ match: { rules: 'hk' }, difficulty: 'easy' }),
     })
     const { load } = await importSettings()
-    expect(load()).toEqual({ claimSeconds: 20, sound: true, voice: true, voiceChat: true, difficulty: 'easy', rules: 'hk', textSize: 'normal' })
+    expect(load()).toEqual({ claimSeconds: 120, sound: true, voice: true, voiceChat: true, difficulty: 'easy', rules: 'hk', textSize: 'normal' })
   })
 
   it('accepts the beginner level', async () => {
@@ -74,8 +74,8 @@ describe('settings', () => {
   })
 
   it('ignores invalid stored values', async () => {
-    stubStorage({ 'mahjong.settings.v1': JSON.stringify({ claimSeconds: 7, sound: 'yes', difficulty: 'insane', rules: 'riichi-x', textSize: 'huge' }) })
+    stubStorage({ 'mahjong.settings.v1': JSON.stringify({ claimSeconds: 10, sound: 'yes', difficulty: 'insane', rules: 'riichi-x', textSize: 'huge' }) })
     const { load } = await importSettings()
-    expect(load()).toEqual({ claimSeconds: 10, sound: true, voice: true, voiceChat: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' })
+    expect(load()).toEqual({ claimSeconds: 40, sound: true, voice: true, voiceChat: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' })
   })
 })

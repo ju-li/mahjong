@@ -145,12 +145,12 @@ describe('lobby', () => {
     table.start('c1')
     expect(snap('c0').settings.rules).toBe('mcr')
     expect(snap('c0').phase).toBe('lobby')
-    table.configure('c0', { rules: 'hk', difficulty: 'hard', claimSeconds: 5 })
-    table.configure('c0', { rules: 'riichi', claimSeconds: 0 }) // not offered: ignored
+    table.configure('c0', { rules: 'hk', difficulty: 'hard', claimSeconds: 60 })
+    table.configure('c0', { rules: 'riichi', claimSeconds: 10 }) // not offered: ignored
     table.configure('c0', { difficulty: 'beginner' })
     expect(snap('c1').settings.difficulty).toBe('beginner')
     table.configure('c0', { difficulty: 'hard' })
-    expect(snap('c1').settings).toEqual({ rules: 'hk', difficulty: 'hard', claimSeconds: 5 })
+    expect(snap('c1').settings).toEqual({ rules: 'hk', difficulty: 'hard', claimSeconds: 60 })
     table.start('c0')
     expect(snap('c1').phase).toBe('playing')
   })
@@ -194,12 +194,12 @@ describe('play', () => {
       else env.advance(200)
     }
     // The window may have opened a moment before this snapshot (a bot answered first).
-    expect(claimMs).toBeGreaterThan(9_000)
-    expect(claimMs).toBeLessThanOrEqual(10_000)
+    expect(claimMs).toBeGreaterThan(39_000)
+    expect(claimMs).toBeLessThanOrEqual(40_000)
     const step = snap('c0').match!.step
-    env.advance(10_000)
+    env.advance(40_000)
     expect(snap('c0').match!.step).toBeGreaterThan(step)
-    expect(snap('c0').match!.claimMs).not.toBe(10_000)
+    expect(snap('c0').match!.claimMs).not.toBe(40_000)
   })
 
   it('makes a move for a human who sits on their turn', () => {
