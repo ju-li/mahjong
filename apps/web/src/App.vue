@@ -24,7 +24,7 @@ const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
 const { claimSeconds, sound, voice, voiceChat, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
 const online = useOnline()
-const { snapshot, isHost } = online
+const { snapshot, isHost, link } = online
 /** At an online table (lobby or match); the solo match waits meanwhile. */
 const atTable = computed(() => snapshot.value !== null)
 const solo = useMatch(atTable)
@@ -54,6 +54,8 @@ async function joinTable(code: string) {
 function leaveTable() {
   if (snapshot.value?.phase === 'lobby' || window.confirm(t('lobby.confirmLeave'))) void online.leave()
 }
+/** Lost the table: go solo on the player's say-so, without the leave-table confirmation. */
+const playSolo = () => void online.leave()
 const pausedBy = computed(() => online.source.pausedBy?.value ?? null)
 /** On a break: someone paused the online table, or you paused your solo match. */
 const onBreak = computed(() => (atTable.value ? pausedBy.value !== null : solo.onBreak.value))
@@ -270,7 +272,7 @@ async function loadLatest() {
     />
 
     <!-- A break: everyone at the online table sees this until someone resumes. -->
-    <div v-if="onBreak" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+    <div v-if="onBreak && link === 'up'" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
       <div class="result__card pause">
         <h2 id="pause-title">{{ t('pause.title') }}</h2>
         <template v-if="atTable">
@@ -279,6 +281,24 @@ async function loadLatest() {
         </template>
         <p v-else class="result__note">{{ t('pause.solo') }}</p>
         <button class="action action--primary" autofocus @click="resume">{{ t('pause.resume') }}</button>
+      </div>
+    </div>
+
+    <!-- Lost the connection to the online table: wait for it to come back, retry, or go solo. -->
+    <div v-if="atTable && link !== 'up'" class="result" role="alertdialog" aria-modal="true" aria-labelledby="link-title" aria-describedby="link-body">
+      <div class="result__card pause">
+        <h2 id="link-title">{{ t(link === 'lost' ? 'link.lostTitle' : 'link.reconnectingTitle') }}</h2>
+        <p id="link-body">{{ t(link === 'lost' ? 'link.lost' : 'link.reconnecting', { code: snapshot!.code }) }}</p>
+        <p v-if="link === 'lost' && online.error.value" class="online__error" role="alert">
+          {{ t(online.error.value === 'notFound' ? 'link.closed' : `online.error.${online.error.value}`) }}
+        </p>
+        <p class="result__note">{{ t('link.seatHint') }}</p>
+        <div class="summary__choices">
+          <button class="action action--primary" :disabled="link === 'reconnecting'" autofocus @click="online.reconnect">
+            {{ link === 'reconnecting' ? t('online.connecting') : t('link.reconnect') }}
+          </button>
+          <button class="action" @click="playSolo">{{ t('link.solo') }}</button>
+        </div>
       </div>
     </div>
 
@@ -309,6 +329,5 @@ async function loadLatest() {
       </button>
       <button v-else class="action action--primary" @click="startNewMatch()">{{ t('app.newMatch') }}</button>
     </section>
-    <p v-if="!atTable && online.error.value === 'lost'" class="online__error online__error--banner" role="alert">{{ t('online.error.lost') }}</p>
   </main>
 </template>
