@@ -10,6 +10,7 @@ import ProfileDialog from './components/ProfileDialog.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import VoiceButton from './components/VoiceButton.vue'
 import { loadLatestVersion } from './game/appUpdate'
+import { useInstall } from './game/install'
 import { shareInvite } from './game/invite'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
@@ -145,6 +146,12 @@ function changeRules(e: Event) {
   else select.value = rules.value
 }
 
+/** Install as an app; iOS has no prompt, so explain the Share menu route instead. */
+const { canInstall, install } = useInstall()
+async function installApp() {
+  if (!(await install())) window.alert(t('app.installIos'))
+}
+
 /** Reload onto the newest deploy (installed PWAs can otherwise linger on an old build). */
 const updating = ref(false)
 async function loadLatest() {
@@ -244,6 +251,7 @@ async function loadLatest() {
             <button class="action action--quiet-light" :disabled="updating" @click="loadLatest">{{ updating ? t('app.loadingLatest') : t('app.loadLatest') }}</button>
           </div>
         </details>
+        <button v-if="canInstall" class="action action--quiet-light" @click="installApp">{{ t('app.install') }}</button>
         <button class="action action--quiet-light" @click="rulesDialog = { tab: 'rules' }">{{ t('app.howToPlay') }}</button>
         <button v-if="canPause" class="action action--quiet-light" @click="pause">{{ t('online.pause') }}</button>
         <template v-if="atTable">

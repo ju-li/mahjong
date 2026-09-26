@@ -23,6 +23,8 @@ export const en = {
   'app.loadLatest': 'Load latest version',
   'app.loadingLatest': 'Loading…',
   'app.loadLatestOffline': 'Can’t reach the server. Check your connection and try again.',
+  'app.install': 'Install app',
+  'app.installIos': 'To install, tap the Share button in Safari, then “Add to Home Screen”.',
   'app.fanReference': 'Fan list',
   'app.settings': 'Settings',
 
@@ -290,6 +292,8 @@ export const zhHans: Record<MessageKey, string> = {
   'app.loadLatest': '加载最新版本',
   'app.loadingLatest': '加载中…',
   'app.loadLatestOffline': '无法连接服务器。请检查网络后重试。',
+  'app.install': '安装应用',
+  'app.installIos': '安装方法：在 Safari 中点击“分享”按钮，然后选择“添加到主屏幕”。',
   'app.fanReference': '番种表',
   'app.settings': '设置',
 
