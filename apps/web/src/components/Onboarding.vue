@@ -12,7 +12,7 @@ const { t, locale } = useI18n()
 const { claimSeconds, sound, difficulty, rules } = useSettings()
 
 const STEPS = ['language', 'rules', 'bots', 'timer', 'sound'] as const
-const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
+const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 /** Shown in their own language, whatever the current one. */
 const LANGUAGES = [
   { id: 'en', label: 'English' },

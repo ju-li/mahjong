@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { Difficulty } from '@mahjong/bots'
+import { DIFFICULTIES, type Difficulty } from '@mahjong/bots'
 import { isRuleSet } from '@mahjong/engine'
 import { MAX_NAME_LENGTH, ONLINE_CLAIM_SECONDS, type Snapshot, type TableSettings } from '@mahjong/protocol'
 import { RULE_OPTIONS } from '../game/settings'
@@ -12,7 +12,6 @@ const name = defineModel<string>('name', { required: true })
 const emit = defineEmits<{ configure: [settings: Partial<TableSettings>]; start: []; rename: []; leave: [] }>()
 
 const { t } = useI18n()
-const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
 
 const link = computed(() => `${location.origin}${location.pathname}?room=${props.snapshot.code}`)
 const hostName = computed(() => props.snapshot.players[props.snapshot.host]?.name ?? '')
@@ -84,7 +83,7 @@ function onRules(e: Event) {
           :aria-label="t('app.botDifficulty')"
           @change="emit('configure', { difficulty: ($event.target as HTMLSelectElement).value as Difficulty })"
         >
-          <option v-for="l in LEVELS" :key="l" :value="l">{{ t(`level.${l}`) }}</option>
+          <option v-for="l in DIFFICULTIES" :key="l" :value="l">{{ t(`level.${l}`) }}</option>
         </select>
       </label>
       <label class="select">

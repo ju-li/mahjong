@@ -21,7 +21,7 @@ const fanList = ref<string | null>(null)
 /** How-to-play dialog. */
 const rulesOpen = ref(false)
 
-const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
+const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
 const { claimSeconds, sound, voice, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
 const online = useOnline()

@@ -15,7 +15,7 @@ export const RULE_OPTIONS = [
   { id: 'riichi', playable: false },
   { id: 'taiwan', playable: false },
 ] as const
-const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard']
+const DIFFICULTIES: readonly Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
 /** Scales every text size in the app (see the type scale in style.css). */
 export const TEXT_SIZE_OPTIONS = ['normal', 'large', 'larger'] as const

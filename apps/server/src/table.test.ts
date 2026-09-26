@@ -119,6 +119,9 @@ describe('lobby', () => {
     expect(snap('c0').phase).toBe('lobby')
     table.configure('c0', { rules: 'hk', difficulty: 'hard', claimSeconds: 5 })
     table.configure('c0', { rules: 'riichi', claimSeconds: 0 }) // not offered: ignored
+    table.configure('c0', { difficulty: 'beginner' })
+    expect(snap('c1').settings.difficulty).toBe('beginner')
+    table.configure('c0', { difficulty: 'hard' })
     expect(snap('c1').settings).toEqual({ rules: 'hk', difficulty: 'hard', claimSeconds: 5 })
     table.start('c0')
     expect(snap('c1').phase).toBe('playing')

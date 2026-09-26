@@ -1,4 +1,4 @@
-import { chooseAction, timeoutAction } from '@mahjong/bots'
+import { chooseAction, DIFFICULTIES, timeoutAction } from '@mahjong/bots'
 import {
   applyAction,
   HANDS_PER_MATCH,
@@ -40,7 +40,6 @@ export const NEXT_HAND_MS = 30_000
 /** A dropped player's seat is kept for them this long; after that anyone joining may take it over. */
 export const RESERVE_MS = 2 * 60_000
 
-const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
 /** Actions a player calls out loud. */
 const CALLS = new Set<Action['type']>(['chow', 'pung', 'kong', 'win'])
 
