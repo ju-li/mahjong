@@ -1,11 +1,14 @@
-import type { GameState, Seat } from '@mahjong/engine'
+import type { GameState, PlayerView, Seat } from '@mahjong/engine'
 
 export type SoundKind = 'discard' | 'claim' | 'win' | 'drawn' | 'yourTurn'
 
 const count = (arrays: readonly (readonly unknown[])[]) => arrays.reduce((n, a) => n + a.length, 0)
 
-/** Which sound (if any) a state transition deserves. Pure, so it can be tested without audio. */
-export function soundFor(prev: GameState | null, next: GameState | null, me: Seat): SoundKind | null {
+/**
+ * Which sound (if any) a table transition deserves. Takes full states or one seat's views, so it works
+ * offline and online alike. Pure, so it can be tested without audio.
+ */
+export function soundFor(prev: GameState | PlayerView | null, next: GameState | PlayerView | null, me: Seat): SoundKind | null {
   if (!prev || !next || prev === next) return null
   if (next.phase.kind === 'ended' && prev.phase.kind !== 'ended') return next.phase.result.type === 'win' ? 'win' : 'drawn'
   if (count(next.melds) > count(prev.melds)) return 'claim'

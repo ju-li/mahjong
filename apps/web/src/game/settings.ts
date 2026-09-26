@@ -1,6 +1,6 @@
 import { ref, watch } from 'vue'
 import { isRuleSet, type RuleSet } from '@mahjong/engine'
-import type { Difficulty } from '../bots/protocol'
+import type { Difficulty } from '@mahjong/bots'
 
 const STORAGE_KEY = 'mahjong.settings.v1'
 /** Older builds kept difficulty and rules only inside the saved match. */

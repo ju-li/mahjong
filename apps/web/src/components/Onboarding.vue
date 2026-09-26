@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import type { Difficulty } from '../bots/protocol'
+import type { Difficulty } from '@mahjong/bots'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, useSettings } from '../game/settings'
 import { playSound } from '../game/sound'
 import type { MessageKey } from '../i18n/messages'

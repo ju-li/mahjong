@@ -25,7 +25,5 @@ export function actionForKey(key: string, actions: readonly Action[], nth = 0): 
   return options.length ? options[nth % options.length]! : null
 }
 
-/** What the claim timer does on expiry: pass, and only if passing is legal (V31). */
-export function timeoutAction(actions: readonly Action[]): Action | null {
-  return actions.find((a) => a.type === 'pass') ?? null
-}
+/** What the claim timer does on expiry; shared with the game server. */
+export { timeoutAction } from '@mahjong/bots'

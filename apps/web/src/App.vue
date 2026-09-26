@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { HANDS_PER_MATCH, isRuleSet } from '@mahjong/engine'
-import type { Difficulty } from './bots/protocol'
+import { isRuleSet } from '@mahjong/engine'
+import type { Difficulty } from '@mahjong/bots'
 import FanReference from './components/FanReference.vue'
-import GameTable from './components/GameTable.vue'
-import HandResult from './components/HandResult.vue'
+import Lobby from './components/Lobby.vue'
+import MatchScreen from './components/MatchScreen.vue'
 import Onboarding from './components/Onboarding.vue'
+import OnlineDialog from './components/OnlineDialog.vue'
 import RulesReference from './components/RulesReference.vue'
 import { loadLatestVersion } from './game/appUpdate'
-import { avatarSeeds, avatarSvg } from './game/avatar'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
+import { useOnline } from './game/useOnline'
 import { useI18n } from './i18n/useI18n'
 
 const { t, toggle } = useI18n()
@@ -20,27 +21,67 @@ const fanList = ref<string | null>(null)
 /** How-to-play dialog. */
 const rulesOpen = ref(false)
 
-/** Per player. Bots are numbered by where they sit relative to you at the start of the match. */
-const NAMES = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
 const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
 const { claimSeconds, sound, voice, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
-const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, rules, resumed, act, continueToNextHand, startNewMatch } = useMatch()
+const online = useOnline()
+const { snapshot, isHost } = online
+/** At an online table (lobby or match); the solo match waits meanwhile. */
+const atTable = computed(() => snapshot.value !== null)
+const solo = useMatch(atTable)
+const { difficulty, rules, resumed, inProgress, startNewMatch } = solo
+/** The match on screen. */
+const source = computed(() => (atTable.value ? online.source : solo))
+const view = computed(() => source.value.view.value)
+const shownRules = computed(() => source.value.rules.value)
 
-const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.phase.result : null))
-/** Names in table-seat order for this round. */
-const seatNames = computed(() => seatPlayers.value.map((p) => NAMES.value[p]!))
-/** Match totals in seat order, including the hand just finished. */
-const seatTotals = computed(() =>
-  seatPlayers.value.map((p, seat) => match.value.scores[p]! + (result.value?.type === 'win' ? result.value.deltas[seat]! : 0)),
-)
+/** Host / join dialog; opened from the top bar or by an invite link. */
+const onlineOpen = ref(false)
+const inviteCode = ref<string | undefined>()
 
-/** Match totals in seat order, before the hand in play. */
-const seatScores = computed(() => seatPlayers.value.map((p) => match.value.scores[p]!))
-/** A random face per player, fixed for the whole match. */
-const playerAvatars = computed(() => avatarSeeds(match.value.seed).map(avatarSvg))
-const seatAvatars = computed(() => seatPlayers.value.map((p) => playerAvatars.value[p]!))
-const handLabel = computed(() => t('score.hand', { n: Math.min(match.value.handIndex + 1, HANDS_PER_MATCH), total: HANDS_PER_MATCH }))
+async function hostTable() {
+  if (await online.host()) onlineOpen.value = false
+}
+async function joinTable(code: string) {
+  if (await online.join(code)) onlineOpen.value = false
+}
+function leaveTable() {
+  if (snapshot.value?.phase === 'lobby' || window.confirm(t('lobby.confirmLeave'))) void online.leave()
+}
+const pausedBy = computed(() => online.source.pausedBy?.value ?? null)
+/** On a break: someone paused the online table, or you paused your solo match. */
+const onBreak = computed(() => (atTable.value ? pausedBy.value !== null : solo.onBreak.value))
+/** Pausing makes sense while a hand is being played. */
+const canPause = computed(() => {
+  if (onBreak.value || !view.value || view.value.phase.kind === 'ended') return false
+  return atTable.value ? snapshot.value?.phase === 'playing' : !needsOnboarding.value
+})
+const pause = () => (atTable.value ? online.pause() : solo.pause())
+const resume = () => (atTable.value ? online.resume() : solo.resume())
+const hostName = computed(() => {
+  const s = snapshot.value
+  return s ? (s.players[s.host]?.name ?? '') : ''
+})
+/** End of an online match: the host takes everyone back to the lobby; others may leave. */
+function onlineMatchDone() {
+  if (isHost.value) online.restart()
+  else void online.leave()
+}
+
+onMounted(() => {
+  // Invite link (?room=KJXW): open the join dialog with the code filled in, then tidy the address bar.
+  const params = new URLSearchParams(location.search)
+  const room = params.get('room')
+  if (room) {
+    inviteCode.value = room.toUpperCase()
+    onlineOpen.value = true
+    params.delete('room')
+    const rest = params.toString()
+    history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`)
+  } else {
+    void online.rejoin()
+  }
+})
 
 /** Settings dropdown; closes on a click outside it or Escape. */
 const settingsMenu = ref<HTMLDetailsElement | null>(null)
@@ -57,8 +98,6 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', closeSettings)
   document.removeEventListener('keydown', closeSettings)
 })
-
-const inProgress = () => match.value.history.length > 0 || (match.value.current !== null && !handOver.value)
 
 function confirmNewMatch() {
   if (!inProgress() || window.confirm(t('app.confirmNewMatch'))) startNewMatch()
@@ -98,12 +137,15 @@ async function loadLatest() {
 <template>
   <main class="app">
     <header class="topbar">
-      <h1>{{ t('app.title') }} <small>{{ t(`rules.short.${rules}`) }}</small></h1>
+      <h1>
+        {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
+        <small v-if="snapshot" class="topbar__code">{{ t('lobby.table') }} {{ snapshot.code }}</small>
+      </h1>
       <div class="topbar__controls">
         <details ref="settingsMenu" class="menu">
           <summary class="action action--quiet-light">{{ t('app.settings') }}</summary>
           <div class="menu__panel">
-            <label class="select">
+            <label v-if="!atTable" class="select">
               <span>{{ t('app.rules') }}</span>
               <select :value="rules" :aria-label="t('app.rules')" @change="changeRules">
                 <option v-for="r in RULE_OPTIONS" :key="r.id" :value="r.id" :disabled="!r.playable">
@@ -111,13 +153,13 @@ async function loadLatest() {
                 </option>
               </select>
             </label>
-            <label class="select">
+            <label v-if="!atTable" class="select">
               <span>{{ t('app.bots') }}</span>
               <select v-model="difficulty" :aria-label="t('app.botDifficulty')">
                 <option v-for="l in LEVELS" :key="l" :value="l">{{ t(`level.${l}`) }}</option>
               </select>
             </label>
-            <label class="select">
+            <label v-if="!atTable" class="select">
               <span>{{ t('app.claimTimer') }}</span>
               <select v-model.number="claimSeconds" :aria-label="t('app.claimTimer')">
                 <option v-for="s in CLAIM_TIMER_OPTIONS" :key="s" :value="s">{{ s === 0 ? t('timer.off') : t('timer.seconds', { n: s }) }}</option>
@@ -158,45 +200,84 @@ async function loadLatest() {
         </details>
         <button class="action action--quiet-light" @click="rulesOpen = true">{{ t('app.howToPlay') }}</button>
         <button class="action action--quiet-light" @click="fanList = ''">{{ t('app.fanReference') }}</button>
-        <button class="action" @click="confirmNewMatch">{{ t('app.newMatch') }}</button>
+        <button v-if="canPause" class="action action--quiet-light" @click="pause">{{ t('online.pause') }}</button>
+        <template v-if="atTable">
+          <button class="action" @click="leaveTable">{{ t('lobby.leave') }}</button>
+        </template>
+        <template v-else>
+          <button class="action action--quiet-light" @click="onlineOpen = true">{{ t('online.open') }}</button>
+          <button class="action" @click="confirmNewMatch">{{ t('app.newMatch') }}</button>
+        </template>
       </div>
     </header>
 
-    <GameTable
-      v-if="view"
-      :key="`${match.seed}:${match.handIndex}`"
-      :view="view"
-      :actions="humanActions"
-      :names="seatNames"
-      :scores="seatScores"
-      :avatars="seatAvatars"
-      :hand-label="handLabel"
-      :claim-remaining="claimRemaining"
-      @act="act"
+    <Lobby
+      v-if="snapshot?.phase === 'lobby'"
+      v-model:name="online.name.value"
+      :snapshot="snapshot"
+      :is-host="isHost"
+      @configure="online.configure"
+      @start="online.start"
+      @rename="online.rename"
+      @leave="leaveTable"
     />
-    <p v-if="view" class="keys-help">{{ t('keys.help') }}</p>
-
-    <HandResult
-      v-if="view && result"
-      :result="result"
-      :view="view"
-      :names="seatNames"
-      :avatars="seatAvatars"
-      :match-over="matchOver || match.handIndex === 15"
-      :final-scores="seatTotals"
-      @next="continueToNextHand"
-      @new-match="startNewMatch()"
+    <MatchScreen
+      v-else-if="atTable"
+      :key="`online:${snapshot!.code}`"
+      :source="online.source"
+      @new-match="onlineMatchDone"
       @explain="(id: string) => (fanList = id)"
-    />
+    >
+      <template #matchEnd>
+        <div v-if="isHost" class="summary__choices">
+          <button class="action action--primary summary__continue" autofocus @click="online.rematch">{{ t('online.keepGoing') }}</button>
+          <button class="action summary__continue" @click="online.restart">{{ t('online.backToLobby') }}</button>
+        </div>
+        <template v-else>
+          <p class="result__note">{{ t('online.waitingHostChoice', { name: hostName }) }}</p>
+          <button class="action summary__continue" @click="leaveTable">{{ t('online.leaveMatch') }}</button>
+        </template>
+      </template>
+    </MatchScreen>
 
-    <RulesReference v-if="rulesOpen" :rules="rules" @close="rulesOpen = false" @fans="rulesOpen = false; fanList = ''" />
-    <FanReference v-if="fanList !== null" :focus="fanList || null" :rules="rules" @close="fanList = null" />
+    <MatchScreen v-else :source="solo" @new-match="startNewMatch()" @explain="(id: string) => (fanList = id)" />
+
+    <!-- A break: everyone at the online table sees this until someone resumes. -->
+    <div v-if="onBreak" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <div class="result__card pause">
+        <h2 id="pause-title">{{ t('pause.title') }}</h2>
+        <template v-if="atTable">
+          <p>{{ t('pause.by', { name: pausedBy ?? '' }) }}</p>
+          <p class="result__note">{{ t('pause.hint') }}</p>
+        </template>
+        <p v-else class="result__note">{{ t('pause.solo') }}</p>
+        <button class="action action--primary" autofocus @click="resume">{{ t('pause.resume') }}</button>
+      </div>
+    </div>
+
+    <RulesReference v-if="rulesOpen" :rules="shownRules" @close="rulesOpen = false" @fans="rulesOpen = false; fanList = ''" />
+    <FanReference v-if="fanList !== null" :focus="fanList || null" :rules="shownRules" @close="fanList = null" />
 
     <Onboarding v-if="needsOnboarding" @done="onboardingDone" />
 
-    <section v-if="!view" class="result__card result__card--inline">
+    <OnlineDialog
+      v-if="onlineOpen && !atTable"
+      v-model:name="online.name.value"
+      :busy="online.busy.value"
+      :error="online.error.value"
+      :initial-code="inviteCode"
+      @host="hostTable"
+      @join="joinTable"
+      @close="onlineOpen = false"
+    />
+
+    <section v-if="!view && snapshot?.phase !== 'lobby'" class="result__card result__card--inline">
       <h2>{{ t('app.matchFinished') }}</h2>
-      <button class="action action--primary" @click="startNewMatch()">{{ t('app.newMatch') }}</button>
+      <button v-if="atTable" class="action action--primary" @click="onlineMatchDone">
+        {{ isHost ? t('online.backToLobby') : t('online.leaveMatch') }}
+      </button>
+      <button v-else class="action action--primary" @click="startNewMatch()">{{ t('app.newMatch') }}</button>
     </section>
+    <p v-if="!atTable && online.error.value === 'lost'" class="online__error online__error--banner" role="alert">{{ t('online.error.lost') }}</p>
   </main>
 </template>
