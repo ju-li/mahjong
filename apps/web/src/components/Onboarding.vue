@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { Difficulty } from '@mahjong/bots'
+import { isMobile } from '../game/device'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, useSettings } from '../game/settings'
 import { playSound } from '../game/sound'
 import type { MessageKey } from '../i18n/messages'
@@ -11,7 +12,10 @@ const emit = defineEmits<{ done: [] }>()
 const { t, locale } = useI18n()
 const { claimSeconds, sound, difficulty, rules } = useSettings()
 
-const STEPS = ['language', 'rules', 'bots', 'timer', 'sound'] as const
+const ALL_STEPS = ['language', 'mobile', 'rules', 'bots', 'timer', 'sound'] as const
+type Step = (typeof ALL_STEPS)[number]
+/** The "not optimized for mobile" notice comes right after the language, so it reads in the chosen one. */
+const STEPS = ALL_STEPS.filter((s) => s !== 'mobile' || isMobile())
 const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 /** Shown in their own language, whatever the current one. */
 const LANGUAGES = [
@@ -23,6 +27,7 @@ const index = ref(0)
 const step = computed(() => STEPS[index.value]!)
 const last = computed(() => index.value === STEPS.length - 1)
 const body = ref<HTMLElement | null>(null)
+const nextButton = ref<HTMLButtonElement | null>(null)
 
 function next() {
   if (last.value) emit('done')
@@ -38,20 +43,24 @@ function chooseSound(on: boolean) {
 /** Each step starts with its selected option focused, so arrow keys and Enter work straight away. */
 async function focusStep() {
   await nextTick()
-  body.value?.querySelector<HTMLInputElement>('input:checked')?.focus()
+  const checked = body.value?.querySelector<HTMLInputElement>('input:checked')
+  if (checked) checked.focus()
+  else nextButton.value?.focus()
 }
 watch(index, focusStep)
 onMounted(focusStep)
 
-const titles: Record<(typeof STEPS)[number], MessageKey> = {
+const titles: Record<Step, MessageKey> = {
   language: 'onboarding.language.title',
+  mobile: 'onboarding.mobile.title',
   rules: 'onboarding.rules.title',
   bots: 'onboarding.bots.title',
   timer: 'onboarding.timer.title',
   sound: 'onboarding.sound.title',
 }
-const intros: Record<(typeof STEPS)[number], MessageKey> = {
+const intros: Record<Step, MessageKey> = {
   language: 'onboarding.language.body',
+  mobile: 'onboarding.mobile.body',
   rules: 'onboarding.rules.body',
   bots: 'onboarding.bots.body',
   timer: 'onboarding.timer.body',
@@ -72,7 +81,7 @@ const intros: Record<(typeof STEPS)[number], MessageKey> = {
       <h2 id="onboard-title">{{ t(titles[step]) }}</h2>
       <p id="onboard-intro" class="result__note">{{ t(intros[step]) }}</p>
 
-      <div ref="body" :key="step" class="onboard__options">
+      <div v-if="step !== 'mobile'" ref="body" :key="step" class="onboard__options">
         <template v-if="step === 'language'">
           <label v-for="l in LANGUAGES" :key="l.id" class="onboard__option" :class="{ 'is-selected': locale === l.id }">
             <input v-model="locale" type="radio" name="language" :value="l.id" />
@@ -118,12 +127,12 @@ const intros: Record<(typeof STEPS)[number], MessageKey> = {
         </template>
       </div>
 
-      <p class="onboard__hint">{{ t('onboarding.later') }}</p>
+      <p v-if="step !== 'mobile'" class="onboard__hint">{{ t('onboarding.later') }}</p>
 
       <footer class="onboard__nav">
         <button v-if="index > 0" type="button" class="action action--quiet-light" @click="index--">{{ t('onboarding.back') }}</button>
         <button v-else type="button" class="action action--quiet-light" @click="emit('done')">{{ t('onboarding.skip') }}</button>
-        <button type="submit" class="action onboard__next">{{ last ? t('onboarding.start') : t('onboarding.next') }}</button>
+        <button ref="nextButton" type="submit" class="action onboard__next">{{ last ? t('onboarding.start') : t('onboarding.next') }}</button>
       </footer>
     </form>
   </div>

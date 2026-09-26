@@ -263,9 +263,8 @@ export const en = {
   'pause.hint': 'Bots and timers wait too. Anyone at the table can carry on.',
   'pause.resume': 'Resume',
   'pause.solo': 'The bots and the claim timer wait until you carry on.',
-  'mobile.title': 'Best on a bigger screen',
-  'mobile.body': 'This game has not been optimized for mobile yet, so some parts may be cramped or hard to tap. For the best experience, play on a computer or tablet.',
-  'mobile.ok': 'Got it',
+  'onboarding.mobile.title': 'Best on a bigger screen',
+  'onboarding.mobile.body': 'This game has not been optimized for mobile yet, so some parts may be cramped or hard to tap. For the best experience, play on a computer or tablet.',
 }
 
 export type MessageKey = keyof typeof en
@@ -531,9 +530,8 @@ export const zhHans: Record<MessageKey, string> = {
   'pause.hint': '电脑和计时器也会等待。牌桌上任何人都可以继续。',
   'pause.resume': '继续',
   'pause.solo': '电脑和吃碰计时器会等你回来再继续。',
-  'mobile.title': '大屏幕体验更佳',
-  'mobile.body': '本游戏尚未针对手机进行优化，部分界面可能显得拥挤或不易点按。建议在电脑或平板上游玩以获得最佳体验。',
-  'mobile.ok': '知道了',
+  'onboarding.mobile.title': '大屏幕体验更佳',
+  'onboarding.mobile.body': '本游戏尚未针对手机进行优化，部分界面可能显得拥挤或不易点按。建议在电脑或平板上游玩以获得最佳体验。',
 }
 
 export const MESSAGES = { en, 'zh-Hans': zhHans } as const

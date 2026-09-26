@@ -4,14 +4,12 @@ import { isRuleSet } from '@mahjong/engine'
 import type { Difficulty } from '@mahjong/bots'
 import Lobby from './components/Lobby.vue'
 import MatchScreen from './components/MatchScreen.vue'
-import MobileWarning from './components/MobileWarning.vue'
 import Onboarding from './components/Onboarding.vue'
 import OnlineDialog from './components/OnlineDialog.vue'
 import ProfileDialog from './components/ProfileDialog.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import VoiceButton from './components/VoiceButton.vue'
 import { loadLatestVersion } from './game/appUpdate'
-import { markMobileWarningSeen, needsMobileWarning } from './game/mobileWarning'
 import { shareInvite } from './game/invite'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
@@ -40,12 +38,6 @@ const shownRules = computed(() => source.value.rules.value)
 /** Your name and avatar; opened by clicking your own badge or your lobby seat. */
 const profileOpen = ref(false)
 
-/** One-time notice for phones; onboarding waits until it is dismissed so the dialogs don't stack. */
-const mobileWarningOpen = ref(needsMobileWarning())
-function closeMobileWarning() {
-  markMobileWarningSeen()
-  mobileWarningOpen.value = false
-}
 /** A changed profile reaches the online table straight away. */
 function profileSaved() {
   if (atTable.value) online.sendProfile()
@@ -337,9 +329,7 @@ async function loadLatest() {
 
     <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :rules="shownRules" @close="rulesDialog = null" />
 
-    <MobileWarning v-if="mobileWarningOpen" @close="closeMobileWarning" />
-
-    <Onboarding v-if="needsOnboarding && !mobileWarningOpen" @done="onboardingDone" />
+    <Onboarding v-if="needsOnboarding" @done="onboardingDone" />
 
     <ProfileDialog v-if="profileOpen" @save="profileSaved" @close="profileOpen = false" />
 
