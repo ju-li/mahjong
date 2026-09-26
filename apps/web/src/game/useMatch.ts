@@ -68,7 +68,7 @@ function randomSeed(): number {
 /**
  * Drives a 16-hand match. Bots act through the worker, the human through `act`.
  * All rules come from the engine; this file only sequences turns and persists progress.
- * While `paused` (e.g. the player is at an online table), nothing moves and no timer runs.
+ * While `paused` (the player is at an online table) or on a break (`pause`), nothing moves and no timer runs.
  */
 export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   const bots = new BotClient()
@@ -79,6 +79,9 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   let generation = 0
   let step = 0
   let running = false
+  /** The player paused for a break. */
+  const onBreak = ref(false)
+  const held = computed(() => paused.value || onBreak.value)
 
   const humanSeat = computed(() => seatOf(match.value, HUMAN_PLAYER))
   /** `seatPlayers[seat]` = player sitting there this round. */
@@ -95,16 +98,20 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   /** Identifies one claim window for the human, so bot replies inside it do not restart the clock. */
   const claimKey = computed(() => {
     const s = state.value
-    if (needsOnboarding.value || paused.value) return null
+    if (needsOnboarding.value || held.value) return null
     if (!s || (s.phase.kind !== 'claim' && s.phase.kind !== 'robKong')) return null
     if (!timeoutAction(humanActions.value)) return null
     return `${match.value.handIndex}:${s.phase.kind}:${s.phase.tile.id}:${claimSeconds.value}`
   })
-  watch(claimKey, (key) => {
+  /** Time left on a claim when play was held, so the countdown resumes rather than restarts. */
+  let heldClaim: { key: string; left: number } | null = null
+  watch(claimKey, (key, before) => {
     clearInterval(claimTimer)
+    if (key === null && before && held.value && claimRemaining.value !== null) heldClaim = { key: before, left: claimRemaining.value }
     claimRemaining.value = null
     if (key === null || claimSeconds.value === 0) return
-    claimRemaining.value = claimSeconds.value
+    claimRemaining.value = heldClaim?.key === key ? heldClaim.left : claimSeconds.value
+    heldClaim = null
     claimTimer = setInterval(() => {
       claimRemaining.value = (claimRemaining.value ?? 1) - 1
       if (claimRemaining.value > 0) return
@@ -126,14 +133,14 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
 
   /** Advance until the hand ends or the human must choose. */
   async function pump(): Promise<void> {
-    if (running || needsOnboarding.value || paused.value) return
+    if (running || needsOnboarding.value || held.value) return
     running = true
     const gen = generation
     try {
       while (gen === generation) {
         // Let the last call finish before anyone moves on, as players would at a real table.
         await calloutsDone()
-        if (gen !== generation || paused.value) return
+        if (gen !== generation || held.value) return
         const s = match.value.current
         if (!s || s.phase.kind === 'ended') return
         const me = seatOf(match.value, HUMAN_PLAYER)
@@ -176,7 +183,7 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
 
   function act(action: Action): void {
     const s = match.value.current
-    if (!s || !legalActions(s, humanSeat.value).some((a) => sameAction(a, action))) return
+    if (held.value || !s || !legalActions(s, humanSeat.value).some((a) => sameAction(a, action))) return
     commit(action)
     void pump()
   }
@@ -204,7 +211,7 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   })
 
   // Play waits behind the onboarding dialog, and while paused.
-  watch([needsOnboarding, paused], ([waiting, hold]) => {
+  watch([needsOnboarding, held], ([waiting, hold]) => {
     if (!waiting && !hold) return void pump()
     // Drop any bot move still in flight.
     generation++
@@ -239,6 +246,9 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     ...source,
     difficulty,
     inProgress,
+    onBreak,
+    pause: () => void (onBreak.value = true),
+    resume: () => void (onBreak.value = false),
     /** A match was restored from storage rather than dealt fresh. */
     resumed: saved !== null,
     startNewMatch,

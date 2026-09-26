@@ -49,8 +49,15 @@ function leaveTable() {
   if (snapshot.value?.phase === 'lobby' || window.confirm(t('lobby.confirmLeave'))) void online.leave()
 }
 const pausedBy = computed(() => online.source.pausedBy?.value ?? null)
+/** On a break: someone paused the online table, or you paused your solo match. */
+const onBreak = computed(() => (atTable.value ? pausedBy.value !== null : solo.onBreak.value))
 /** Pausing makes sense while a hand is being played. */
-const canPause = computed(() => snapshot.value?.phase === 'playing' && !pausedBy.value && view.value?.phase.kind !== 'ended' && view.value !== null)
+const canPause = computed(() => {
+  if (onBreak.value || !view.value || view.value.phase.kind === 'ended') return false
+  return atTable.value ? snapshot.value?.phase === 'playing' : !needsOnboarding.value
+})
+const pause = () => (atTable.value ? online.pause() : solo.pause())
+const resume = () => (atTable.value ? online.resume() : solo.resume())
 const hostName = computed(() => {
   const s = snapshot.value
   return s ? (s.players[s.host]?.name ?? '') : ''
@@ -193,8 +200,8 @@ async function loadLatest() {
         </details>
         <button class="action action--quiet-light" @click="rulesOpen = true">{{ t('app.howToPlay') }}</button>
         <button class="action action--quiet-light" @click="fanList = ''">{{ t('app.fanReference') }}</button>
+        <button v-if="canPause" class="action action--quiet-light" @click="pause">{{ t('online.pause') }}</button>
         <template v-if="atTable">
-          <button v-if="canPause" class="action action--quiet-light" @click="online.pause">{{ t('online.pause') }}</button>
           <button class="action" @click="leaveTable">{{ t('lobby.leave') }}</button>
         </template>
         <template v-else>
@@ -236,12 +243,15 @@ async function loadLatest() {
     <MatchScreen v-else :source="solo" @new-match="startNewMatch()" @explain="(id: string) => (fanList = id)" />
 
     <!-- A break: everyone at the online table sees this until someone resumes. -->
-    <div v-if="pausedBy" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+    <div v-if="onBreak" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
       <div class="result__card pause">
         <h2 id="pause-title">{{ t('pause.title') }}</h2>
-        <p>{{ t('pause.by', { name: pausedBy }) }}</p>
-        <p class="result__note">{{ t('pause.hint') }}</p>
-        <button class="action action--primary" autofocus @click="online.resume">{{ t('pause.resume') }}</button>
+        <template v-if="atTable">
+          <p>{{ t('pause.by', { name: pausedBy ?? '' }) }}</p>
+          <p class="result__note">{{ t('pause.hint') }}</p>
+        </template>
+        <p v-else class="result__note">{{ t('pause.solo') }}</p>
+        <button class="action action--primary" autofocus @click="resume">{{ t('pause.resume') }}</button>
       </div>
     </div>
 

@@ -57,6 +57,7 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - ui: table (4 seats, discards, melds, flowers), own hand, claim prompts, win screen w/ fan breakdown, difficulty picker, new match. match saved to `localStorage`.
 - ui: language toggle `en` ↔ `zh-Hans`, persisted; defaults from `navigator.language`.
 - ui: fan reference page: all 81 fans, points, description, exclusions, both languages.
+- ui: pause (top bar) in solo & online: bots & claim timer wait; claim countdown resumes where it stopped; moves ignored while paused.
 - ui: claim timer (default 10 s, setting incl off) → auto-pass. keyboard play for every human action. tile animations & sound (toggle; respect `prefers-reduced-motion`).
 - pwa: web app manifest + service worker; installable; plays offline after first load.
 - deploy: `apps/web/Dockerfile` (repo-root context, Caddy serves `dist` on `$PORT`; build arg `VITE_SERVER_URL` = game server `wss://` URL). Railway service `web` configured manually in dashboard; ⊥ Config as Code, ⊥ IaC.
@@ -160,6 +161,7 @@ T36|x|extract `packages/bots` (strategy, protocol, `timeoutAction`); `soundFor`/
 T37|x|`packages/protocol` (codes, messages) + `apps/server`: `Table` (lobby, turn loop, bots, claim/turn timers, ready-up, tokens) + Colyseus `TableRoom`; tests incl leak check & full match|V41,V42,V43,V44,V45
 T38|x|web: `useOnline`, host/join dialog, lobby, invite link, online match via `MatchScreen`; bilingual strings|V29,I.ui
 T40|x|online pause/resume (any player), end-of-match choice (keep going / back to lobby), hop-in-hop-out seats (take over bots mid-match, chosen leave frees seat, drops reserved 2 min)|V44,V46,V47
+T41|x|solo pause: same button & overlay as online; freezes bots & claim timer, countdown resumes|V46
 T39|.|deploy: Railway service `server` from `apps/server/Dockerfile` + public domain; set `VITE_SERVER_URL` build variable on `web`|I.deploy
 
 ## §B BUGS

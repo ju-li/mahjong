@@ -233,6 +233,7 @@ export const en = {
   'pause.by': '{name} paused the game.',
   'pause.hint': 'Bots and timers wait too. Anyone at the table can carry on.',
   'pause.resume': 'Resume',
+  'pause.solo': 'The bots and the claim timer wait until you carry on.',
 }
 
 export type MessageKey = keyof typeof en
@@ -468,6 +469,7 @@ export const zhHans: Record<MessageKey, string> = {
   'pause.by': '{name}暂停了游戏。',
   'pause.hint': '电脑和计时器也会等待。牌桌上任何人都可以继续。',
   'pause.resume': '继续',
+  'pause.solo': '电脑和吃碰计时器会等你回来再继续。',
 }
 
 export const MESSAGES = { en, 'zh-Hans': zhHans } as const
