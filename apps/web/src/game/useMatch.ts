@@ -19,8 +19,10 @@ import {
 import { BotClient } from './botClient'
 import { timeoutAction } from './keyboard'
 import { useSettings } from './settings'
-import { calloutFor, calloutsDone, speakCallout } from './callout'
-import { playSound, soundFor } from './sound'
+import { calloutsDone } from './callout'
+import type { MatchSource } from './source'
+import { useTableAudio } from './tableAudio'
+import { useI18n } from '../i18n/useI18n'
 
 /** The human is always player 0; their table seat changes between rounds. */
 export const HUMAN_PLAYER: Player = 0
@@ -70,7 +72,8 @@ function randomSeed(): number {
 export function useMatch() {
   const bots = new BotClient()
   const saved = load()
-  const { claimSeconds, sound, voice, difficulty, rules: preferredRules, needsOnboarding } = useSettings()
+  const { claimSeconds, difficulty, rules: preferredRules, needsOnboarding } = useSettings()
+  const { t } = useI18n()
   const match = shallowRef<Match>(saved?.match ?? newMatch(randomSeed(), preferredRules.value))
   let generation = 0
   let step = 0
@@ -84,16 +87,7 @@ export function useMatch() {
   const humanActions = computed(() => (state.value ? legalActions(state.value, humanSeat.value) : []))
   const handOver = computed(() => state.value?.phase.kind === 'ended')
 
-  watch(state, (next, prev) => {
-    if (sound.value) {
-      const kind = soundFor(prev ?? null, next ?? null, humanSeat.value)
-      if (kind) playSound(kind)
-    }
-    if (voice.value) {
-      const call = calloutFor(prev ?? null, next ?? null)
-      if (call) speakCallout(call)
-    }
-  })
+  useTableAudio(view)
   // Claim timer: counts down while the human may claim; on expiry it passes (only if legal).
   const claimRemaining = ref<number | null>(null)
   let claimTimer: ReturnType<typeof setInterval> | undefined
@@ -214,21 +208,35 @@ export function useMatch() {
   })
   void pump()
 
-  return {
-    match,
-    humanSeat,
-    seatPlayers,
+  /** Bots are numbered by where they sit relative to you at the start of the match. */
+  const playerNames = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
+  const scores = computed(() => match.value.scores)
+  const matchSeed = computed(() => match.value.seed)
+  const handIndex = computed(() => match.value.handIndex)
+  /** A hand has been played or is under way, so starting over would throw progress away. */
+  const inProgress = () => match.value.history.length > 0 || (match.value.current !== null && !handOver.value)
+
+  const source: MatchSource = {
     view,
-    humanActions,
-    claimRemaining,
-    handOver,
-    matchOver,
-    difficulty,
+    actions: humanActions,
+    seatPlayers,
+    playerNames,
+    scores,
+    matchSeed,
+    handIndex,
     rules,
-    /** A match was restored from storage rather than dealt fresh. */
-    resumed: saved !== null,
+    claimRemaining,
+    matchOver,
     act,
     continueToNextHand,
+  }
+
+  return {
+    ...source,
+    difficulty,
+    inProgress,
+    /** A match was restored from storage rather than dealt fresh. */
+    resumed: saved !== null,
     startNewMatch,
   }
 }

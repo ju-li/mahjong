@@ -1,5 +1,5 @@
 import type { Action } from '@mahjong/engine'
-import type { BotRequest, BotResponse } from '../bots/protocol'
+import type { BotRequest, BotResponse } from '@mahjong/bots'
 
 /** Promise wrapper around the bot worker. One worker serves every bot seat. */
 export class BotClient {

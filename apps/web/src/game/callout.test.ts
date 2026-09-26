@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { applyAction, legalActions, newHand, type Action, type GameState, type Seat } from '@mahjong/engine'
+import { applyAction, legalActions, newHand, viewFor, type Action, type GameState, type Seat } from '@mahjong/engine'
 import { calloutFor, tileCall } from './callout'
 
-/** Play a hand, preferring claims, and collect every callout. */
+/** Play a hand, preferring claims, and collect every callout; also checks a seat's view calls the same. */
 function playHand(seed: number): string[] {
   let s = newHand({ seed, dealer: 0, prevailingWind: 'E' })
   const calls: string[] = []
@@ -13,6 +13,8 @@ function playHand(seed: number): string[] {
     const action = pick('win') ?? pick('kong') ?? pick('pung') ?? pick('chow') ?? pick('draw') ?? pick('discard') ?? legal[0]!
     const next = applyAction(s, action)
     const call = calloutFor(s, next)
+    // Online clients only see their own view; it must announce exactly the same calls.
+    expect(calloutFor(viewFor(s, 0), viewFor(next, 0))).toEqual(call)
     if (call) calls.push(call.text)
     s = next
   }

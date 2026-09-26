@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyAction, legalActions, newHand, type GameState, type Seat } from '@mahjong/engine'
+import { applyAction, legalActions, newHand, viewFor, type GameState, type Seat } from '@mahjong/engine'
 import { soundFor } from './sound'
 
 function step(s: GameState): GameState {
@@ -21,6 +21,8 @@ describe('soundFor', () => {
     for (let i = 0; i < 40 && s.phase.kind !== 'ended'; i++) {
       const next = step(s)
       const k = soundFor(s, next, 0)
+      // Online clients only see their own view; it must sound exactly the same.
+      expect(soundFor(viewFor(s, 0), viewFor(next, 0), 0)).toBe(k)
       if (k) kinds.add(k)
       s = next
     }

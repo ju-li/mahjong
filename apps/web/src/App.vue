@@ -1,14 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { HANDS_PER_MATCH, isRuleSet } from '@mahjong/engine'
-import type { Difficulty } from './bots/protocol'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { isRuleSet } from '@mahjong/engine'
+import type { Difficulty } from '@mahjong/bots'
 import FanReference from './components/FanReference.vue'
-import GameTable from './components/GameTable.vue'
-import HandResult from './components/HandResult.vue'
+import MatchScreen from './components/MatchScreen.vue'
 import Onboarding from './components/Onboarding.vue'
 import RulesReference from './components/RulesReference.vue'
 import { loadLatestVersion } from './game/appUpdate'
-import { avatarSeeds, avatarSvg } from './game/avatar'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useI18n } from './i18n/useI18n'
@@ -20,27 +18,11 @@ const fanList = ref<string | null>(null)
 /** How-to-play dialog. */
 const rulesOpen = ref(false)
 
-/** Per player. Bots are numbered by where they sit relative to you at the start of the match. */
-const NAMES = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
 const LEVELS: Difficulty[] = ['easy', 'medium', 'hard']
 
 const { claimSeconds, sound, voice, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
-const { match, seatPlayers, view, humanActions, claimRemaining, handOver, matchOver, difficulty, rules, resumed, act, continueToNextHand, startNewMatch } = useMatch()
-
-const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.phase.result : null))
-/** Names in table-seat order for this round. */
-const seatNames = computed(() => seatPlayers.value.map((p) => NAMES.value[p]!))
-/** Match totals in seat order, including the hand just finished. */
-const seatTotals = computed(() =>
-  seatPlayers.value.map((p, seat) => match.value.scores[p]! + (result.value?.type === 'win' ? result.value.deltas[seat]! : 0)),
-)
-
-/** Match totals in seat order, before the hand in play. */
-const seatScores = computed(() => seatPlayers.value.map((p) => match.value.scores[p]!))
-/** A random face per player, fixed for the whole match. */
-const playerAvatars = computed(() => avatarSeeds(match.value.seed).map(avatarSvg))
-const seatAvatars = computed(() => seatPlayers.value.map((p) => playerAvatars.value[p]!))
-const handLabel = computed(() => t('score.hand', { n: Math.min(match.value.handIndex + 1, HANDS_PER_MATCH), total: HANDS_PER_MATCH }))
+const solo = useMatch()
+const { view, difficulty, rules, resumed, inProgress, startNewMatch } = solo
 
 /** Settings dropdown; closes on a click outside it or Escape. */
 const settingsMenu = ref<HTMLDetailsElement | null>(null)
@@ -57,8 +39,6 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', closeSettings)
   document.removeEventListener('keydown', closeSettings)
 })
-
-const inProgress = () => match.value.history.length > 0 || (match.value.current !== null && !handOver.value)
 
 function confirmNewMatch() {
   if (!inProgress() || window.confirm(t('app.confirmNewMatch'))) startNewMatch()
@@ -162,32 +142,7 @@ async function loadLatest() {
       </div>
     </header>
 
-    <GameTable
-      v-if="view"
-      :key="`${match.seed}:${match.handIndex}`"
-      :view="view"
-      :actions="humanActions"
-      :names="seatNames"
-      :scores="seatScores"
-      :avatars="seatAvatars"
-      :hand-label="handLabel"
-      :claim-remaining="claimRemaining"
-      @act="act"
-    />
-    <p v-if="view" class="keys-help">{{ t('keys.help') }}</p>
-
-    <HandResult
-      v-if="view && result"
-      :result="result"
-      :view="view"
-      :names="seatNames"
-      :avatars="seatAvatars"
-      :match-over="matchOver || match.handIndex === 15"
-      :final-scores="seatTotals"
-      @next="continueToNextHand"
-      @new-match="startNewMatch()"
-      @explain="(id: string) => (fanList = id)"
-    />
+    <MatchScreen :source="solo" @new-match="startNewMatch()" @explain="(id: string) => (fanList = id)" />
 
     <RulesReference v-if="rulesOpen" :rules="rules" @close="rulesOpen = false" @fans="rulesOpen = false; fanList = ''" />
     <FanReference v-if="fanList !== null" :focus="fanList || null" :rules="rules" @close="fanList = null" />

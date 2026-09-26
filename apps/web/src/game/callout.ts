@@ -1,4 +1,4 @@
-import type { GameState, Meld, Seat, TileKind } from '@mahjong/engine'
+import type { GameState, MeldType, PlayerView, Seat, TileKind } from '@mahjong/engine'
 
 /** Something a player says out loud, as at a real table. */
 export type Callout = { seat: Seat; text: string }
@@ -26,15 +26,16 @@ export function tileCall(kind: TileKind): string {
 const MELD_CALLS = { chow: '吃', pung: '碰', kong: '杠' } as const
 
 /** The meld a seat just declared, if its meld list grew. */
-function newMeld(prev: readonly Meld[], next: readonly Meld[]): Meld | undefined {
+function newMeld(prev: readonly { type: MeldType }[], next: readonly { type: MeldType }[]): { type: MeldType } | undefined {
   return next.length > prev.length ? next[next.length - 1] : undefined
 }
 
 /**
  * What a player would call out for a state transition: 吃 / 碰 / 杠 on a claim or kong,
- * 胡 / 自摸 on a win, and the tile's name on a discard. Pure, so it can be tested without audio.
+ * 胡 / 自摸 on a win, and the tile's name on a discard. Takes full states or one seat's views.
+ * Pure, so it can be tested without audio.
  */
-export function calloutFor(prev: GameState | null, next: GameState | null): Callout | null {
+export function calloutFor(prev: GameState | PlayerView | null, next: GameState | PlayerView | null): Callout | null {
   if (!prev || !next || prev === next) return null
   const phase = next.phase
   if (phase.kind === 'ended' && prev.phase.kind !== 'ended' && phase.result.type === 'win') {
