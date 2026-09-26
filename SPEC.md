@@ -14,8 +14,9 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - Vitest for engine tests.
 - engine src also typechecked by web's vue-tsc (`verbatimModuleSyntax`, `erasableSyntaxOnly`, `noUnusedLocals`) ∴ engine ! use `import type` for types, ⊥ `enum`, ⊥ `namespace`.
 - scope now: v0 hardening. ⊥ accounts, ⊥ network play, ⊥ mobile shell.
-- roadmap order (fixed): hardening → multiplayer (Colyseus) → accounts & leaderboards (PocketBase) → Capacitor apps.
+- roadmap order (fixed): hardening → multiplayer (Colyseus) → accounts & leaderboards (Supabase) → Capacitor apps.
 - leaderboards ! multiplayer only (server-authoritative results). ⊥ single-player / bot results on leaderboards.
+- backend (future): Supabase (Postgres + Auth). schema plan → `docs/backend-schema.md`. ids: `profiles.id` = `auth.users.id`. writes affecting fairness or money (matches, ratings, wallets, inventory, achievements, bans) ! server only (Colyseus / edge fn / webhook, service role); client writes only via RLS (own profile, friends, blocks, messages, clans, loadout).
 - rule sets: `mcr` (default) & `hk` playable; picker also lists Japanese Riichi & Taiwanese 16-tile as coming soon (disabled). switching rules → new match.
 - hk: faan scoring, win ! ≥ 3 faan incl flowers, cap 13 (limit hands), half-spicy base table, discarder pays 2b / others b, self-draw each 2b. ⊥ re-seating, ⊥ dealer repeat, ⊥ heavenly/earthly hands. source: en.wikipedia.org/wiki/Hong_Kong_mahjong_scoring_rules.
 - rules: MCR (Chinese Official, 81 fan). win ! ≥ 8 fan excl flower fan. no dead wall; replacement draws (flower, kong) from wall back end. wall empty → drawn hand, 0 payment.
@@ -24,7 +25,7 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - v0 simplification: ⊥ false-win penalty (UI offers only legal actions).
 - i18n: UI languages `en` & `zh-Hans`. tile faces stay traditional glyphs (萬 筒 條 東 發). engine holds fan names in both; ⊥ other UI strings in engine.
 - engine = single source of truth for rules. web & bots ⊥ reimplement rules; call engine only. same reducer → future Colyseus server.
-- future (not now): Capacitor iOS/Android, PocketBase accounts/leaderboards, Colyseus authoritative multiplayer.
+- future (not now): Capacitor iOS/Android, Supabase accounts/leaderboards, Colyseus authoritative multiplayer.
 
 ## §I INTERFACES
 - pkg: `@mahjong/engine` → `src/index.ts` re-exports all public symbols.
