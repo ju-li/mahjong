@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import {
   applyAction,
   isMatchOver,
@@ -68,8 +68,9 @@ function randomSeed(): number {
 /**
  * Drives a 16-hand match. Bots act through the worker, the human through `act`.
  * All rules come from the engine; this file only sequences turns and persists progress.
+ * While `paused` (e.g. the player is at an online table), nothing moves and no timer runs.
  */
-export function useMatch() {
+export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   const bots = new BotClient()
   const saved = load()
   const { claimSeconds, difficulty, rules: preferredRules, needsOnboarding } = useSettings()
@@ -94,7 +95,7 @@ export function useMatch() {
   /** Identifies one claim window for the human, so bot replies inside it do not restart the clock. */
   const claimKey = computed(() => {
     const s = state.value
-    if (needsOnboarding.value) return null
+    if (needsOnboarding.value || paused.value) return null
     if (!s || (s.phase.kind !== 'claim' && s.phase.kind !== 'robKong')) return null
     if (!timeoutAction(humanActions.value)) return null
     return `${match.value.handIndex}:${s.phase.kind}:${s.phase.tile.id}:${claimSeconds.value}`
@@ -125,14 +126,14 @@ export function useMatch() {
 
   /** Advance until the hand ends or the human must choose. */
   async function pump(): Promise<void> {
-    if (running || needsOnboarding.value) return
+    if (running || needsOnboarding.value || paused.value) return
     running = true
     const gen = generation
     try {
       while (gen === generation) {
         // Let the last call finish before anyone moves on, as players would at a real table.
         await calloutsDone()
-        if (gen !== generation) return
+        if (gen !== generation || paused.value) return
         const s = match.value.current
         if (!s || s.phase.kind === 'ended') return
         const me = seatOf(match.value, HUMAN_PLAYER)
@@ -202,9 +203,12 @@ export function useMatch() {
     bots.dispose()
   })
 
-  // Play waits behind the onboarding dialog.
-  watch(needsOnboarding, (waiting) => {
-    if (!waiting) void pump()
+  // Play waits behind the onboarding dialog, and while paused.
+  watch([needsOnboarding, paused], ([waiting, hold]) => {
+    if (!waiting && !hold) return void pump()
+    // Drop any bot move still in flight.
+    generation++
+    running = false
   })
   void pump()
 

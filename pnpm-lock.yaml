@@ -211,12 +211,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@colyseus/sdk':
+        specifier: ^0.18.4
+        version: 0.18.4(@colyseus/core@0.18.16)(typescript@6.0.3)
       '@mahjong/bots':
         specifier: workspace:*
         version: link:../../packages/bots
       '@mahjong/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@mahjong/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       vue:
         specifier: ^3.5.42
         version: 3.5.43(typescript@6.0.3)

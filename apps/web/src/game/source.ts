@@ -24,6 +24,8 @@ export type MatchSource = {
   /** Seconds left to claim, or null when no timer is running. */
   claimRemaining: Readonly<Ref<number | null>>
   matchOver: Readonly<Ref<boolean>>
+  /** You asked for the next hand and others haven't yet (online only). */
+  waiting?: Readonly<Ref<boolean>>
   act(action: Action): void
   continueToNextHand(): void
 }

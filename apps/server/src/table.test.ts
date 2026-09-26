@@ -221,6 +221,21 @@ describe('play', () => {
     expect(state(table)).not.toBe(before)
   })
 
+  it('lets the host go back to the lobby as soon as the last hand is scored', () => {
+    const { env, table, clients, snap } = setup(['Ann', 'Bo'])
+    table.start('c0')
+    const internals = table as unknown as { match: Match }
+    internals.match = { ...internals.match, handIndex: 15 }
+    for (let i = 0; i < 100_000 && snap('c0').match!.view?.phase.kind !== 'ended'; i++) {
+      autoplay(table, clients, snap)
+      if (snap('c0').match!.view?.phase.kind !== 'ended') env.advance(500)
+    }
+    table.restart('c1') // not the host
+    expect(snap('c0').phase).toBe('playing')
+    table.restart('c0')
+    expect(snap('c0').phase).toBe('lobby')
+  })
+
   it('plays a whole match to the end and returns to the lobby', () => {
     const { env, table, clients, snap } = setup(['Ann', 'Bo', 'Cy'])
     table.configure('c0', { difficulty: 'easy' })

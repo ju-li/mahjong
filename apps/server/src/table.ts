@@ -1,6 +1,7 @@
 import { chooseAction, timeoutAction } from '@mahjong/bots'
 import {
   applyAction,
+  HANDS_PER_MATCH,
   isMatchOver,
   isRuleSet,
   legalActions,
@@ -196,12 +197,19 @@ export class Table {
 
   /** Host, once the match is over: everyone still here goes back to the lobby. */
   restart(client: string): void {
-    if (this.phase !== 'playing' || this.playerOf(client) !== this.host || !this.match || !isMatchOver(this.match)) return
+    if (this.phase !== 'playing' || this.playerOf(client) !== this.host || !this.finished()) return
     this.stopTimers()
     this.phase = 'lobby'
     this.match = null
     for (const p of PLAYERS) if (!this.connected(p)) this.slots[p] = { token: null, name: '', client: null }
     this.changed()
+  }
+
+  /** The match is over, or its last hand has been scored. */
+  private finished(): boolean {
+    const m = this.match
+    if (!m) return false
+    return isMatchOver(m) || (m.handIndex === HANDS_PER_MATCH - 1 && m.current?.phase.kind === 'ended')
   }
 
   // ---------------------------------------------------------------------------

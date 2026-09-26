@@ -1,7 +1,7 @@
 # SPEC
 
 ## §G GOAL
-MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human vs 3 bots, adjustable difficulty. Current phase: v0 hardening → verified scoring, official seating, bilingual UI (en / zh-Hans), play polish, offline PWA.
+MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human vs 3 bots, adjustable difficulty. Current phase: multiplayer → Jackbox-style tables: host gets a 4-letter code + share link, friends join, no sign-up; bots fill empty & dropped seats.
 
 ## §C CONSTRAINTS
 - pnpm workspace monorepo. `pnpm-workspace.yaml` → `apps/*`, `packages/*`.
@@ -10,10 +10,12 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - engine tsconfig `lib` = `["ES2022"]` only. ⊥ `"DOM"`.
 - engine deterministic. ∀ randomness via seedable PRNG. ⊥ `Math.random`, ⊥ `Date.now` in engine.
 - `apps/web` (pkg `web`): Vite + Vue 3 + TS SPA. client-only, ⊥ SSR. DOM/CSS render, ⊥ canvas engine.
-- bots run in Web Worker inside `apps/web`, import engine.
+- `packages/bots` (`@mahjong/bots`): bot strategy + `timeoutAction`. pure TS like engine. runs in Web Worker (solo) & on server (online).
+- `packages/protocol` (`@mahjong/protocol`): room codes + client/server message types. shared by web & server.
+- `apps/server` (pkg `server`): Node + Colyseus 0.18 (`@colyseus/core`, `@colyseus/ws-transport`). authoritative: holds the only full `Match`. rooms in memory only (⊥ DB); redeploy ends open tables. esbuild → single `dist/server.mjs`.
 - Vitest for engine tests.
 - engine src also typechecked by web's vue-tsc (`verbatimModuleSyntax`, `erasableSyntaxOnly`, `noUnusedLocals`) ∴ engine ! use `import type` for types, ⊥ `enum`, ⊥ `namespace`.
-- scope now: v0 hardening. ⊥ accounts, ⊥ network play, ⊥ mobile shell.
+- scope now: multiplayer. ⊥ accounts, ⊥ mobile shell.
 - roadmap order (fixed): hardening → multiplayer (Colyseus) → accounts & leaderboards (PocketBase) → Capacitor apps.
 - leaderboards ! multiplayer only (server-authoritative results). ⊥ single-player / bot results on leaderboards.
 - rule sets: `mcr` (default) & `hk` playable; picker also lists Japanese Riichi & Taiwanese 16-tile as coming soon (disabled). switching rules → new match.
@@ -24,7 +26,7 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - v0 simplification: ⊥ false-win penalty (UI offers only legal actions).
 - i18n: UI languages `en` & `zh-Hans`. tile faces stay traditional glyphs (萬 筒 條 東 發). engine holds fan names in both; ⊥ other UI strings in engine.
 - engine = single source of truth for rules. web & bots ⊥ reimplement rules; call engine only. same reducer → future Colyseus server.
-- future (not now): Capacitor iOS/Android, PocketBase accounts/leaderboards, Colyseus authoritative multiplayer.
+- future (not now): Capacitor iOS/Android, PocketBase accounts/leaderboards.
 
 ## §I INTERFACES
 - pkg: `@mahjong/engine` → `src/index.ts` re-exports all public symbols.
@@ -57,7 +59,14 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - ui: fan reference page: all 81 fans, points, description, exclusions, both languages.
 - ui: claim timer (default 10 s, setting incl off) → auto-pass. keyboard play for every human action. tile animations & sound (toggle; respect `prefers-reduced-motion`).
 - pwa: web app manifest + service worker; installable; plays offline after first load.
-- deploy: `apps/web/Dockerfile` (repo-root context, Caddy serves `dist` on `$PORT`). Railway service `web` configured manually in dashboard; ⊥ Config as Code, ⊥ IaC.
+- deploy: `apps/web/Dockerfile` (repo-root context, Caddy serves `dist` on `$PORT`; build arg `VITE_SERVER_URL` = game server `wss://` URL). Railway service `web` configured manually in dashboard; ⊥ Config as Code, ⊥ IaC.
+- deploy: `apps/server/Dockerfile` (repo-root context, `node server.mjs` on `$PORT`, `GET /health`). Railway service `server` configured manually, own public domain.
+- cmd: root `pnpm dev:server` → server on :2567 (tsx watch); web dev defaults to `ws://<host>:2567`. `pnpm build:server` → `apps/server/dist/server.mjs`.
+- net: room = Colyseus room `table`, `roomId` = code: 4 letters from `ABCDEFGHJKLMNPQRSTUVWXYZ`, rude words skipped. `client.create('table', {name})` / `client.joinById(code, {name, token})`.
+- net: server → client `snapshot`: `{code, phase: lobby|playing, you, token, host, players[4]: {name|null=bot, connected}, settings: {rules, difficulty, claimSeconds ∈ 5|10|20}, match: {avatarSeed, handIndex, scores, seatPlayers, over, step, view, legal, claimMs, ready[4]} | null}`.
+- net: client → server `act {step, action}` · `ready` · `rename {name}` · host: `configure {rules?, difficulty?, claimSeconds?}` · `start` · `restart` (after last hand → lobby).
+- net: seat `token` (localStorage per code) reclaims a seat anytime while the room lives, even mid-match. dropped/left human → bot plays seat. room closes after 5 min with no human connected. idle human: claim timer auto-passes; own turn → bot move after 60 s.
+- ui: top bar "Play with friends" → dialog (name, Host a table / code + Join). invite link `?room=CODE` opens it prefilled. lobby: big code, Share invite (Web Share → clipboard), seats, host picks rules/bots/timer, Start. solo match paused while at a table; reload rejoins (sessionStorage).
 
 ## §V INVARIANTS
 V1: engine src ⊥ ref to `window`, `document`, `self`, `navigator`, `fetch`, `Math.random`, `Date.now`, Node builtins.
@@ -100,6 +109,11 @@ V37: knitted straight + chow(s) + suited pair → `allChows` (knitted straight c
 V38: `nineGates` cancels exactly one `pungOfTerminalsOrHonors`; others still count.
 V39: hk `win` legal only if hk total (flowers incl) ≥ 3; hk total ≤ 13; hk settle sums to 0; hk matches keep seating fixed.
 V40: bots & UI score via rule-set dispatch (`scoreFor`, `fanDef`), ⊥ hard-coded MCR in rule-dependent paths.
+V41: server → seat k snapshot ∌ other seats' concealed tile ids, ∌ match seed (walls derive from it); view = `viewFor(s, k)`.
+V42: server applies only actions ∈ `legalActions(s, seatOf(match, sender))` quoting current `step`; applies its own copy of the matching legal action.
+V43: room codes unique among live rooms in the process.
+V44: after match start, join ⇔ valid seat token; ≤ 4 humans per table.
+V45: claim-timer & turn-timer expiry online: claim → `pass` only (V31); turn → bot move for that seat.
 
 ## §T TASKS
 id|status|task|cites
@@ -138,6 +152,10 @@ T32|x|PWA: manifest, icons, service worker precache; offline smoke test|I.pwa
 T33|x|rule sets: engine `RuleSet` + Hong Kong scoring/settlement; settings dropdown w/ rules picker (MCR, HK; Riichi, Taiwan coming soon); fan list per rule set|V39,V40
 T34|.|Japanese Riichi rule set|
 T35|.|Taiwanese 16-tile rule set|
+T36|x|extract `packages/bots` (strategy, protocol, `timeoutAction`); `soundFor`/`calloutFor` accept `PlayerView`; `MatchSource` + `MatchScreen` so table renders any match source|V25,V26
+T37|x|`packages/protocol` (codes, messages) + `apps/server`: `Table` (lobby, turn loop, bots, claim/turn timers, ready-up, tokens) + Colyseus `TableRoom`; tests incl leak check & full match|V41,V42,V43,V44,V45
+T38|x|web: `useOnline`, host/join dialog, lobby, invite link, online match via `MatchScreen`; bilingual strings|V29,I.ui
+T39|.|deploy: Railway service `server` from `apps/server/Dockerfile` + public domain; set `VITE_SERVER_URL` build variable on `web`|I.deploy
 
 ## §B BUGS
 id|date|cause|fix

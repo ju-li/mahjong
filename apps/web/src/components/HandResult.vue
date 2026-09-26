@@ -13,6 +13,10 @@ const props = defineProps<{
   avatars: string[]
   matchOver: boolean
   finalScores: number[]
+  /** Asked for the next hand; others still reading (online). */
+  waiting?: boolean
+  /** Label for the end-of-match button; "New match" by default. */
+  newMatchLabel?: string
 }>()
 
 defineEmits<{ next: []; newMatch: []; explain: [fanId: string] }>()
@@ -130,9 +134,11 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
             <span>{{ s.name }}</span><strong>{{ s.total }}</strong>
           </li>
         </ol>
-        <button class="action action--primary summary__continue" @click="$emit('newMatch')">{{ t('result.newMatch') }}</button>
+        <button class="action action--primary summary__continue" @click="$emit('newMatch')">{{ newMatchLabel ?? t('result.newMatch') }}</button>
       </template>
-      <button v-else class="action action--primary summary__continue" autofocus @click="$emit('next')">{{ t('result.continue') }}</button>
+      <button v-else class="action action--primary summary__continue" autofocus :disabled="waiting" @click="$emit('next')">
+        {{ waiting ? t('result.waiting') : t('result.continue') }}
+      </button>
     </div>
 
     <ScoreExplain
