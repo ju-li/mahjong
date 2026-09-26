@@ -106,20 +106,39 @@ onMounted(() => {
   }
 })
 
-/** Settings dropdown; closes on a click outside it or Escape. */
+/** Phones: the top bar shrinks to the title and a toggle that reveals every control. */
+const narrowQuery = window.matchMedia('(max-width: 640px)')
+const narrow = ref(narrowQuery.matches)
+const navOpen = ref(false)
+function onNarrowChange() {
+  narrow.value = narrowQuery.matches
+  navOpen.value = false
+}
+/** Picking an action closes the phone menu; the settings dropdown inside it stays open for more changes. */
+function closeNavAfterAction(e: Event) {
+  const target = e.target as Element
+  if (target.closest('button') && !target.closest('.menu')) navOpen.value = false
+}
+
+/** Settings dropdown (and the phone menu); closes on a click outside it or Escape. */
+const topbar = ref<HTMLElement | null>(null)
 const settingsMenu = ref<HTMLDetailsElement | null>(null)
-function closeSettings(e: Event) {
+function closeMenus(e: Event) {
+  const outside = (el: Element | null) => !el?.contains(e.target as Node)
+  const dismiss = (el: Element | null) => (e instanceof KeyboardEvent ? e.key === 'Escape' : outside(el))
   const menu = settingsMenu.value
-  if (!menu?.open) return
-  if (e instanceof KeyboardEvent ? e.key === 'Escape' : !menu.contains(e.target as Node)) menu.open = false
+  if (menu?.open && dismiss(menu)) menu.open = false
+  if (navOpen.value && dismiss(topbar.value)) navOpen.value = false
 }
 onMounted(() => {
-  document.addEventListener('pointerdown', closeSettings)
-  document.addEventListener('keydown', closeSettings)
+  document.addEventListener('pointerdown', closeMenus)
+  document.addEventListener('keydown', closeMenus)
+  narrowQuery.addEventListener('change', onNarrowChange)
 })
 onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', closeSettings)
-  document.removeEventListener('keydown', closeSettings)
+  document.removeEventListener('pointerdown', closeMenus)
+  document.removeEventListener('keydown', closeMenus)
+  narrowQuery.removeEventListener('change', onNarrowChange)
 })
 
 function confirmNewMatch() {
@@ -165,9 +184,19 @@ async function loadLatest() {
 
 <template>
   <main class="app">
-    <header class="topbar">
+    <header ref="topbar" class="topbar" :class="{ 'topbar--narrow': narrow, 'topbar--open': narrow && navOpen }">
       <h1>
-        {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
+        <button
+          v-if="narrow"
+          type="button"
+          class="topbar__title"
+          :aria-expanded="navOpen"
+          aria-controls="topbar-controls"
+          @click="navOpen = !navOpen"
+        >
+          {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
+        </button>
+        <template v-else>{{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small></template>
         <button
           v-if="snapshot"
           type="button"
@@ -183,7 +212,20 @@ async function loadLatest() {
           </svg>
         </button>
       </h1>
-      <div class="topbar__controls">
+      <button
+        v-if="narrow"
+        type="button"
+        class="topbar__toggle"
+        :aria-label="t('app.menu')"
+        :aria-expanded="navOpen"
+        aria-controls="topbar-controls"
+        @click="navOpen = !navOpen"
+      >
+        <svg class="topbar__chevron" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      <div v-show="!narrow || navOpen" id="topbar-controls" class="topbar__controls" @click="closeNavAfterAction">
         <details ref="settingsMenu" class="menu">
           <summary class="action action--quiet-light">{{ t('app.settings') }}</summary>
           <div class="menu__panel">
