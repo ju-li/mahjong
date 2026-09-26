@@ -64,6 +64,8 @@ type Slot = {
   /** Null = no human has this seat (a bot plays it). */
   token: string | null
   name: string
+  /** Avatar seed the player picked, if any. */
+  avatar: number | null
   /** The connection currently holding this seat, if any. */
   client: string | null
   /** When the holder's connection dropped; their seat stays theirs for `RESERVE_MS`. */
@@ -72,7 +74,7 @@ type Slot = {
   formerToken: string | null
 }
 
-const emptySlot = (formerToken: string | null = null): Slot => ({ token: null, name: '', client: null, droppedAt: null, formerToken })
+const emptySlot = (formerToken: string | null = null): Slot => ({ token: null, name: '', avatar: null, client: null, droppedAt: null, formerToken })
 
 type Timer = { clear(): void } | null
 
@@ -81,6 +83,11 @@ export function cleanName(raw: unknown, fallback: string): string {
   if (typeof raw !== 'string') return fallback
   const name = raw.replace(/[\p{C}]/gu, '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME_LENGTH)
   return name || fallback
+}
+
+/** An avatar seed must be a 32-bit unsigned integer; anything else keeps the fallback. */
+export function cleanAvatar(raw: unknown, fallback: number | null): number | null {
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 && raw < 2 ** 32 ? raw : fallback
 }
 
 /**
@@ -161,7 +168,7 @@ export class Table {
   }
 
   /** Seat a connection, taking over from a bot mid-match if need be. Null if every seat is taken. */
-  join(client: string, options: { name?: unknown; token?: unknown }): Player | null {
+  join(client: string, options: { name?: unknown; avatar?: unknown; token?: unknown }): Player | null {
     const token = typeof options.token === 'string' ? options.token : null
     const p = this.seatFor(token)
     if (p === null) return null
@@ -175,6 +182,7 @@ export class Table {
     seated.client = client
     seated.droppedAt = null
     seated.name = cleanName(options.name, seated.name || `Player ${p + 1}`)
+    seated.avatar = cleanAvatar(options.avatar, seated.avatar)
     if (!this.connected(this.host) || this.slots[this.host]!.token === null) this.host = p
     this.changed()
     return p
@@ -212,10 +220,14 @@ export class Table {
     return PLAYERS.some((p) => this.connected(p))
   }
 
-  rename(client: string, name: unknown): void {
+  /** Change a player's name and/or avatar. */
+  profile(client: string, update: unknown): void {
     const p = this.playerOf(client)
-    if (p === null) return
-    this.slots[p]!.name = cleanName(name, this.slots[p]!.name)
+    if (p === null || typeof update !== 'object' || !update) return
+    const u = update as { name?: unknown; avatar?: unknown }
+    const slot = this.slots[p]!
+    slot.name = cleanName(u.name, slot.name)
+    slot.avatar = cleanAvatar(u.avatar, slot.avatar)
     this.changed()
   }
 
@@ -526,7 +538,8 @@ export class Table {
       host: this.host,
       players: PLAYERS.map((p): PlayerSlot => {
         const slot = this.slots[p]!
-        return { name: slot.token === null ? null : slot.name, connected: slot.client !== null }
+        const human = slot.token !== null
+        return { name: human ? slot.name : null, avatar: human ? slot.avatar : null, connected: slot.client !== null }
       }),
       settings: { ...this.settings },
       match: this.matchInfo(you),

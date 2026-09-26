@@ -3,6 +3,7 @@ import { Client, type Room } from '@colyseus/sdk'
 import type { Action } from '@mahjong/engine'
 import { ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
+import { useProfile } from './profile'
 import { useSettings } from './settings'
 import type { MatchSource } from './source'
 import { useTableAudio } from './tableAudio'
@@ -11,7 +12,6 @@ import { useVoicePlayer } from './voiceChat'
 /** Game server address: set at build time for deploys; the local dev server otherwise. */
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname}:2567`
 
-const NAME_KEY = 'mahjong.name'
 const TOKEN_KEY = (code: string) => `mahjong.seat.${code}`
 /** The table this tab is at, so a reload goes straight back to it. */
 const CURRENT_KEY = 'mahjong.table'
@@ -57,8 +57,7 @@ export function useOnline() {
   const busy = ref(false)
   const error = ref<OnlineError | null>(null)
   const link = ref<Link>('up')
-  const name = ref(read(() => localStorage, NAME_KEY) ?? '')
-  watch(name, (value) => write(() => localStorage, NAME_KEY, value.trim() || null))
+  const { name, avatar } = useProfile()
   const { voiceChat } = useSettings()
   const voicePlayer = useVoicePlayer()
   watch(voiceChat, (on) => on || voicePlayer.clear())
@@ -120,6 +119,7 @@ export function useOnline() {
 
   const options = (code?: string): JoinOptions => ({
     name: name.value.trim() || undefined,
+    avatar: avatar.value,
     token: code ? (read(() => localStorage, TOKEN_KEY(code)) ?? undefined) : undefined,
   })
 
@@ -189,13 +189,13 @@ export function useOnline() {
   const view = computed(() => match.value?.view ?? null)
   useTableAudio(view)
 
-  /** You are "You"; other people by name (marked while away); bots numbered in seat order. */
+  /** You by your own name (or "You"); other people by name (marked while away); bots numbered in seat order. */
   const playerNames = computed(() => {
     const s = snapshot.value
     if (!s) return []
     let bots = 0
     return s.players.map((slot, p) => {
-      if (p === s.you) return t('player.you')
+      if (p === s.you) return name.value.trim() || t('player.you')
       if (slot.name === null) return t('player.bot', { n: ++bots })
       return slot.connected ? slot.name : t('player.away', { name: slot.name })
     })
@@ -208,6 +208,7 @@ export function useOnline() {
     playerNames,
     scores: computed(() => match.value?.scores ?? [0, 0, 0, 0]),
     matchSeed: computed(() => match.value?.avatarSeed ?? 0),
+    avatarChoices: computed(() => snapshot.value?.players.map((slot) => slot.avatar) ?? []),
     handIndex: computed(() => match.value?.handIndex ?? 0),
     rules: computed(() => snapshot.value?.settings.rules ?? 'mcr'),
     claimRemaining,
@@ -243,7 +244,8 @@ export function useOnline() {
     rematch: () => send('rematch', {}),
     pause: () => send('pause', {}),
     resume: () => send('resume', {}),
-    rename: () => send('rename', { name: name.value }),
+    /** Tell the table about your current name and avatar. */
+    sendProfile: () => send('profile', { name: name.value, avatar: avatar.value }),
     sendVoice: (clip: VoiceClip) => send('voice', clip),
     /** Player whose voice memo is playing, if any. */
     speaking: voicePlayer.speaking,

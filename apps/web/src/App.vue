@@ -6,6 +6,7 @@ import Lobby from './components/Lobby.vue'
 import MatchScreen from './components/MatchScreen.vue'
 import Onboarding from './components/Onboarding.vue'
 import OnlineDialog from './components/OnlineDialog.vue'
+import ProfileDialog from './components/ProfileDialog.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import VoiceButton from './components/VoiceButton.vue'
 import { loadLatestVersion } from './game/appUpdate'
@@ -32,6 +33,13 @@ const { difficulty, rules, resumed, inProgress, startNewMatch } = solo
 const source = computed(() => (atTable.value ? online.source : solo))
 const view = computed(() => source.value.view.value)
 const shownRules = computed(() => source.value.rules.value)
+
+/** Your name and avatar; opened by clicking your own badge or your lobby seat. */
+const profileOpen = ref(false)
+/** A changed profile reaches the online table straight away. */
+function profileSaved() {
+  if (atTable.value) online.sendProfile()
+}
 
 /** Host / join dialog; opened from the top bar or by an invite link. */
 const onlineOpen = ref(false)
@@ -228,12 +236,11 @@ async function loadLatest() {
 
     <Lobby
       v-if="snapshot?.phase === 'lobby'"
-      v-model:name="online.name.value"
       :snapshot="snapshot"
       :is-host="isHost"
       @configure="online.configure"
       @start="online.start"
-      @rename="online.rename"
+      @edit-profile="profileOpen = true"
       @leave="leaveTable"
     />
     <MatchScreen
@@ -242,6 +249,7 @@ async function loadLatest() {
       :source="online.source"
       @new-match="onlineMatchDone"
       @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
+      @edit-profile="profileOpen = true"
     >
       <template #matchEnd>
         <div v-if="isHost" class="summary__choices">
@@ -255,7 +263,13 @@ async function loadLatest() {
       </template>
     </MatchScreen>
 
-    <MatchScreen v-else :source="solo" @new-match="startNewMatch()" @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })" />
+    <MatchScreen
+      v-else
+      :source="solo"
+      @new-match="startNewMatch()"
+      @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
+      @edit-profile="profileOpen = true"
+    />
 
     <!-- A break: everyone at the online table sees this until someone resumes. -->
     <div v-if="onBreak && link === 'up'" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
@@ -294,6 +308,8 @@ async function loadLatest() {
     <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :rules="shownRules" @close="rulesDialog = null" />
 
     <Onboarding v-if="needsOnboarding" @done="onboardingDone" />
+
+    <ProfileDialog v-if="profileOpen" @save="profileSaved" @close="profileOpen = false" />
 
     <OnlineDialog
       v-if="onlineOpen && !atTable"

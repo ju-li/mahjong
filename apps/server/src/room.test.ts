@@ -51,7 +51,7 @@ describe('TableRoom', () => {
     const back = await colyseus.sdk.joinById(host.roomId, { name: 'Bo', token })
     const again = await next(back)
     expect(again.you).toBe(1)
-    expect(again.players[1]).toEqual({ name: 'Bo', connected: true })
+    expect(again.players[1]).toEqual({ name: 'Bo', avatar: null, connected: true })
     await back.leave()
     await host.leave()
   })
@@ -80,7 +80,7 @@ describe('TableRoom', () => {
     expect(new Uint8Array(memo.data)).toEqual(data)
     // A snapshot round trip later, the sender still has heard nothing back.
     const renamed = next(host, (s) => s.players[0]?.name === 'Annie')
-    host.send('rename', { name: 'Annie' })
+    host.send('profile', { name: 'Annie' })
     await renamed
     expect(echoed).toEqual([])
     await friend.leave()

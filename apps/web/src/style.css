@@ -308,6 +308,35 @@ body {
   flex: none;
 }
 
+/* Your own badge opens your profile. */
+.badge--editable {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 12px;
+}
+
+.badge--editable:hover .badge__photo {
+  transform: translateY(-2px);
+}
+
+.badge--editable:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .badge__photo {
   position: relative;
   width: var(--avatar);
@@ -316,7 +345,7 @@ body {
   border-radius: 12px;
   background: linear-gradient(#fff, #dfe6e4);
   box-shadow: 0 4px 10px rgb(0 0 0 / 0.35);
-  transition: box-shadow 0.25s ease;
+  transition: box-shadow 0.25s ease, transform 0.15s ease;
 }
 
 .badge__face {
@@ -1466,16 +1495,44 @@ body {
 }
 
 .summary__players li {
+  display: flex;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid transparent;
+}
+
+.summary__player {
+  flex: 1;
+  min-width: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: auto auto;
   align-items: center;
   column-gap: 8px;
   padding: 8px 10px;
-  border-radius: 10px;
+  border: 0;
+  border-radius: inherit;
+  font: inherit;
+  color: inherit;
   text-align: left;
-  background: rgb(255 255 255 / 0.06);
-  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+}
+
+.summary__player:hover,
+.summary__player:focus-visible {
+  background: rgb(255 255 255 / 0.08);
+}
+
+.summary__player.is-shown {
+  background: rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+.summary__whose {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--felt-muted);
 }
 
 .summary__players li.is-me {
@@ -1849,6 +1906,29 @@ body {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+
+/* An invisible ring around the button that also catches the press, so a finger
+   that lands or drifts a little off the circle still records. */
+.talk__button::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+}
+
+/* Touch screens (iPad, phones): a bigger target to press and hold. */
+@media (pointer: coarse) {
+  .talk__button {
+    width: 76px;
+    height: 76px;
+  }
+
+  .talk__button svg {
+    width: 34px;
+    height: 34px;
+  }
 }
 
 .talk__button:focus-visible {
@@ -2143,8 +2223,7 @@ body {
   border-top: 1px solid var(--tile-edge);
 }
 
-.online__join,
-.lobby__rename {
+.online__join {
   display: flex;
   min-width: 0;
   align-items: flex-end;
@@ -2171,7 +2250,6 @@ body {
 
 .lobby h3,
 .lobby__seats,
-.lobby__rename,
 .lobby__settings {
   text-align: left;
 }
@@ -2278,4 +2356,121 @@ body {
 
 .pause .action {
   align-self: center;
+}
+
+/* ---- Profile dialog: your name and face ---- */
+
+.profile {
+  width: min(460px, 100%);
+}
+
+.profile__current {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile__preview {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.25);
+}
+
+.profile__preview svg,
+.profile__face svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.profile__faces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.profile__faces legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.profile__face {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--tile-edge);
+}
+
+.profile__face.is-picked {
+  box-shadow: 0 0 0 3px var(--felt-glow);
+}
+
+.profile__face:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.profile__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.profile__buttons .profile__shuffle {
+  margin-right: auto;
+}
+
+.lobby__face {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.lobby__face svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.lobby__me {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lobby__me:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.lobby__edit {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-decoration: underline;
 }

@@ -11,11 +11,21 @@ defineProps<{
   active: boolean
   /** Their voice memo is playing. */
   speaking?: boolean
+  /** Your own badge: a button that opens your profile. */
+  editLabel?: string
 }>()
+defineEmits<{ edit: [] }>()
 </script>
 
 <template>
-  <div class="badge" :class="{ 'badge--active': active, 'badge--speaking': speaking }">
+  <component
+    :is="editLabel ? 'button' : 'div'"
+    class="badge"
+    :class="{ 'badge--active': active, 'badge--speaking': speaking, 'badge--editable': editLabel }"
+    :type="editLabel ? 'button' : undefined"
+    :title="editLabel"
+    @click="editLabel && $emit('edit')"
+  >
     <div class="badge__photo">
       <span class="badge__face" v-html="avatar" />
       <span class="badge__wind" :title="windLabel">{{ wind }}</span>
@@ -31,5 +41,6 @@ defineProps<{
       <span class="badge__name">{{ name }}</span>
       <strong class="badge__score" :class="{ pos: score > 0, neg: score < 0 }">{{ score }}</strong>
     </div>
-  </div>
+    <span v-if="editLabel" class="visually-hidden">{{ editLabel }}</span>
+  </component>
 </template>

@@ -18,6 +18,8 @@ export type MatchSource = {
   scores: Readonly<Ref<number[]>>
   /** Seeds each player's avatar for the whole match. */
   matchSeed: Readonly<Ref<number>>
+  /** Avatar seed a player picked, per player; null = a face dealt from `matchSeed`. */
+  avatarChoices: Readonly<Ref<(number | null)[]>>
   /** 0-based hand number within the match. */
   handIndex: Readonly<Ref<number>>
   rules: Readonly<Ref<RuleSet>>
