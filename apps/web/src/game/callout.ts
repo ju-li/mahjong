@@ -80,11 +80,39 @@ const RATE = [1.1, 1.05, 1.15, 1] as const
 const MAX_CALL_MS = 2500
 
 let lastCall: Promise<void> = Promise.resolve()
+/**
+ * Utterances not yet finished. Chrome garbage-collects an utterance nothing else references, and
+ * then never reports its end (and can stop speaking altogether).
+ */
+const inFlight = new Set<SpeechSynthesisUtterance>()
+/** When the latest call should have finished by, even if the browser never said so. */
+let quietBy = 0
 
 /** Resolves once every callout spoken so far has finished. */
 export function calloutsDone(): Promise<void> {
   return lastCall
 }
+
+/**
+ * Browsers only let a page start speaking from a tap or key press (iOS Safari especially), and
+ * callouts come from timers and server messages. Speaking nothing on the first gesture unlocks it.
+ */
+function unlockOnGesture(synth: SpeechSynthesis): void {
+  if (typeof window === 'undefined') return
+  const unlock = () => {
+    window.removeEventListener('pointerdown', unlock, true)
+    window.removeEventListener('keydown', unlock, true)
+    try {
+      if (!synth.speaking && !synth.pending) synth.speak(new SpeechSynthesisUtterance(''))
+    } catch {
+      // Nothing to unlock.
+    }
+  }
+  window.addEventListener('pointerdown', unlock, true)
+  window.addEventListener('keydown', unlock, true)
+}
+
+if (typeof speechSynthesis !== 'undefined') unlockOnGesture(speechSynthesis)
 
 /** Speak a callout. Silently does nothing where speech synthesis or a Chinese voice is unavailable. */
 export function speakCallout({ seat, text }: Callout): void {
@@ -92,14 +120,26 @@ export function speakCallout({ seat, text }: Callout): void {
   try {
     const v = chineseVoice(speechSynthesis)
     if (v === null) return // no Chinese voice: English voices would mangle the characters
+    // A synth still busy long after the last call should have ended is stuck (Chrome, and after the
+    // tab was in the background): everything queued behind it would stay silent until a reload.
+    if ((speechSynthesis.speaking || speechSynthesis.pending) && performance.now() > quietBy) {
+      speechSynthesis.cancel()
+      inFlight.clear()
+    }
+    if (speechSynthesis.paused) speechSynthesis.resume()
     const u = new SpeechSynthesisUtterance(text)
     u.lang = v?.lang ?? 'zh-CN'
     if (v) u.voice = v
     u.pitch = PITCH[seat]
     u.rate = RATE[seat]
+    inFlight.add(u)
+    quietBy = Math.max(quietBy, performance.now()) + MAX_CALL_MS
     // Utterances play in order, so the latest one ending means the table has gone quiet.
     lastCall = new Promise((resolve) => {
-      u.onend = u.onerror = () => resolve()
+      u.onend = u.onerror = () => {
+        inFlight.delete(u)
+        resolve()
+      }
       setTimeout(resolve, MAX_CALL_MS)
     })
     speechSynthesis.speak(u)

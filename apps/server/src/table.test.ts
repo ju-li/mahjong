@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { chooseAction } from '@mahjong/bots'
 import { seatOf, type GameState, type Match, type Player } from '@mahjong/engine'
 import { MAX_VOICE_BYTES, MAX_VOICE_MS, type Snapshot } from '@mahjong/protocol'
-import { cleanAvatar, cleanName, NEXT_HAND_MS, RESERVE_MS, Table, TURN_MS, VOICE_GAP_MS, VOICE_PER_MINUTE, type TableEnv } from './table'
+import { cleanAvatar, cleanName, RESERVE_MS, Table, TURN_MS, VOICE_GAP_MS, VOICE_PER_MINUTE, type TableEnv } from './table'
 
 /** Timers that only fire when the test moves the clock. */
 class FakeEnv implements TableEnv {
@@ -243,6 +243,48 @@ describe('play', () => {
     expect(state(table)).not.toBe(before)
   })
 
+  it('waits for every connected human to be ready before dealing the next hand', () => {
+    const { env, table, clients, snap } = setup(['Ann', 'Bo', 'Cy'])
+    table.start('c0')
+    for (let i = 0; i < 100_000 && snap('c0').match!.view?.phase.kind !== 'ended'; i++) {
+      for (const c of clients) {
+        const m = snap(c).match!
+        if (m.view?.phase.kind !== 'ended' && m.legal.length > 0)
+          table.act(c, { step: m.step, action: chooseAction({ view: m.view!, legal: m.legal, difficulty: 'easy', seed: m.step }) })
+      }
+      if (snap('c0').match!.view?.phase.kind !== 'ended') env.advance(500)
+    }
+    expect(snap('c0').match!.handIndex).toBe(0)
+    table.readyUp('c0')
+    table.readyUp('c1')
+    // However long Cy lingers over the summary, the table waits for them.
+    env.advance(3_600_000)
+    expect(snap('c0').match!.view!.phase.kind).toBe('ended')
+    expect(snap('c0').match!.ready).toEqual([true, true, false, false])
+    // A human who drops is no longer waited for; a bot covers their seat.
+    table.drop('c2')
+    expect(snap('c0').match!.handIndex).toBe(1)
+    expect(snap('c0').match!.view!.phase.kind).not.toBe('ended')
+  })
+
+  it('deals the next hand as soon as the last human readies up', () => {
+    const { env, table, clients, snap } = setup(['Ann', 'Bo'])
+    table.start('c0')
+    for (let i = 0; i < 100_000 && snap('c0').match!.view?.phase.kind !== 'ended'; i++) {
+      for (const c of clients) {
+        const m = snap(c).match!
+        if (m.view?.phase.kind !== 'ended' && m.legal.length > 0)
+          table.act(c, { step: m.step, action: chooseAction({ view: m.view!, legal: m.legal, difficulty: 'easy', seed: m.step }) })
+      }
+      if (snap('c0').match!.view?.phase.kind !== 'ended') env.advance(500)
+    }
+    table.readyUp('c1')
+    env.advance(600_000)
+    expect(snap('c0').match!.handIndex).toBe(0)
+    table.readyUp('c0')
+    expect(snap('c0').match!.handIndex).toBe(1)
+  })
+
   it('keeps the final summary up until the host chooses; keeping going starts a fresh match', () => {
     const { env, table, clients, snap } = setup(['Ann', 'Bo'])
     table.start('c0')
@@ -256,7 +298,7 @@ describe('play', () => {
     // The final summary stays up however long people look at it.
     table.readyUp('c0')
     table.readyUp('c1')
-    env.advance(NEXT_HAND_MS * 10)
+    env.advance(600_000)
     expect(snap('c0').match!.view!.phase.kind).toBe('ended')
     table.restart('c1') // not the host
     table.rematch('c1')
