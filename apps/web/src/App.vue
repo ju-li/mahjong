@@ -2,12 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { isRuleSet } from '@mahjong/engine'
 import type { Difficulty } from '@mahjong/bots'
-import FanReference from './components/FanReference.vue'
 import Lobby from './components/Lobby.vue'
 import MatchScreen from './components/MatchScreen.vue'
 import Onboarding from './components/Onboarding.vue'
 import OnlineDialog from './components/OnlineDialog.vue'
-import RulesReference from './components/RulesReference.vue'
+import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import { loadLatestVersion } from './game/appUpdate'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
@@ -16,10 +15,8 @@ import { useI18n } from './i18n/useI18n'
 
 const { t, toggle } = useI18n()
 
-/** Fan list dialog: `null` = closed, '' = open at the top, otherwise the fan to show. */
-const fanList = ref<string | null>(null)
-/** How-to-play dialog. */
-const rulesOpen = ref(false)
+/** Rules dialog (how to play + fan list tabs); `focus` is the fan to show on the fan list. */
+const rulesDialog = ref<{ tab: RulesTab; focus?: string } | null>(null)
 
 const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
@@ -198,8 +195,7 @@ async function loadLatest() {
             <button class="action action--quiet-light" :disabled="updating" @click="loadLatest">{{ updating ? t('app.loadingLatest') : t('app.loadLatest') }}</button>
           </div>
         </details>
-        <button class="action action--quiet-light" @click="rulesOpen = true">{{ t('app.howToPlay') }}</button>
-        <button class="action action--quiet-light" @click="fanList = ''">{{ t('app.fanReference') }}</button>
+        <button class="action action--quiet-light" @click="rulesDialog = { tab: 'rules' }">{{ t('app.howToPlay') }}</button>
         <button v-if="canPause" class="action action--quiet-light" @click="pause">{{ t('online.pause') }}</button>
         <template v-if="atTable">
           <button class="action" @click="leaveTable">{{ t('lobby.leave') }}</button>
@@ -226,7 +222,7 @@ async function loadLatest() {
       :key="`online:${snapshot!.code}`"
       :source="online.source"
       @new-match="onlineMatchDone"
-      @explain="(id: string) => (fanList = id)"
+      @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
     >
       <template #matchEnd>
         <div v-if="isHost" class="summary__choices">
@@ -240,7 +236,7 @@ async function loadLatest() {
       </template>
     </MatchScreen>
 
-    <MatchScreen v-else :source="solo" @new-match="startNewMatch()" @explain="(id: string) => (fanList = id)" />
+    <MatchScreen v-else :source="solo" @new-match="startNewMatch()" @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })" />
 
     <!-- A break: everyone at the online table sees this until someone resumes. -->
     <div v-if="onBreak" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
@@ -255,8 +251,7 @@ async function loadLatest() {
       </div>
     </div>
 
-    <RulesReference v-if="rulesOpen" :rules="shownRules" @close="rulesOpen = false" @fans="rulesOpen = false; fanList = ''" />
-    <FanReference v-if="fanList !== null" :focus="fanList || null" :rules="shownRules" @close="fanList = null" />
+    <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :rules="shownRules" @close="rulesDialog = null" />
 
     <Onboarding v-if="needsOnboarding" @done="onboardingDone" />
 

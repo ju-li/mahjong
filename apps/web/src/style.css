@@ -1668,6 +1668,39 @@ body {
   color: var(--muted);
 }
 
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--tile-edge);
+}
+
+.tabs__tab {
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 14px;
+  margin-bottom: -1px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tabs__tab:hover {
+  color: var(--text);
+}
+
+.tabs__tab.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tabs__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .guide__section h3 {
   margin: 8px 0 4px;
   font-size: var(--fs-md);
