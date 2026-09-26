@@ -47,7 +47,7 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - api: `newHand({ seed, dealer, prevailingWind }): GameState` → shuffled, dealt (13 each, dealer 14), flowers replaced.
 - api: `legalActions(state, seat): Action[]`. `applyAction(state, action): GameState` (throws on illegal).
 - api: `replay(init, actions): GameState`.
-- api: `viewFor(state, seat): PlayerView` → own concealed tiles; others' melds, discards, flowers, concealed counts; wall count only.
+- api: `viewFor(state, seat): PlayerView` → own concealed tiles; others' melds, discards, flowers, concealed counts; wall count only. once the hand has ended: every seat's concealed tiles & concealed kongs (post-hand summary).
 - api: `decompose(tiles)` → standard (4 sets + pair) | seven pairs | thirteen orphans | knitted forms. `shanten(tiles, melds): number` (-1 = complete).
 - api: `scoreHand(winCtx): { fans: {name, points, count}[], total, flowerPoints }`. `settle(winCtx, score): number[4]` point deltas.
 - api: `RuleSet` = `'mcr'|'hk'`. `GameState.rules`, `Match.rules`, `PlayerView.rules`. `scoreFor` / `meetsMinimumFor` / `settleFor` / `fansFor` / `fanDef` dispatch by rule set; hk fan ids prefixed `hk.`.
@@ -65,7 +65,7 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - cmd: root `pnpm dev:server` → server on :2567 (tsx watch); web dev defaults to `ws://<host>:2567`. `pnpm build:server` → `apps/server/dist/server.mjs`.
 - net: room = Colyseus room `table`, `roomId` = code: 4 letters from `ABCDEFGHJKLMNPQRSTUVWXYZ`, rude words skipped. `client.create('table', {name})` / `client.joinById(code, {name, token})`.
 - net: server → client `snapshot`: `{code, phase: lobby|playing, you, token, host, players[4]: {name|null=bot, connected}, settings: {rules, difficulty, claimSeconds ∈ 5|10|20}, match: {avatarSeed, handIndex, scores, seatPlayers, over, step, view, legal, claimMs, ready[4], final, paused: Player | null} | null}`.
-- net: client → server `act {step, action}` · `ready` · `rename {name}` · `pause` · `resume` (any seated player) · host: `configure {rules?, difficulty?, claimSeconds?}` · `start` · after last hand: `rematch` (new match, same people & settings) | `restart` (→ lobby).
+- net: client → server `act {step, action}` · `ready` (the next hand deals only once every connected human is ready — no timeout) · `rename {name}` · `pause` · `resume` (any seated player) · host: `configure {rules?, difficulty?, claimSeconds?}` · `start` · after last hand: `rematch` (new match, same people & settings) | `restart` (→ lobby).
 - net: hop in / hop out: anyone with the code may join anytime, lobby or mid-match, taking a bot's seat (and its score); ≤ 4 humans. chosen leave → seat freed for a bot / newcomer; leaver's token gets it back while still free. dropped connection → bot covers, seat reserved 2 min for its token, then takeable. seat `token` in localStorage per code. room closes after 5 min with no human connected. idle human: claim timer auto-passes; own turn → bot move after 60 s.
 - net: pause: any seated player pauses / resumes during a match. paused ⇒ no bot moves, no timers (claim countdown resumes from where it stopped), `act` rejected.
 - net: last hand scored ⇒ summary stays (no auto-deal); host picks Keep going (`rematch`) or Back to lobby (`restart`); others wait or leave.
@@ -87,7 +87,7 @@ V12: ∀ reachable state → wall + hands + melds + discards + flowers hold each
 V13: `replay(init, actions)` deterministic: same (seed, actions) → deep-equal state.
 V14: `applyAction` ⊥ mutate input state.
 V15: action ∉ `legalActions(state, seat)` → `applyAction` throws; state unchanged.
-V16: `viewFor(s, k)` ∌ other seats' concealed tile ids/kinds & ∌ wall order.
+V16: while the hand is live, `viewFor(s, k)` ∌ other seats' concealed tile ids/kinds; always ∌ wall order.
 V17: chow claim legal only for seat (discarder + 1) mod 4.
 V18: claim priority win > pung/kong > chow. multiple win claims → nearest seat after discarder (head bump) only.
 V19: at discard decision: concealed + melded tiles = 14, each kong counted as 3.
@@ -112,7 +112,7 @@ V37: knitted straight + chow(s) + suited pair → `allChows` (knitted straight c
 V38: `nineGates` cancels exactly one `pungOfTerminalsOrHonors`; others still count.
 V39: hk `win` legal only if hk total (flowers incl) ≥ 3; hk total ≤ 13; hk settle sums to 0; hk matches keep seating fixed.
 V40: bots & UI score via rule-set dispatch (`scoreFor`, `fanDef`), ⊥ hard-coded MCR in rule-dependent paths.
-V41: server → seat k snapshot ∌ other seats' concealed tile ids, ∌ match seed (walls derive from it); view = `viewFor(s, k)`.
+V41: server → seat k snapshot ∌ other seats' concealed tile ids while the hand is live, ∌ match seed (walls derive from it); view = `viewFor(s, k)`.
 V42: server applies only actions ∈ `legalActions(s, seatOf(match, sender))` quoting current `step`; applies its own copy of the matching legal action.
 V43: room codes unique among live rooms in the process.
 V44: join ⇔ a seat is free (bot-held, own token, or dropped > 2 min); ≤ 4 humans per table; a dropped seat is never taken within 2 min.

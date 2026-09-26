@@ -39,8 +39,6 @@ export const QUICK_DELAY_MS = 120
 export const CALL_PAUSE_MS = 700
 /** A human who sits on their turn this long gets a bot move made for them. */
 export const TURN_MS = 60_000
-/** The next hand deals once everyone is ready, or after this long. */
-export const NEXT_HAND_MS = 30_000
 /** A dropped player's seat is kept for them this long; after that anyone joining may take it over. */
 export const RESERVE_MS = 2 * 60_000
 
@@ -66,6 +64,8 @@ type Slot = {
   /** Null = no human has this seat (a bot plays it). */
   token: string | null
   name: string
+  /** Avatar seed the player picked, if any. */
+  avatar: number | null
   /** The connection currently holding this seat, if any. */
   client: string | null
   /** When the holder's connection dropped; their seat stays theirs for `RESERVE_MS`. */
@@ -74,7 +74,7 @@ type Slot = {
   formerToken: string | null
 }
 
-const emptySlot = (formerToken: string | null = null): Slot => ({ token: null, name: '', client: null, droppedAt: null, formerToken })
+const emptySlot = (formerToken: string | null = null): Slot => ({ token: null, name: '', avatar: null, client: null, droppedAt: null, formerToken })
 
 type Timer = { clear(): void } | null
 
@@ -83,6 +83,11 @@ export function cleanName(raw: unknown, fallback: string): string {
   if (typeof raw !== 'string') return fallback
   const name = raw.replace(/[\p{C}]/gu, '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME_LENGTH)
   return name || fallback
+}
+
+/** An avatar seed must be a 32-bit unsigned integer; anything else keeps the fallback. */
+export function cleanAvatar(raw: unknown, fallback: number | null): number | null {
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 && raw < 2 ** 32 ? raw : fallback
 }
 
 /**
@@ -104,7 +109,6 @@ export class Table {
   private ready = new Set<Player>()
   private botTimer: Timer = null
   private turnTimer: Timer = null
-  private nextHandTimer: Timer = null
   /** The claim window the timer belongs to, so bot replies inside it don't restart the clock. */
   private claimKey: string | null = null
   private claimDeadline: number | null = null
@@ -164,7 +168,7 @@ export class Table {
   }
 
   /** Seat a connection, taking over from a bot mid-match if need be. Null if every seat is taken. */
-  join(client: string, options: { name?: unknown; token?: unknown }): Player | null {
+  join(client: string, options: { name?: unknown; avatar?: unknown; token?: unknown }): Player | null {
     const token = typeof options.token === 'string' ? options.token : null
     const p = this.seatFor(token)
     if (p === null) return null
@@ -178,6 +182,7 @@ export class Table {
     seated.client = client
     seated.droppedAt = null
     seated.name = cleanName(options.name, seated.name || `Player ${p + 1}`)
+    seated.avatar = cleanAvatar(options.avatar, seated.avatar)
     if (!this.connected(this.host) || this.slots[this.host]!.token === null) this.host = p
     this.changed()
     return p
@@ -215,10 +220,14 @@ export class Table {
     return PLAYERS.some((p) => this.connected(p))
   }
 
-  rename(client: string, name: unknown): void {
+  /** Change a player's name and/or avatar. */
+  profile(client: string, update: unknown): void {
     const p = this.playerOf(client)
-    if (p === null) return
-    this.slots[p]!.name = cleanName(name, this.slots[p]!.name)
+    if (p === null || typeof update !== 'object' || !update) return
+    const u = update as { name?: unknown; avatar?: unknown }
+    const slot = this.slots[p]!
+    slot.name = cleanName(u.name, slot.name)
+    slot.avatar = cleanAvatar(u.avatar, slot.avatar)
     this.changed()
   }
 
@@ -314,7 +323,7 @@ export class Table {
     this.commit(chosen)
   }
 
-  /** Ready for the next hand. Deals once every connected human is ready. */
+  /** Ready for the next hand. Deals only once every connected human is ready; there is no timeout. */
   readyUp(client: string): void {
     const p = this.playerOf(client)
     if (p === null || this.match?.current?.phase.kind !== 'ended' || this.finished()) return
@@ -331,8 +340,8 @@ export class Table {
   }
 
   private stopTimers(): void {
-    for (const t of [this.botTimer, this.turnTimer, this.nextHandTimer, this.claimTimer]) t?.clear()
-    this.botTimer = this.turnTimer = this.nextHandTimer = this.claimTimer = null
+    for (const t of [this.botTimer, this.turnTimer, this.claimTimer]) t?.clear()
+    this.botTimer = this.turnTimer = this.claimTimer = null
     this.claimKey = this.claimDeadline = this.claimLeft = null
   }
 
@@ -362,22 +371,10 @@ export class Table {
       this.claimTimer?.clear()
       this.claimKey = this.claimDeadline = this.claimTimer = null
       // The last hand's summary stays up until the host picks what's next.
-      if (this.finished()) {
-        this.nextHandTimer?.clear()
-        this.nextHandTimer = null
-        return
-      }
+      if (this.finished()) return
+      // The next hand waits for every human at the table; seats of those who dropped are bots'.
       const waiting = this.humans().filter((p) => this.connected(p) && !this.ready.has(p))
-      if (waiting.length === 0) {
-        this.nextHandTimer?.clear()
-        this.nextHandTimer = null
-        this.dealNext()
-      } else {
-        this.nextHandTimer ??= this.env.setTimeout(() => {
-          this.nextHandTimer = null
-          if (this.match?.current?.phase.kind === 'ended') this.dealNext()
-        }, NEXT_HAND_MS)
-      }
+      if (waiting.length === 0) this.dealNext()
       return
     }
 
@@ -419,8 +416,6 @@ export class Table {
 
   /** Paused: stop every clock, remembering how long the current claim still had. */
   private freeze(): void {
-    this.nextHandTimer?.clear()
-    this.nextHandTimer = null
     if (this.claimTimer && this.claimDeadline !== null) {
       this.claimLeft = Math.max(0, this.claimDeadline - this.env.now())
       this.claimTimer.clear()
@@ -543,7 +538,8 @@ export class Table {
       host: this.host,
       players: PLAYERS.map((p): PlayerSlot => {
         const slot = this.slots[p]!
-        return { name: slot.token === null ? null : slot.name, connected: slot.client !== null }
+        const human = slot.token !== null
+        return { name: human ? slot.name : null, avatar: human ? slot.avatar : null, connected: slot.client !== null }
       }),
       settings: { ...this.settings },
       match: this.matchInfo(you),

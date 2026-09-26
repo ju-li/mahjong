@@ -2,14 +2,14 @@
 import { computed, ref } from 'vue'
 import { DIFFICULTIES, type Difficulty } from '@mahjong/bots'
 import { isRuleSet } from '@mahjong/engine'
-import { MAX_NAME_LENGTH, ONLINE_CLAIM_SECONDS, type Snapshot, type TableSettings } from '@mahjong/protocol'
+import { ONLINE_CLAIM_SECONDS, type Snapshot, type TableSettings } from '@mahjong/protocol'
+import { avatarSvg } from '../game/avatar'
 import { RULE_OPTIONS } from '../game/settings'
 import { useI18n } from '../i18n/useI18n'
 
 /** The waiting room: the code to share, who has sat down, and the host's match settings. */
 const props = defineProps<{ snapshot: Snapshot; isHost: boolean }>()
-const name = defineModel<string>('name', { required: true })
-const emit = defineEmits<{ configure: [settings: Partial<TableSettings>]; start: []; rename: []; leave: [] }>()
+const emit = defineEmits<{ configure: [settings: Partial<TableSettings>]; start: []; editProfile: []; leave: [] }>()
 
 const { t } = useI18n()
 
@@ -61,19 +61,19 @@ function onRules(e: Event) {
     <h3>{{ t('lobby.players') }}</h3>
     <ol class="lobby__seats">
       <li v-for="(p, i) in snapshot.players" :key="i" :class="{ 'is-empty': p.name === null, 'is-me': i === snapshot.you }">
-        <span class="lobby__name">{{ p.name ?? t('lobby.emptySeat') }}</span>
+        <button v-if="i === snapshot.you" type="button" class="lobby__me" :title="t('profile.edit')" @click="emit('editProfile')">
+          <span v-if="p.avatar !== null" class="lobby__face" v-html="avatarSvg(p.avatar)" />
+          <span class="lobby__name">{{ p.name }}</span>
+          <span class="lobby__edit">{{ t('lobby.edit') }}</span>
+        </button>
+        <template v-else>
+          <span v-if="p.avatar !== null" class="lobby__face" v-html="avatarSvg(p.avatar)" />
+          <span class="lobby__name">{{ p.name ?? t('lobby.emptySeat') }}</span>
+        </template>
         <span v-if="i === snapshot.host" class="lobby__tag">{{ t('lobby.host') }}</span>
         <span v-if="i === snapshot.you" class="lobby__tag lobby__tag--you">{{ t('lobby.you') }}</span>
       </li>
     </ol>
-
-    <form class="lobby__rename" @submit.prevent="emit('rename')">
-      <label class="online__field">
-        <span>{{ t('online.name') }}</span>
-        <input v-model="name" type="text" autocomplete="nickname" :maxlength="MAX_NAME_LENGTH" @blur="emit('rename')" />
-      </label>
-      <button class="action" type="submit">{{ t('lobby.rename') }}</button>
-    </form>
 
     <div class="lobby__settings">
       <label class="select">

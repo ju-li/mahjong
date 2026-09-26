@@ -8,8 +8,8 @@ const liveCodes = new Set<string>()
 
 /** How long a dropped connection may come straight back before its seat is handed to a bot for good. */
 const RECONNECT_SECONDS = 20
-/** An empty table stays open this long so people can come back to it. */
-const EMPTY_TABLE_MS = 5 * 60_000
+/** A table stays open this long after its last human leaves, so people can come back to it. */
+const EMPTY_TABLE_MS = 30 * 60_000
 
 /**
  * One table, addressed by its four-letter code (the Colyseus room id). All game logic lives in
@@ -42,7 +42,7 @@ export class TableRoom extends Room {
     )
     this.onMessage('act', (client, message) => this.table.act(client.sessionId, message))
     this.onMessage('ready', (client) => this.table.readyUp(client.sessionId))
-    this.onMessage('rename', (client, message: { name?: unknown }) => this.table.rename(client.sessionId, message?.name))
+    this.onMessage('profile', (client, message) => this.table.profile(client.sessionId, message))
     this.onMessage('configure', (client, message) => this.table.configure(client.sessionId, message))
     this.onMessage('start', (client) => this.table.start(client.sessionId))
     this.onMessage('restart', (client) => this.table.restart(client.sessionId))

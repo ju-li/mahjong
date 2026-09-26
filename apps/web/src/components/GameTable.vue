@@ -25,7 +25,7 @@ const props = defineProps<{
   speakingSeat?: number | null
 }>()
 
-const emit = defineEmits<{ act: [action: Action] }>()
+const emit = defineEmits<{ act: [action: Action]; editProfile: [] }>()
 
 const { t } = useI18n()
 
@@ -265,6 +265,8 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer-label="t('score.dealer')"
           :active="seatActive(view.seat)"
           :speaking="speakingSeat === view.seat"
+          :edit-label="t('profile.edit')"
+          @edit="emit('editProfile')"
         />
 
         <div class="me__main">

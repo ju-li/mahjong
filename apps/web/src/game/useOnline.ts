@@ -3,6 +3,7 @@ import { Client, type Room } from '@colyseus/sdk'
 import type { Action } from '@mahjong/engine'
 import { ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
+import { useProfile } from './profile'
 import { useSettings } from './settings'
 import type { MatchSource } from './source'
 import { useTableAudio } from './tableAudio'
@@ -11,12 +12,13 @@ import { useVoicePlayer } from './voiceChat'
 /** Game server address: set at build time for deploys; the local dev server otherwise. */
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname}:2567`
 
-const NAME_KEY = 'mahjong.name'
 const TOKEN_KEY = (code: string) => `mahjong.seat.${code}`
 /** The table this tab is at, so a reload goes straight back to it. */
 const CURRENT_KEY = 'mahjong.table'
 
-export type OnlineError = 'notFound' | 'full' | 'network' | 'lost'
+export type OnlineError = 'notFound' | 'full' | 'network'
+/** The link to the table: fine, being restored on its own, or gone until the player picks what to do. */
+export type Link = 'up' | 'reconnecting' | 'lost'
 
 function read(storage: () => Storage, key: string): string | null {
   try {
@@ -54,8 +56,8 @@ export function useOnline() {
   const snapshot = shallowRef<Snapshot | null>(null)
   const busy = ref(false)
   const error = ref<OnlineError | null>(null)
-  const name = ref(read(() => localStorage, NAME_KEY) ?? '')
-  watch(name, (value) => write(() => localStorage, NAME_KEY, value.trim() || null))
+  const link = ref<Link>('up')
+  const { name, avatar } = useProfile()
   const { voiceChat } = useSettings()
   const voicePlayer = useVoicePlayer()
   watch(voiceChat, (on) => on || voicePlayer.clear())
@@ -70,28 +72,42 @@ export function useOnline() {
     r.onMessage('voice', (memo: VoiceMemo) => {
       if (room === r && voiceChat.value) voicePlayer.enqueue(memo)
     })
+    // The SDK retries a dropped socket by itself for a while; the table stays on screen meanwhile.
+    r.onDrop(() => {
+      if (room === r) link.value = 'reconnecting'
+    })
+    r.onReconnect(() => {
+      if (room === r) link.value = 'up'
+      else void r.leave() // the player went solo while this was retrying
+    })
     r.onLeave(() => {
       if (room !== r) return // we left on purpose
       const code = snapshot.value?.code
       room = null
-      // The SDK's own reconnection gave up; try once more with the seat token before giving up.
       if (!code) return
+      // The SDK's own reconnection gave up; try once more with the seat token, then let the player choose.
+      link.value = 'reconnecting'
       void join(code).then((ok) => {
-        if (ok) return
-        snapshot.value = null
-        voicePlayer.clear()
-        write(() => sessionStorage, CURRENT_KEY, null)
-        error.value = 'lost'
+        if (!ok && snapshot.value?.code === code) link.value = 'lost'
       })
     })
   }
 
+  /** Bumped on every leave, so a join still in flight when the player goes solo is dropped. */
+  let generation = 0
+
   async function connect(open: () => Promise<Room>): Promise<boolean> {
     busy.value = true
     error.value = null
+    const started = generation
     try {
       const r = await open()
+      if (started !== generation) {
+        void r.leave()
+        return false
+      }
       attach(r)
+      link.value = 'up'
       return true
     } catch (e) {
       error.value = classify(e)
@@ -103,6 +119,7 @@ export function useOnline() {
 
   const options = (code?: string): JoinOptions => ({
     name: name.value.trim() || undefined,
+    avatar: avatar.value,
     token: code ? (read(() => localStorage, TOKEN_KEY(code)) ?? undefined) : undefined,
   })
 
@@ -113,6 +130,8 @@ export function useOnline() {
   async function leave(): Promise<void> {
     const r = room
     room = null
+    generation++
+    link.value = 'up'
     snapshot.value = null
     voicePlayer.clear()
     error.value = null
@@ -124,6 +143,17 @@ export function useOnline() {
   function rejoin(): Promise<boolean> {
     const code = read(() => sessionStorage, CURRENT_KEY)
     return code ? join(code) : Promise.resolve(false)
+  }
+
+  /** After losing the table: try to take the seat back. */
+  function reconnect(): Promise<boolean> {
+    const code = snapshot.value?.code
+    if (!code || link.value !== 'lost') return Promise.resolve(false)
+    link.value = 'reconnecting'
+    return join(code).then((ok) => {
+      if (!ok && snapshot.value?.code === code) link.value = 'lost'
+      return ok
+    })
   }
 
   function send<K extends keyof ClientMessages>(type: K, message: ClientMessages[K]): void {
@@ -159,13 +189,13 @@ export function useOnline() {
   const view = computed(() => match.value?.view ?? null)
   useTableAudio(view)
 
-  /** You are "You"; other people by name (marked while away); bots numbered in seat order. */
+  /** You by your own name (or "You"); other people by name (marked while away); bots numbered in seat order. */
   const playerNames = computed(() => {
     const s = snapshot.value
     if (!s) return []
     let bots = 0
     return s.players.map((slot, p) => {
-      if (p === s.you) return t('player.you')
+      if (p === s.you) return name.value.trim() || t('player.you')
       if (slot.name === null) return t('player.bot', { n: ++bots })
       return slot.connected ? slot.name : t('player.away', { name: slot.name })
     })
@@ -178,6 +208,7 @@ export function useOnline() {
     playerNames,
     scores: computed(() => match.value?.scores ?? [0, 0, 0, 0]),
     matchSeed: computed(() => match.value?.avatarSeed ?? 0),
+    avatarChoices: computed(() => snapshot.value?.players.map((slot) => slot.avatar) ?? []),
     handIndex: computed(() => match.value?.handIndex ?? 0),
     rules: computed(() => snapshot.value?.settings.rules ?? 'mcr'),
     claimRemaining,
@@ -199,6 +230,8 @@ export function useOnline() {
     source,
     busy,
     error,
+    link,
+    reconnect,
     name,
     isHost,
     host,
@@ -211,7 +244,8 @@ export function useOnline() {
     rematch: () => send('rematch', {}),
     pause: () => send('pause', {}),
     resume: () => send('resume', {}),
-    rename: () => send('rename', { name: name.value }),
+    /** Tell the table about your current name and avatar. */
+    sendProfile: () => send('profile', { name: name.value, avatar: avatar.value }),
     sendVoice: (clip: VoiceClip) => send('voice', clip),
     /** Player whose voice memo is playing, if any. */
     speaking: voicePlayer.speaking,

@@ -18,6 +18,7 @@ import {
 } from '@mahjong/engine'
 import { BotClient } from './botClient'
 import { timeoutAction } from './keyboard'
+import { useProfile } from './profile'
 import { useSettings } from './settings'
 import { calloutsDone } from './callout'
 import type { MatchSource } from './source'
@@ -220,7 +221,9 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   void pump()
 
   /** Bots are numbered by where they sit relative to you at the start of the match. */
-  const playerNames = computed(() => [t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
+  const profile = useProfile()
+  const playerNames = computed(() => [profile.name.value.trim() || t('player.you'), t('player.bot', { n: 1 }), t('player.bot', { n: 2 }), t('player.bot', { n: 3 })])
+  const avatarChoices = computed(() => [profile.avatar.value, null, null, null])
   const scores = computed(() => match.value.scores)
   const matchSeed = computed(() => match.value.seed)
   const handIndex = computed(() => match.value.handIndex)
@@ -234,6 +237,7 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     playerNames,
     scores,
     matchSeed,
+    avatarChoices,
     handIndex,
     rules,
     claimRemaining,

@@ -6,6 +6,7 @@ import Lobby from './components/Lobby.vue'
 import MatchScreen from './components/MatchScreen.vue'
 import Onboarding from './components/Onboarding.vue'
 import OnlineDialog from './components/OnlineDialog.vue'
+import ProfileDialog from './components/ProfileDialog.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import VoiceButton from './components/VoiceButton.vue'
 import { loadLatestVersion } from './game/appUpdate'
@@ -23,7 +24,7 @@ const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
 const { claimSeconds, sound, voice, voiceChat, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
 const online = useOnline()
-const { snapshot, isHost } = online
+const { snapshot, isHost, link } = online
 /** At an online table (lobby or match); the solo match waits meanwhile. */
 const atTable = computed(() => snapshot.value !== null)
 const solo = useMatch(atTable)
@@ -32,6 +33,13 @@ const { difficulty, rules, resumed, inProgress, startNewMatch } = solo
 const source = computed(() => (atTable.value ? online.source : solo))
 const view = computed(() => source.value.view.value)
 const shownRules = computed(() => source.value.rules.value)
+
+/** Your name and avatar; opened by clicking your own badge or your lobby seat. */
+const profileOpen = ref(false)
+/** A changed profile reaches the online table straight away. */
+function profileSaved() {
+  if (atTable.value) online.sendProfile()
+}
 
 /** Host / join dialog; opened from the top bar or by an invite link. */
 const onlineOpen = ref(false)
@@ -46,6 +54,8 @@ async function joinTable(code: string) {
 function leaveTable() {
   if (snapshot.value?.phase === 'lobby' || window.confirm(t('lobby.confirmLeave'))) void online.leave()
 }
+/** Lost the table: go solo on the player's say-so, without the leave-table confirmation. */
+const playSolo = () => void online.leave()
 const pausedBy = computed(() => online.source.pausedBy?.value ?? null)
 /** On a break: someone paused the online table, or you paused your solo match. */
 const onBreak = computed(() => (atTable.value ? pausedBy.value !== null : solo.onBreak.value))
@@ -226,12 +236,11 @@ async function loadLatest() {
 
     <Lobby
       v-if="snapshot?.phase === 'lobby'"
-      v-model:name="online.name.value"
       :snapshot="snapshot"
       :is-host="isHost"
       @configure="online.configure"
       @start="online.start"
-      @rename="online.rename"
+      @edit-profile="profileOpen = true"
       @leave="leaveTable"
     />
     <MatchScreen
@@ -240,6 +249,7 @@ async function loadLatest() {
       :source="online.source"
       @new-match="onlineMatchDone"
       @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
+      @edit-profile="profileOpen = true"
     >
       <template #matchEnd>
         <div v-if="isHost" class="summary__choices">
@@ -253,10 +263,16 @@ async function loadLatest() {
       </template>
     </MatchScreen>
 
-    <MatchScreen v-else :source="solo" @new-match="startNewMatch()" @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })" />
+    <MatchScreen
+      v-else
+      :source="solo"
+      @new-match="startNewMatch()"
+      @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
+      @edit-profile="profileOpen = true"
+    />
 
     <!-- A break: everyone at the online table sees this until someone resumes. -->
-    <div v-if="onBreak" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+    <div v-if="onBreak && link === 'up'" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
       <div class="result__card pause">
         <h2 id="pause-title">{{ t('pause.title') }}</h2>
         <template v-if="atTable">
@@ -268,12 +284,32 @@ async function loadLatest() {
       </div>
     </div>
 
+    <!-- Lost the connection to the online table: wait for it to come back, retry, or go solo. -->
+    <div v-if="atTable && link !== 'up'" class="result" role="alertdialog" aria-modal="true" aria-labelledby="link-title" aria-describedby="link-body">
+      <div class="result__card pause">
+        <h2 id="link-title">{{ t(link === 'lost' ? 'link.lostTitle' : 'link.reconnectingTitle') }}</h2>
+        <p id="link-body">{{ t(link === 'lost' ? 'link.lost' : 'link.reconnecting', { code: snapshot!.code }) }}</p>
+        <p v-if="link === 'lost' && online.error.value" class="online__error" role="alert">
+          {{ t(online.error.value === 'notFound' ? 'link.closed' : `online.error.${online.error.value}`) }}
+        </p>
+        <p class="result__note">{{ t('link.seatHint') }}</p>
+        <div class="summary__choices">
+          <button class="action action--primary" :disabled="link === 'reconnecting'" autofocus @click="online.reconnect">
+            {{ link === 'reconnecting' ? t('online.connecting') : t('link.reconnect') }}
+          </button>
+          <button class="action" @click="playSolo">{{ t('link.solo') }}</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Push-to-talk, at online tables only; it stays usable during a break. -->
     <VoiceButton v-if="atTable" :speaking-name="speakingName" @send="online.sendVoice" />
 
     <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :rules="shownRules" @close="rulesDialog = null" />
 
     <Onboarding v-if="needsOnboarding" @done="onboardingDone" />
+
+    <ProfileDialog v-if="profileOpen" @save="profileSaved" @close="profileOpen = false" />
 
     <OnlineDialog
       v-if="onlineOpen && !atTable"
@@ -293,6 +329,5 @@ async function loadLatest() {
       </button>
       <button v-else class="action action--primary" @click="startNewMatch()">{{ t('app.newMatch') }}</button>
     </section>
-    <p v-if="!atTable && online.error.value === 'lost'" class="online__error online__error--banner" role="alert">{{ t('online.error.lost') }}</p>
   </main>
 </template>
