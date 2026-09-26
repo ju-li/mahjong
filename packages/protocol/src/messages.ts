@@ -19,6 +19,8 @@ export type OnlineClaimSeconds = (typeof ONLINE_CLAIM_SECONDS)[number]
 /** Options for `client.create` / `client.joinById`. */
 export type JoinOptions = {
   name?: string
+  /** Seed of the avatar this player picked. */
+  avatar?: number
   /** Seat token from an earlier join: reclaims that seat (or the one you last left), even mid-match. */
   token?: string
 }
@@ -32,6 +34,8 @@ export type TableSettings = {
 /** One of the four players. `name` null = a bot sits there. */
 export type PlayerSlot = {
   name: string | null
+  /** Avatar seed the player picked; null = one dealt from the match. */
+  avatar: number | null
   /** A human is at the table right now (a dropped human's seat is played by a bot until they return). */
   connected: boolean
 }
@@ -92,7 +96,8 @@ export type VoiceMemo = VoiceClip & { from: Player }
 export type ClientMessages = {
   act: { step: number; action: Action }
   ready: Record<string, never>
-  rename: { name: string }
+  /** Change your name and/or avatar. */
+  profile: { name?: string; avatar?: number }
   configure: Partial<TableSettings>
   start: Record<string, never>
   /** Host, after the last hand: back to the lobby with the same people. */

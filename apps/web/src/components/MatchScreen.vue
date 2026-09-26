@@ -9,7 +9,7 @@ import { useI18n } from '../i18n/useI18n'
 
 /** The table and the end-of-hand dialog for one match, local or online. */
 const props = defineProps<{ source: MatchSource }>()
-defineEmits<{ newMatch: []; explain: [fanId: string] }>()
+defineEmits<{ newMatch: []; explain: [fanId: string]; editProfile: [] }>()
 
 const { t } = useI18n()
 
@@ -24,8 +24,10 @@ const seatScores = computed(() => seatPlayers.value.map((p) => props.source.scor
 const seatTotals = computed(() =>
   seatPlayers.value.map((p, seat) => props.source.scores.value[p]! + (result.value?.type === 'win' ? result.value.deltas[seat]! : 0)),
 )
-/** A random face per player, fixed for the whole match. */
-const playerAvatars = computed(() => avatarSeeds(props.source.matchSeed.value).map(avatarSvg))
+/** Each player's chosen face, or a random one fixed for the whole match. */
+const playerAvatars = computed(() =>
+  avatarSeeds(props.source.matchSeed.value).map((seed, p) => avatarSvg(props.source.avatarChoices.value[p] ?? seed)),
+)
 const seatAvatars = computed(() => seatPlayers.value.map((p) => playerAvatars.value[p]!))
 const handIndex = computed(() => props.source.handIndex.value)
 /** Seat whose player is talking (a voice memo is playing), if any. */
@@ -49,6 +51,7 @@ const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value +
     :claim-remaining="source.claimRemaining.value"
     :speaking-seat="speakingSeat"
     @act="source.act"
+    @edit-profile="$emit('editProfile')"
   />
   <p v-if="view" class="keys-help">{{ t('keys.help') }}</p>
 

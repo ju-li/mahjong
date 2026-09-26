@@ -42,7 +42,7 @@ export class TableRoom extends Room {
     )
     this.onMessage('act', (client, message) => this.table.act(client.sessionId, message))
     this.onMessage('ready', (client) => this.table.readyUp(client.sessionId))
-    this.onMessage('rename', (client, message: { name?: unknown }) => this.table.rename(client.sessionId, message?.name))
+    this.onMessage('profile', (client, message) => this.table.profile(client.sessionId, message))
     this.onMessage('configure', (client, message) => this.table.configure(client.sessionId, message))
     this.onMessage('start', (client) => this.table.start(client.sessionId))
     this.onMessage('restart', (client) => this.table.restart(client.sessionId))

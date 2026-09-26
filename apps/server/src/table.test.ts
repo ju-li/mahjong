@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { chooseAction } from '@mahjong/bots'
 import { seatOf, type GameState, type Match, type Player } from '@mahjong/engine'
 import { MAX_VOICE_BYTES, MAX_VOICE_MS, type Snapshot } from '@mahjong/protocol'
-import { cleanName, RESERVE_MS, Table, TURN_MS, VOICE_GAP_MS, VOICE_PER_MINUTE, type TableEnv } from './table'
+import { cleanAvatar, cleanName, RESERVE_MS, Table, TURN_MS, VOICE_GAP_MS, VOICE_PER_MINUTE, type TableEnv } from './table'
 
 /** Timers that only fire when the test moves the clock. */
 class FakeEnv implements TableEnv {
@@ -98,7 +98,27 @@ describe('cleanName', () => {
   })
 })
 
+describe('cleanAvatar', () => {
+  it('accepts 32-bit unsigned integers only', () => {
+    expect(cleanAvatar(12345, null)).toBe(12345)
+    expect(cleanAvatar(2 ** 32, 7)).toBe(7)
+    expect(cleanAvatar(-1, 7)).toBe(7)
+    expect(cleanAvatar(1.5, null)).toBeNull()
+    expect(cleanAvatar('3', null)).toBeNull()
+  })
+})
+
 describe('lobby', () => {
+  it('keeps the name and avatar each player picks', () => {
+    const { table, snap } = setup(['Ann', 'Bo'])
+    table.join('c2', { name: 'Cy', avatar: 99 })
+    expect(snap('c0').players.map((p) => p.avatar)).toEqual([null, null, 99, null])
+    table.profile('c0', { name: 'Annie', avatar: 42 })
+    table.profile('c1', { avatar: 'nope' })
+    expect(snap('c1').players.map((p) => p.name)).toEqual(['Annie', 'Bo', 'Cy', null])
+    expect(snap('c1').players.map((p) => p.avatar)).toEqual([42, null, 99, null])
+  })
+
   it('seats up to four, makes the first the host and hands hosting on', () => {
     const { table, snap } = setup(['Ann', 'Bo', 'Cy', 'Di'])
     expect(snap('c0').host).toBe(0)
@@ -196,7 +216,7 @@ describe('play', () => {
     table.start('c0')
     const token = snap('c1').token
     table.drop('c1')
-    expect(snap('c0').players[1]).toEqual({ name: 'Bo', connected: false })
+    expect(snap('c0').players[1]).toEqual({ name: 'Bo', avatar: null, connected: false })
     // With Bo gone, only Ann ever has to act.
     for (let i = 0; i < 300; i++) {
       autoplay(table, ['c0'], snap)
@@ -206,7 +226,7 @@ describe('play', () => {
     // Bo's seat stays reserved: a newcomer hops into a bot's seat instead.
     expect(table.join('c8', { name: 'Cy' })).toBe(2)
     expect(table.join('c9', { token })).toBe(1)
-    expect(table.snapshotFor('c9')!.players[1]).toEqual({ name: 'Bo', connected: true })
+    expect(table.snapshotFor('c9')!.players[1]).toEqual({ name: 'Bo', avatar: null, connected: true })
   })
 
   it('pauses while nobody is connected', () => {
@@ -351,7 +371,7 @@ describe('hop in, hop out', () => {
     table.start('c0')
     const token = snap('c1').token
     table.leave('c1')
-    expect(snap('c0').players[1]).toEqual({ name: null, connected: false }) // a bot again
+    expect(snap('c0').players[1]).toEqual({ name: null, avatar: null, connected: false }) // a bot again
     expect(table.join('c5', { name: 'Bo', token })).toBe(1)
     expect(table.snapshotFor('c5')!.token).toBe(token)
     // Once someone else has it, the leaver hops into another free seat.
@@ -367,7 +387,7 @@ describe('hop in, hop out', () => {
     expect(table.canJoin(undefined)).toBe(false)
     env.advance(RESERVE_MS)
     expect(table.join('c9', { name: 'Ed' })).toBe(1)
-    expect(snap('c0').players[1]).toEqual({ name: 'Ed', connected: true })
+    expect(snap('c0').players[1]).toEqual({ name: 'Ed', avatar: null, connected: true })
   })
 })
 
