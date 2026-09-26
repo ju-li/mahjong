@@ -148,6 +148,13 @@ body {
   font-weight: 500;
 }
 
+.topbar__logo {
+  width: 1.45em;
+  height: 1.45em;
+  margin-right: 0.1em;
+  vertical-align: -0.35em;
+}
+
 
 /* ---- Board: wooden rim around a felt table ---- */
 

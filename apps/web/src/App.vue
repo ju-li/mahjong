@@ -194,9 +194,13 @@ async function loadLatest() {
           aria-controls="topbar-controls"
           @click="navOpen = !navOpen"
         >
+          <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
           {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
         </button>
-        <template v-else>{{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small></template>
+        <template v-else>
+          <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
+          {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
+        </template>
         <button
           v-if="snapshot"
           type="button"
