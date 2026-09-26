@@ -26,6 +26,8 @@ export type MatchSource = {
   matchOver: Readonly<Ref<boolean>>
   /** You asked for the next hand and others haven't yet (online only). */
   waiting?: Readonly<Ref<boolean>>
+  /** Who paused play, by display name; null while it runs (online only). */
+  pausedBy?: Readonly<Ref<string | null>>
   act(action: Action): void
   continueToNextHand(): void
 }

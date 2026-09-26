@@ -37,6 +37,8 @@ export const CALL_PAUSE_MS = 700
 export const TURN_MS = 60_000
 /** The next hand deals once everyone is ready, or after this long. */
 export const NEXT_HAND_MS = 30_000
+/** A dropped player's seat is kept for them this long; after that anyone joining may take it over. */
+export const RESERVE_MS = 2 * 60_000
 
 const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
 /** Actions a player calls out loud. */
@@ -58,7 +60,13 @@ type Slot = {
   name: string
   /** The connection currently holding this seat, if any. */
   client: string | null
+  /** When the holder's connection dropped; their seat stays theirs for `RESERVE_MS`. */
+  droppedAt: number | null
+  /** Token of whoever left this seat last, so they get it back if it is still free. */
+  formerToken: string | null
 }
+
+const emptySlot = (formerToken: string | null = null): Slot => ({ token: null, name: '', client: null, droppedAt: null, formerToken })
 
 type Timer = { clear(): void } | null
 
@@ -78,7 +86,7 @@ export class Table {
   readonly code: string
   phase: 'lobby' | 'playing' = 'lobby'
   settings: TableSettings = { rules: 'mcr', difficulty: 'medium', claimSeconds: 10 }
-  private slots: Slot[] = PLAYERS.map(() => ({ token: null, name: '', client: null }))
+  private slots: Slot[] = PLAYERS.map(() => emptySlot())
   private host: Player = 0
   private match: Match | null = null
   private avatarSeed = 0
@@ -93,6 +101,10 @@ export class Table {
   private claimKey: string | null = null
   private claimDeadline: number | null = null
   private claimTimer: Timer = null
+  /** Who paused play, if it is paused. */
+  private pausedBy: Player | null = null
+  /** Claim time left when play was paused; the countdown resumes from here. */
+  private claimLeft: number | null = null
 
   constructor(
     code: string,
@@ -119,43 +131,71 @@ export class Table {
     return p ?? null
   }
 
-  /** Whether a join with these options would be let in. */
-  canJoin(token: string | undefined): boolean {
-    if (token && PLAYERS.some((p) => this.slots[p]!.token === token)) return true
-    return this.phase === 'lobby' && this.humans().length < 4
+  /**
+   * The seat a join would get: your own (by token), else the one you last left if it is still
+   * free, else any seat a bot is playing, else one whose player dropped more than `RESERVE_MS` ago.
+   */
+  private seatFor(token: string | null): Player | null {
+    const slots = this.slots
+    if (token) {
+      const own = PLAYERS.find((p) => slots[p]!.token === token) ?? PLAYERS.find((p) => slots[p]!.token === null && slots[p]!.formerToken === token)
+      if (own !== undefined) return own
+    }
+    const free = PLAYERS.find((p) => slots[p]!.token === null)
+    if (free !== undefined) return free
+    const now = this.env.now()
+    const lapsed = PLAYERS.find((p) => slots[p]!.client === null && slots[p]!.droppedAt !== null && now - slots[p]!.droppedAt! >= RESERVE_MS)
+    return lapsed ?? null
   }
 
-  /** Seat a connection: back in its old seat when the token matches, else the first free one in the lobby. */
+  /** Whether a join with this token would get a seat. Anyone may hop in while a bot holds one. */
+  canJoin(token: string | undefined): boolean {
+    return this.seatFor(token ?? null) !== null
+  }
+
+  /** Seat a connection, taking over from a bot mid-match if need be. Null if every seat is taken. */
   join(client: string, options: { name?: unknown; token?: unknown }): Player | null {
     const token = typeof options.token === 'string' ? options.token : null
-    let p = token ? PLAYERS.find((x) => this.slots[x]!.token === token) : undefined
-    if (p === undefined) {
-      if (this.phase !== 'lobby') return null
-      p = PLAYERS.find((x) => this.slots[x]!.token === null)
-      if (p === undefined) return null
-      this.slots[p] = { token: this.env.newToken(), name: '', client: null }
-    }
+    const p = this.seatFor(token)
+    if (p === null) return null
     const slot = this.slots[p]!
-    slot.client = client
-    slot.name = cleanName(options.name, slot.name || `Player ${p + 1}`)
+    if (slot.token === null || slot.token !== token) {
+      // A new occupant: keep a returning player's token, otherwise issue one.
+      const returning = token !== null && slot.formerToken === token
+      this.slots[p] = { ...emptySlot(), token: returning ? token : this.env.newToken() }
+    }
+    const seated = this.slots[p]!
+    seated.client = client
+    seated.droppedAt = null
+    seated.name = cleanName(options.name, seated.name || `Player ${p + 1}`)
     if (!this.connected(this.host) || this.slots[this.host]!.token === null) this.host = p
     this.changed()
     return p
   }
 
-  /**
-   * A connection went away. In the lobby its seat is freed; mid-match a bot plays it until the
-   * player returns with their token.
-   */
+  /** The connection dropped without saying goodbye: the seat stays theirs for a while, a bot covers it. */
+  drop(client: string): void {
+    this.vacate(client, false)
+  }
+
+  /** The player chose to leave. In a match a bot takes the seat over, and anyone may hop into it. */
   leave(client: string): void {
+    this.vacate(client, true)
+  }
+
+  private vacate(client: string, forGood: boolean): void {
     const p = this.playerOf(client)
     if (p === null) return
     const slot = this.slots[p]!
-    slot.client = null
-    if (this.phase === 'lobby') this.slots[p] = { token: null, name: '', client: null }
+    if (this.phase === 'lobby') this.slots[p] = emptySlot()
+    else if (forGood) this.slots[p] = emptySlot(slot.token)
+    else {
+      slot.client = null
+      slot.droppedAt = this.env.now()
+    }
     this.ready.delete(p)
     if (p === this.host) {
-      const next = this.humans().find((x) => this.connected(x))
+      const next = PLAYERS.find((x) => this.connected(x))
       if (next !== undefined) this.host = next
     }
     this.changed()
@@ -186,13 +226,26 @@ export class Table {
 
   start(client: string): void {
     if (this.phase !== 'lobby' || this.playerOf(client) !== this.host) return
+    this.avatarSeed = this.env.random32()
+    this.newMatch()
+  }
+
+  private newMatch(): void {
+    this.stopTimers()
     this.phase = 'playing'
     this.match = newMatch(this.env.random32(), this.settings.rules)
-    this.avatarSeed = this.env.random32()
-    this.step = 0
+    // Steps only ever grow, so a click from the previous match can never match the new one.
+    this.step++
     this.lastAction = null
+    this.pausedBy = null
     this.ready.clear()
     this.changed()
+  }
+
+  /** Host, once the last hand is scored: another match with the same people and settings. */
+  rematch(client: string): void {
+    if (this.phase !== 'playing' || this.playerOf(client) !== this.host || !this.finished()) return
+    this.newMatch()
   }
 
   /** Host, once the match is over: everyone still here goes back to the lobby. */
@@ -201,7 +254,8 @@ export class Table {
     this.stopTimers()
     this.phase = 'lobby'
     this.match = null
-    for (const p of PLAYERS) if (!this.connected(p)) this.slots[p] = { token: null, name: '', client: null }
+    this.pausedBy = null
+    for (const p of PLAYERS) if (!this.connected(p)) this.slots[p] = emptySlot()
     this.changed()
   }
 
@@ -215,11 +269,26 @@ export class Table {
   // ---------------------------------------------------------------------------
   // Play
 
+  /** Anyone at the table may pause (a toilet break) and anyone may resume. */
+  pause(client: string): void {
+    const p = this.playerOf(client)
+    if (p === null || this.phase !== 'playing' || !this.match?.current || this.pausedBy !== null) return
+    this.pausedBy = p
+    this.changed()
+  }
+
+  resume(client: string): void {
+    if (this.playerOf(client) === null || this.pausedBy === null) return
+    this.pausedBy = null
+    this.changed()
+  }
+
   /** A player's move. Ignored unless it quotes the current step and is legal for their own seat. */
   act(client: string, message: unknown): void {
     const p = this.playerOf(client)
     const s = this.match?.current
     if (p === null || !s || typeof message !== 'object' || !message) return
+    if (this.pausedBy !== null) return this.onChange() // nobody moves while paused
     const { step, action } = message as { step?: unknown; action?: unknown }
     if (step !== this.step) return this.onChange() // stale: resend so the client catches up
     const legal = legalActions(s, seatOf(this.match!, p))
@@ -238,7 +307,7 @@ export class Table {
   /** Ready for the next hand. Deals once every connected human is ready. */
   readyUp(client: string): void {
     const p = this.playerOf(client)
-    if (p === null || this.match?.current?.phase.kind !== 'ended') return
+    if (p === null || this.match?.current?.phase.kind !== 'ended' || this.finished()) return
     this.ready.add(p)
     this.changed()
   }
@@ -254,7 +323,7 @@ export class Table {
   private stopTimers(): void {
     for (const t of [this.botTimer, this.turnTimer, this.nextHandTimer, this.claimTimer]) t?.clear()
     this.botTimer = this.turnTimer = this.nextHandTimer = this.claimTimer = null
-    this.claimKey = this.claimDeadline = null
+    this.claimKey = this.claimDeadline = this.claimLeft = null
   }
 
   /** Something changed: work out what happens next, then tell everyone. */
@@ -276,10 +345,18 @@ export class Table {
       this.stopTimers()
       return
     }
+    if (this.pausedBy !== null) return this.freeze()
+    this.thaw()
 
     if (s.phase.kind === 'ended') {
       this.claimTimer?.clear()
       this.claimKey = this.claimDeadline = this.claimTimer = null
+      // The last hand's summary stays up until the host picks what's next.
+      if (this.finished()) {
+        this.nextHandTimer?.clear()
+        this.nextHandTimer = null
+        return
+      }
       const waiting = this.humans().filter((p) => this.connected(p) && !this.ready.has(p))
       if (waiting.length === 0) {
         this.nextHandTimer?.clear()
@@ -330,8 +407,31 @@ export class Table {
     }
   }
 
+  /** Paused: stop every clock, remembering how long the current claim still had. */
+  private freeze(): void {
+    this.nextHandTimer?.clear()
+    this.nextHandTimer = null
+    if (this.claimTimer && this.claimDeadline !== null) {
+      this.claimLeft = Math.max(0, this.claimDeadline - this.env.now())
+      this.claimTimer.clear()
+      this.claimTimer = null
+      this.claimDeadline = null
+    }
+  }
+
+  /** Resumed: the claim countdown picks up where it stopped. */
+  private thaw(): void {
+    if (this.claimLeft === null) return
+    const key = this.claimKey
+    const left = this.claimLeft
+    this.claimLeft = null
+    if (key === null) return
+    this.claimDeadline = this.env.now() + left
+    this.claimTimer = this.env.setTimeout(() => this.claimExpired(key), left)
+  }
+
   private stepIs(step: number): boolean {
-    return this.step === step && this.phase === 'playing'
+    return this.step === step && this.phase === 'playing' && this.pausedBy === null
   }
 
   private botMove(seat: Seat): Action {
@@ -424,7 +524,8 @@ export class Table {
     const s = m.current
     const seat = seatOf(m, you)
     const legal = s ? legalActions(s, seat) : []
-    const claiming = this.claimDeadline !== null && legal.some((a) => a.type === 'pass')
+    const claimMs = this.claimLeft ?? (this.claimDeadline === null ? null : Math.max(0, this.claimDeadline - this.env.now()))
+    const claiming = claimMs !== null && legal.some((a) => a.type === 'pass')
     return {
       avatarSeed: this.avatarSeed,
       handIndex: m.handIndex,
@@ -434,8 +535,10 @@ export class Table {
       step: this.step,
       view: s ? viewFor(s, seat) : null,
       legal,
-      claimMs: claiming ? Math.max(0, this.claimDeadline! - this.env.now()) : null,
+      claimMs: claiming ? claimMs : null,
       ready: PLAYERS.map((p) => this.ready.has(p)),
+      final: this.finished(),
+      paused: this.pausedBy,
     }
   }
 

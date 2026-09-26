@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { chooseAction } from '@mahjong/bots'
 import { seatOf, type GameState, type Match, type Player } from '@mahjong/engine'
 import type { Snapshot } from '@mahjong/protocol'
-import { cleanName, Table, TURN_MS, type TableEnv } from './table'
+import { cleanName, NEXT_HAND_MS, RESERVE_MS, Table, TURN_MS, type TableEnv } from './table'
 
 /** Timers that only fire when the test moves the clock. */
 class FakeEnv implements TableEnv {
@@ -122,7 +122,6 @@ describe('lobby', () => {
     expect(snap('c1').settings).toEqual({ rules: 'hk', difficulty: 'hard', claimSeconds: 5 })
     table.start('c0')
     expect(snap('c1').phase).toBe('playing')
-    expect(table.canJoin(undefined)).toBe(false) // strangers can't join a match under way
   })
 })
 
@@ -193,7 +192,7 @@ describe('play', () => {
     const { env, table, snap } = setup(['Ann', 'Bo'])
     table.start('c0')
     const token = snap('c1').token
-    table.leave('c1')
+    table.drop('c1')
     expect(snap('c0').players[1]).toEqual({ name: 'Bo', connected: false })
     // With Bo gone, only Ann ever has to act.
     for (let i = 0; i < 300; i++) {
@@ -201,8 +200,8 @@ describe('play', () => {
       env.advance(1000)
     }
     expect(snap('c0').match!.step).toBeGreaterThan(20)
-    expect(table.canJoin(token)).toBe(true)
-    expect(table.canJoin('someone-else')).toBe(false)
+    // Bo's seat stays reserved: a newcomer hops into a bot's seat instead.
+    expect(table.join('c8', { name: 'Cy' })).toBe(2)
     expect(table.join('c9', { token })).toBe(1)
     expect(table.snapshotFor('c9')!.players[1]).toEqual({ name: 'Bo', connected: true })
   })
@@ -211,7 +210,7 @@ describe('play', () => {
     const { env, table, snap } = setup(['Ann'])
     table.start('c0')
     const token = snap('c0').token
-    table.leave('c0')
+    table.drop('c0')
     const before = state(table)
     env.advance(600_000)
     expect(state(table)).toBe(before)
@@ -221,7 +220,7 @@ describe('play', () => {
     expect(state(table)).not.toBe(before)
   })
 
-  it('lets the host go back to the lobby as soon as the last hand is scored', () => {
+  it('keeps the final summary up until the host chooses; keeping going starts a fresh match', () => {
     const { env, table, clients, snap } = setup(['Ann', 'Bo'])
     table.start('c0')
     const internals = table as unknown as { match: Match }
@@ -229,6 +228,32 @@ describe('play', () => {
     for (let i = 0; i < 100_000 && snap('c0').match!.view?.phase.kind !== 'ended'; i++) {
       autoplay(table, clients, snap)
       if (snap('c0').match!.view?.phase.kind !== 'ended') env.advance(500)
+    }
+    expect(snap('c0').match!.final).toBe(true)
+    // The final summary stays up however long people look at it.
+    table.readyUp('c0')
+    table.readyUp('c1')
+    env.advance(NEXT_HAND_MS * 10)
+    expect(snap('c0').match!.view!.phase.kind).toBe('ended')
+    table.restart('c1') // not the host
+    table.rematch('c1')
+    expect(snap('c0').match!.handIndex).toBe(15)
+    table.rematch('c0')
+    const again = snap('c1').match!
+    expect(again.handIndex).toBe(0)
+    expect(again.final).toBe(false)
+    expect(again.scores).toEqual([0, 0, 0, 0])
+    expect(snap('c1').players.map((p) => p.name)).toEqual(['Ann', 'Bo', null, null])
+  })
+
+  it('takes everyone back to the lobby after the last hand if the host chooses', () => {
+    const { env, table, clients, snap } = setup(['Ann', 'Bo'])
+    table.start('c0')
+    const internals = table as unknown as { match: Match }
+    internals.match = { ...internals.match, handIndex: 15 }
+    for (let i = 0; i < 100_000 && !snap('c0').match!.final; i++) {
+      autoplay(table, clients, snap)
+      if (!snap('c0').match!.final) env.advance(500)
     }
     table.restart('c1') // not the host
     expect(snap('c0').phase).toBe('playing')
@@ -240,13 +265,14 @@ describe('play', () => {
     const { env, table, clients, snap } = setup(['Ann', 'Bo', 'Cy'])
     table.configure('c0', { difficulty: 'easy' })
     table.start('c0')
-    for (let i = 0; i < 100_000 && !snap('c0').match!.over; i++) {
+    for (let i = 0; i < 100_000 && !snap('c0').match!.final; i++) {
       autoplay(table, clients, snap)
       env.advance(500)
     }
     const m = snap('c0').match!
-    expect(m.over).toBe(true)
-    expect(m.view).toBeNull()
+    expect(m.final).toBe(true)
+    expect(m.handIndex).toBe(15)
+    expect(m.view!.phase.kind).toBe('ended')
     expect(m.scores.reduce((a, b) => a + b, 0)).toBe(0)
     table.restart('c1') // not the host
     expect(snap('c0').phase).toBe('playing')
@@ -254,5 +280,91 @@ describe('play', () => {
     expect(snap('c0').phase).toBe('lobby')
     expect(snap('c0').players.map((p) => p.name)).toEqual(['Ann', 'Bo', 'Cy', null])
     expect(([0, 1, 2] as Player[]).every((p) => snap(clients[p]!).you === p)).toBe(true)
+  })
+})
+
+describe('hop in, hop out', () => {
+  it('lets friends take over a bot mid-match, keeping its score, until all four seats are people', () => {
+    const { table, snap } = setup(['Ann', 'Bo'])
+    table.start('c0')
+    const internals = table as unknown as { match: Match }
+    internals.match = { ...internals.match, scores: [10, -4, 7, -13] }
+    expect(table.canJoin(undefined)).toBe(true)
+    expect(table.join('c2', { name: 'Cy' })).toBe(2)
+    expect(table.join('c3', { name: 'Di' })).toBe(3)
+    expect(table.canJoin(undefined)).toBe(false)
+    expect(table.join('c4', { name: 'Ed' })).toBeNull()
+    const cy = table.snapshotFor('c2')!
+    expect(cy.you).toBe(2)
+    expect(cy.match!.scores[2]).toBe(7)
+    expect(cy.match!.view).not.toBeNull()
+    expect(snap('c0').players.map((p) => p.name)).toEqual(['Ann', 'Bo', 'Cy', 'Di'])
+  })
+
+  it('frees the seat of someone who leaves, and gives it back if they return while it is free', () => {
+    const { table, snap } = setup(['Ann', 'Bo'])
+    table.start('c0')
+    const token = snap('c1').token
+    table.leave('c1')
+    expect(snap('c0').players[1]).toEqual({ name: null, connected: false }) // a bot again
+    expect(table.join('c5', { name: 'Bo', token })).toBe(1)
+    expect(table.snapshotFor('c5')!.token).toBe(token)
+    // Once someone else has it, the leaver hops into another free seat.
+    table.leave('c5')
+    expect(table.join('c6', { name: 'Cy' })).toBe(1)
+    expect(table.join('c7', { name: 'Bo', token })).toBe(2)
+  })
+
+  it('holds a dropped seat for a while, then lets a newcomer take it', () => {
+    const { env, table, snap } = setup(['Ann', 'Bo', 'Cy', 'Di'])
+    table.start('c0')
+    table.drop('c1')
+    expect(table.canJoin(undefined)).toBe(false)
+    env.advance(RESERVE_MS)
+    expect(table.join('c9', { name: 'Ed' })).toBe(1)
+    expect(snap('c0').players[1]).toEqual({ name: 'Ed', connected: true })
+  })
+})
+
+describe('pause', () => {
+  /** Plays Ann's turns until a claim window with a countdown opens for her. */
+  function untilClaim(env: FakeEnv, table: Table, snap: (c: string) => Snapshot) {
+    for (let i = 0; i < 2000 && snap('c0').match!.claimMs === null; i++) {
+      const m = snap('c0').match!
+      if (m.legal.length && m.view!.phase.kind === 'discard') table.act('c0', { step: m.step, action: m.legal.find((a) => a.type === 'discard') })
+      else env.advance(200)
+    }
+  }
+
+  it('freezes bots, moves and the claim countdown until someone resumes', () => {
+    const { env, table, snap } = setup(['Ann', 'Bo'])
+    table.start('c0')
+    untilClaim(env, table, snap)
+    env.advance(3_000)
+    table.pause('c1')
+    const frozen = snap('c0').match!
+    expect(frozen.paused).toBe(1)
+    const before = state(table)
+    env.advance(10 * 60_000)
+    expect(state(table)).toBe(before)
+    expect(snap('c0').match!.claimMs).toBe(frozen.claimMs)
+    table.act('c0', { step: frozen.step, action: frozen.legal[0] })
+    expect(state(table)).toBe(before)
+    table.resume('c0')
+    expect(snap('c0').match!.paused).toBeNull()
+    env.advance(frozen.claimMs! - 1)
+    expect(state(table)).toBe(before) // the countdown carried on from where it stopped
+    env.advance(1)
+    expect(state(table)).not.toBe(before)
+  })
+
+  it('can only be paused once at a time and not in the lobby', () => {
+    const { table, snap } = setup(['Ann', 'Bo'])
+    table.pause('c0')
+    expect(snap('c0').match).toBeNull()
+    table.start('c0')
+    table.pause('c0')
+    table.pause('c1')
+    expect(snap('c1').match!.paused).toBe(0)
   })
 })

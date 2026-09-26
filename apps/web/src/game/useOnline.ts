@@ -111,7 +111,7 @@ export function useOnline() {
   }
 
   /** After a reload: rejoin the table this tab was at, if any. */
-  function resume(): Promise<boolean> {
+  function rejoin(): Promise<boolean> {
     const code = read(() => sessionStorage, CURRENT_KEY)
     return code ? join(code) : Promise.resolve(false)
   }
@@ -127,11 +127,14 @@ export function useOnline() {
   // Claim countdown, ticking locally from the time left when the snapshot arrived.
   const claimRemaining = ref<number | null>(null)
   let claimTimer: ReturnType<typeof setInterval> | undefined
+  const paused = computed(() => match.value?.paused ?? null)
   watch(
-    () => match.value?.claimMs ?? null,
-    (ms) => {
+    [() => match.value?.claimMs ?? null, paused],
+    ([ms, stopped]) => {
       clearInterval(claimTimer)
       if (ms === null) return void (claimRemaining.value = null)
+      // Paused: the server holds the clock, so show the time left without counting down.
+      if (stopped !== null) return void (claimRemaining.value = Math.ceil(ms / 1000))
       const deadline = performance.now() + ms
       const tick = () => {
         const left = Math.max(0, Math.ceil((deadline - performance.now()) / 1000))
@@ -170,6 +173,7 @@ export function useOnline() {
     claimRemaining,
     matchOver: computed(() => match.value?.over ?? false),
     waiting: computed(() => !!match.value?.ready[me.value]),
+    pausedBy: computed(() => (paused.value === null ? null : (playerNames.value[paused.value] ?? null))),
     act(action: Action) {
       const m = match.value
       if (m) send('act', { step: m.step, action })
@@ -189,10 +193,13 @@ export function useOnline() {
     host,
     join,
     leave,
-    resume,
+    rejoin,
     configure: (settings: Partial<TableSettings>) => send('configure', settings),
     start: () => send('start', {}),
     restart: () => send('restart', {}),
+    rematch: () => send('rematch', {}),
+    pause: () => send('pause', {}),
+    resume: () => send('resume', {}),
     rename: () => send('rename', { name: name.value }),
   }
 }

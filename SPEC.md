@@ -63,9 +63,11 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - deploy: `apps/server/Dockerfile` (repo-root context, `node server.mjs` on `$PORT`, `GET /health`). Railway service `server` configured manually, own public domain.
 - cmd: root `pnpm dev:server` → server on :2567 (tsx watch); web dev defaults to `ws://<host>:2567`. `pnpm build:server` → `apps/server/dist/server.mjs`.
 - net: room = Colyseus room `table`, `roomId` = code: 4 letters from `ABCDEFGHJKLMNPQRSTUVWXYZ`, rude words skipped. `client.create('table', {name})` / `client.joinById(code, {name, token})`.
-- net: server → client `snapshot`: `{code, phase: lobby|playing, you, token, host, players[4]: {name|null=bot, connected}, settings: {rules, difficulty, claimSeconds ∈ 5|10|20}, match: {avatarSeed, handIndex, scores, seatPlayers, over, step, view, legal, claimMs, ready[4]} | null}`.
-- net: client → server `act {step, action}` · `ready` · `rename {name}` · host: `configure {rules?, difficulty?, claimSeconds?}` · `start` · `restart` (after last hand → lobby).
-- net: seat `token` (localStorage per code) reclaims a seat anytime while the room lives, even mid-match. dropped/left human → bot plays seat. room closes after 5 min with no human connected. idle human: claim timer auto-passes; own turn → bot move after 60 s.
+- net: server → client `snapshot`: `{code, phase: lobby|playing, you, token, host, players[4]: {name|null=bot, connected}, settings: {rules, difficulty, claimSeconds ∈ 5|10|20}, match: {avatarSeed, handIndex, scores, seatPlayers, over, step, view, legal, claimMs, ready[4], final, paused: Player | null} | null}`.
+- net: client → server `act {step, action}` · `ready` · `rename {name}` · `pause` · `resume` (any seated player) · host: `configure {rules?, difficulty?, claimSeconds?}` · `start` · after last hand: `rematch` (new match, same people & settings) | `restart` (→ lobby).
+- net: hop in / hop out: anyone with the code may join anytime, lobby or mid-match, taking a bot's seat (and its score); ≤ 4 humans. chosen leave → seat freed for a bot / newcomer; leaver's token gets it back while still free. dropped connection → bot covers, seat reserved 2 min for its token, then takeable. seat `token` in localStorage per code. room closes after 5 min with no human connected. idle human: claim timer auto-passes; own turn → bot move after 60 s.
+- net: pause: any seated player pauses / resumes during a match. paused ⇒ no bot moves, no timers (claim countdown resumes from where it stopped), `act` rejected.
+- net: last hand scored ⇒ summary stays (no auto-deal); host picks Keep going (`rematch`) or Back to lobby (`restart`); others wait or leave.
 - ui: top bar "Play with friends" → dialog (name, Host a table / code + Join). invite link `?room=CODE` opens it prefilled. lobby: big code, Share invite (Web Share → clipboard), seats, host picks rules/bots/timer, Start. solo match paused while at a table; reload rejoins (sessionStorage).
 
 ## §V INVARIANTS
@@ -112,8 +114,10 @@ V40: bots & UI score via rule-set dispatch (`scoreFor`, `fanDef`), ⊥ hard-code
 V41: server → seat k snapshot ∌ other seats' concealed tile ids, ∌ match seed (walls derive from it); view = `viewFor(s, k)`.
 V42: server applies only actions ∈ `legalActions(s, seatOf(match, sender))` quoting current `step`; applies its own copy of the matching legal action.
 V43: room codes unique among live rooms in the process.
-V44: after match start, join ⇔ valid seat token; ≤ 4 humans per table.
+V44: join ⇔ a seat is free (bot-held, own token, or dropped > 2 min); ≤ 4 humans per table; a dropped seat is never taken within 2 min.
 V45: claim-timer & turn-timer expiry online: claim → `pass` only (V31); turn → bot move for that seat.
+V46: paused ⇒ game state unchanged until resume; remaining claim time preserved.
+V47: last hand scored ⇒ no automatic deal; only host `rematch` / `restart` move on.
 
 ## §T TASKS
 id|status|task|cites
@@ -155,6 +159,7 @@ T35|.|Taiwanese 16-tile rule set|
 T36|x|extract `packages/bots` (strategy, protocol, `timeoutAction`); `soundFor`/`calloutFor` accept `PlayerView`; `MatchSource` + `MatchScreen` so table renders any match source|V25,V26
 T37|x|`packages/protocol` (codes, messages) + `apps/server`: `Table` (lobby, turn loop, bots, claim/turn timers, ready-up, tokens) + Colyseus `TableRoom`; tests incl leak check & full match|V41,V42,V43,V44,V45
 T38|x|web: `useOnline`, host/join dialog, lobby, invite link, online match via `MatchScreen`; bilingual strings|V29,I.ui
+T40|x|online pause/resume (any player), end-of-match choice (keep going / back to lobby), hop-in-hop-out seats (take over bots mid-match, chosen leave frees seat, drops reserved 2 min)|V44,V46,V47
 T39|.|deploy: Railway service `server` from `apps/server/Dockerfile` + public domain; set `VITE_SERVER_URL` build variable on `web`|I.deploy
 
 ## §B BUGS

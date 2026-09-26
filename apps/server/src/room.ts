@@ -23,6 +23,8 @@ export class TableRoom extends Room {
   private emptyTimer: { clear(): void } | null = null
   /** Seat token per connection, for reconnections. */
   private tokens = new Map<string, string>()
+  /** Connections that dropped and may still reconnect. */
+  private dropped = new Set<string>()
 
   onCreate() {
     const code = newRoomCode(liveCodes, (n) => randomInt(n))
@@ -44,35 +46,41 @@ export class TableRoom extends Room {
     this.onMessage('configure', (client, message) => this.table.configure(client.sessionId, message))
     this.onMessage('start', (client) => this.table.start(client.sessionId))
     this.onMessage('restart', (client) => this.table.restart(client.sessionId))
+    this.onMessage('rematch', (client) => this.table.rematch(client.sessionId))
+    this.onMessage('pause', (client) => this.table.pause(client.sessionId))
+    this.onMessage('resume', (client) => this.table.resume(client.sessionId))
     this.watchEmpty()
   }
 
   onAuth(_client: Client, options: JoinOptions) {
-    if (!this.table.canJoin(options?.token)) throw new ServerError(4003, 'table full or match under way')
+    if (!this.table.canJoin(options?.token)) throw new ServerError(4003, 'every seat is taken')
     return true
   }
 
   onJoin(client: Client, options: JoinOptions) {
     const player = this.table.join(client.sessionId, options ?? {})
-    if (player === null) throw new ServerError(4003, 'table full or match under way')
+    if (player === null) throw new ServerError(4003, 'every seat is taken')
     this.tokens.set(client.sessionId, this.table.snapshotFor(client.sessionId)!.token)
     this.watchEmpty()
   }
 
   onDrop(client: Client) {
-    // A bot covers the seat right away; the same connection may still slip back in.
-    this.table.leave(client.sessionId)
+    // A bot covers the seat right away; it stays reserved so the same player can slip back in.
+    this.dropped.add(client.sessionId)
+    this.table.drop(client.sessionId)
     this.allowReconnection(client, RECONNECT_SECONDS)
     this.watchEmpty()
   }
 
   onReconnect(client: Client) {
+    this.dropped.delete(client.sessionId)
     this.table.join(client.sessionId, { token: this.tokens.get(client.sessionId) })
     this.watchEmpty()
   }
 
   onLeave(client: Client) {
-    this.table.leave(client.sessionId)
+    // A connection that dropped and never came back keeps its reservation; a chosen leave frees the seat.
+    if (!this.dropped.delete(client.sessionId)) this.table.leave(client.sessionId)
     this.tokens.delete(client.sessionId)
     this.watchEmpty()
   }

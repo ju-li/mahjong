@@ -8,7 +8,7 @@ import type { MatchSource } from '../game/source'
 import { useI18n } from '../i18n/useI18n'
 
 /** The table and the end-of-hand dialog for one match, local or online. */
-const props = defineProps<{ source: MatchSource; newMatchLabel?: string }>()
+const props = defineProps<{ source: MatchSource }>()
 defineEmits<{ newMatch: []; explain: [fanId: string] }>()
 
 const { t } = useI18n()
@@ -55,9 +55,10 @@ const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value +
     :match-over="source.matchOver.value || handIndex === HANDS_PER_MATCH - 1"
     :final-scores="seatTotals"
     :waiting="source.waiting?.value"
-    :new-match-label="newMatchLabel"
     @next="source.continueToNextHand()"
     @new-match="$emit('newMatch')"
     @explain="(id: string) => $emit('explain', id)"
-  />
+  >
+    <template v-if="$slots.matchEnd" #matchEnd><slot name="matchEnd" /></template>
+  </HandResult>
 </template>

@@ -48,6 +48,13 @@ async function joinTable(code: string) {
 function leaveTable() {
   if (snapshot.value?.phase === 'lobby' || window.confirm(t('lobby.confirmLeave'))) void online.leave()
 }
+const pausedBy = computed(() => online.source.pausedBy?.value ?? null)
+/** Pausing makes sense while a hand is being played. */
+const canPause = computed(() => snapshot.value?.phase === 'playing' && !pausedBy.value && view.value?.phase.kind !== 'ended' && view.value !== null)
+const hostName = computed(() => {
+  const s = snapshot.value
+  return s ? (s.players[s.host]?.name ?? '') : ''
+})
 /** End of an online match: the host takes everyone back to the lobby; others may leave. */
 function onlineMatchDone() {
   if (isHost.value) online.restart()
@@ -65,7 +72,7 @@ onMounted(() => {
     const rest = params.toString()
     history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`)
   } else {
-    void online.resume()
+    void online.rejoin()
   }
 })
 
@@ -187,6 +194,7 @@ async function loadLatest() {
         <button class="action action--quiet-light" @click="rulesOpen = true">{{ t('app.howToPlay') }}</button>
         <button class="action action--quiet-light" @click="fanList = ''">{{ t('app.fanReference') }}</button>
         <template v-if="atTable">
+          <button v-if="canPause" class="action action--quiet-light" @click="online.pause">{{ t('online.pause') }}</button>
           <button class="action" @click="leaveTable">{{ t('lobby.leave') }}</button>
         </template>
         <template v-else>
@@ -210,11 +218,32 @@ async function loadLatest() {
       v-else-if="atTable"
       :key="`online:${snapshot!.code}`"
       :source="online.source"
-      :new-match-label="isHost ? t('online.backToLobby') : t('online.leaveMatch')"
       @new-match="onlineMatchDone"
       @explain="(id: string) => (fanList = id)"
-    />
+    >
+      <template #matchEnd>
+        <div v-if="isHost" class="summary__choices">
+          <button class="action action--primary summary__continue" autofocus @click="online.rematch">{{ t('online.keepGoing') }}</button>
+          <button class="action summary__continue" @click="online.restart">{{ t('online.backToLobby') }}</button>
+        </div>
+        <template v-else>
+          <p class="result__note">{{ t('online.waitingHostChoice', { name: hostName }) }}</p>
+          <button class="action summary__continue" @click="leaveTable">{{ t('online.leaveMatch') }}</button>
+        </template>
+      </template>
+    </MatchScreen>
+
     <MatchScreen v-else :source="solo" @new-match="startNewMatch()" @explain="(id: string) => (fanList = id)" />
+
+    <!-- A break: everyone at the online table sees this until someone resumes. -->
+    <div v-if="pausedBy" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <div class="result__card pause">
+        <h2 id="pause-title">{{ t('pause.title') }}</h2>
+        <p>{{ t('pause.by', { name: pausedBy }) }}</p>
+        <p class="result__note">{{ t('pause.hint') }}</p>
+        <button class="action action--primary" autofocus @click="online.resume">{{ t('pause.resume') }}</button>
+      </div>
+    </div>
 
     <RulesReference v-if="rulesOpen" :rules="shownRules" @close="rulesOpen = false" @fans="rulesOpen = false; fanList = ''" />
     <FanReference v-if="fanList !== null" :focus="fanList || null" :rules="shownRules" @close="fanList = null" />

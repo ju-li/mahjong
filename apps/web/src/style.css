@@ -2107,3 +2107,26 @@ body {
 .lobby__waiting {
   text-align: center;
 }
+
+.summary__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.summary__choices .action {
+  flex: 1 1 160px;
+}
+
+.pause {
+  text-align: center;
+  width: min(380px, 100%);
+}
+
+.pause p {
+  margin: 0;
+}
+
+.pause .action {
+  align-self: center;
+}

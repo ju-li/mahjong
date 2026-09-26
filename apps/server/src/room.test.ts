@@ -42,11 +42,13 @@ describe('TableRoom', () => {
     expect(snap.players.map((p) => p.name)).toEqual(['Ann', 'Bo', null, null])
     expect(snap.match!.view!.hand.length).toBeGreaterThanOrEqual(13)
 
-    // Strangers can't join a match under way, but a seat's token gets its owner back in.
-    await expect(colyseus.sdk.joinById(host.roomId, { name: 'Cy' })).rejects.toThrow()
+    // Friends can hop in mid-match, taking over a bot; a seat's token gets its owner back in.
+    const cy = await colyseus.sdk.joinById(host.roomId, { name: 'Cy' })
+    expect((await next(cy)).you).toBe(2)
+    await cy.leave()
     const token = snap.token
     await friend.leave()
-    const back = await colyseus.sdk.joinById(host.roomId, { token })
+    const back = await colyseus.sdk.joinById(host.roomId, { name: 'Bo', token })
     const again = await next(back)
     expect(again.you).toBe(1)
     expect(again.players[1]).toEqual({ name: 'Bo', connected: true })

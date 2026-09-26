@@ -14,7 +14,7 @@ export type OnlineClaimSeconds = (typeof ONLINE_CLAIM_SECONDS)[number]
 /** Options for `client.create` / `client.joinById`. */
 export type JoinOptions = {
   name?: string
-  /** Seat token from an earlier join: reclaims that seat, even mid-match. */
+  /** Seat token from an earlier join: reclaims that seat (or the one you last left), even mid-match. */
   token?: string
 }
 
@@ -51,6 +51,10 @@ export type MatchInfo = {
   claimMs: number | null
   /** Per player: has asked for the next hand. */
   ready: boolean[]
+  /** The last hand has been scored: the host chooses to keep going or go back to the lobby. */
+  final: boolean
+  /** Who paused play, or null while it runs. While paused nothing moves and no timer runs. */
+  paused: Player | null
 }
 
 /** Server → client, message type `snapshot`: everything one player may see. */
@@ -74,6 +78,12 @@ export type ClientMessages = {
   rename: { name: string }
   configure: Partial<TableSettings>
   start: Record<string, never>
-  /** Host, after the match ends: back to the lobby with the same people. */
+  /** Host, after the last hand: back to the lobby with the same people. */
   restart: Record<string, never>
+  /** Host, after the last hand: another match straight away, same people and settings. */
+  rematch: Record<string, never>
+  /** Anyone at the table: stop play for a break. */
+  pause: Record<string, never>
+  /** Anyone at the table: carry on. */
+  resume: Record<string, never>
 }
