@@ -2164,11 +2164,6 @@ body {
   font-size: var(--fs-sm);
 }
 
-.online__error--banner {
-  max-width: 520px;
-  margin: 12px auto 0;
-}
-
 .lobby {
   text-align: center;
   max-height: none;
