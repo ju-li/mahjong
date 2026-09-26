@@ -98,10 +98,29 @@
   box-sizing: border-box;
 }
 
+:root {
+  /* iOS Safari otherwise enlarges text on rotation to landscape. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   min-height: 100vh;
+}
+
+/*
+ * Keep the page exactly as wide as the screen. iOS Safari widens the whole page to fit anything
+ * that pokes out sideways, which shoves the top bar's buttons off screen and, because tile sizes
+ * follow the viewport width, makes the tiles grow and poke out further. Clipping here (on the
+ * mount element, so it doesn't propagate to the viewport) stops that at the source.
+ * Double-tap zoom is off too: tapping tiles in quick succession otherwise zooms the table in.
+ */
+#app {
+  overflow-x: hidden;
+  overflow-x: clip;
+  touch-action: manipulation;
 }
 
 .app {
