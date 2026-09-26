@@ -58,8 +58,10 @@ export type MatchInfo = {
   legal: Action[]
   /** Milliseconds left to answer the current claim, or null when no timer runs for you. */
   claimMs: number | null
-  /** Per player: has asked for the next hand. */
+  /** Per player: has said they are ready for the next hand. */
   ready: boolean[]
+  /** Between hands, every human at the table is ready: the host may deal the next one. */
+  allReady: boolean
   /** The last hand has been scored: the host chooses to keep going or go back to the lobby. */
   final: boolean
   /** Who paused play, or null while it runs. While paused nothing moves and no timer runs. */
@@ -95,7 +97,12 @@ export type VoiceMemo = VoiceClip & { from: Player }
 /** Client → server messages. */
 export type ClientMessages = {
   act: { step: number; action: Action }
+  /** Between hands: ready for the next one. */
   ready: Record<string, never>
+  /** Between hands: take back your ready. */
+  unready: Record<string, never>
+  /** Host, once everyone is ready: deal the next hand. */
+  deal: Record<string, never>
   /** Change your name and/or avatar. */
   profile: { name?: string; avatar?: number }
   configure: Partial<TableSettings>

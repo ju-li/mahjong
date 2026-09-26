@@ -75,16 +75,25 @@ function setup(names: string[]) {
   return { env, table, clients, sent, snap }
 }
 
-/** Every connected client plays like a bot and readies up between hands. */
+/** Every connected client plays like a bot and readies up between hands; the host then deals. */
 function autoplay(table: Table, clients: string[], snap: (c: string) => Snapshot) {
   for (const c of clients) {
     const m = snap(c)?.match
     if (!m?.view) continue
     if (m.view.phase.kind === 'ended') {
       if (!m.ready[snap(c).you]) table.readyUp(c)
+      else if (snap(c).match!.allReady && snap(c).host === snap(c).you) table.deal(c)
     } else if (m.legal.length > 0) {
       table.act(c, { step: m.step, action: chooseAction({ view: m.view, legal: m.legal, difficulty: 'easy', seed: m.step }) })
     }
+  }
+}
+
+/** Everyone plays until the hand in play has been scored. */
+function playHand(env: FakeEnv, table: Table, clients: string[], snap: (c: string) => Snapshot) {
+  for (let i = 0; i < 100_000 && snap('c0').match!.view?.phase.kind !== 'ended'; i++) {
+    autoplay(table, clients, snap)
+    if (snap('c0').match!.view?.phase.kind !== 'ended') env.advance(500)
   }
 }
 
@@ -242,45 +251,48 @@ describe('play', () => {
     expect(state(table)).not.toBe(before)
   })
 
-  it('waits for every connected human to be ready before dealing the next hand', () => {
+  it('deals the next hand only when the host says so, once every connected human is ready', () => {
     const { env, table, clients, snap } = setup(['Ann', 'Bo', 'Cy'])
     table.start('c0')
-    for (let i = 0; i < 100_000 && snap('c0').match!.view?.phase.kind !== 'ended'; i++) {
-      for (const c of clients) {
-        const m = snap(c).match!
-        if (m.view?.phase.kind !== 'ended' && m.legal.length > 0)
-          table.act(c, { step: m.step, action: chooseAction({ view: m.view!, legal: m.legal, difficulty: 'easy', seed: m.step }) })
-      }
-      if (snap('c0').match!.view?.phase.kind !== 'ended') env.advance(500)
-    }
-    expect(snap('c0').match!.handIndex).toBe(0)
+    playHand(env, table, clients, snap)
+    const m = () => snap('c0').match!
+    expect(m().ready).toEqual([false, false, false, false])
+    expect(m().allReady).toBe(false)
     table.readyUp('c0')
     table.readyUp('c1')
+    table.deal('c0') // Cy isn't ready
     // However long Cy lingers over the summary, the table waits for them.
     env.advance(3_600_000)
-    expect(snap('c0').match!.view!.phase.kind).toBe('ended')
-    expect(snap('c0').match!.ready).toEqual([true, true, false, false])
-    // A human who drops is no longer waited for; a bot covers their seat.
-    table.drop('c2')
-    expect(snap('c0').match!.handIndex).toBe(1)
-    expect(snap('c0').match!.view!.phase.kind).not.toBe('ended')
+    expect(m().handIndex).toBe(0)
+    expect(m().ready).toEqual([true, true, false, false])
+    // Bo changes their mind, then everyone is ready.
+    table.unready('c1')
+    expect(m().ready).toEqual([true, false, false, false])
+    table.readyUp('c1')
+    table.readyUp('c2')
+    expect(m().allReady).toBe(true)
+    env.advance(600_000)
+    expect(m().handIndex).toBe(0) // still up to the host
+    table.deal('c1') // not the host
+    expect(m().handIndex).toBe(0)
+    table.deal('c0')
+    expect(m().handIndex).toBe(1)
+    expect(m().view!.phase.kind).not.toBe('ended')
+    expect(m().ready).toEqual([false, false, false, false])
+    // Ready only means something between hands.
+    table.readyUp('c1')
+    expect(m().ready[1]).toBe(false)
   })
 
-  it('deals the next hand as soon as the last human readies up', () => {
+  it('stops waiting for a human who drops', () => {
     const { env, table, clients, snap } = setup(['Ann', 'Bo'])
     table.start('c0')
-    for (let i = 0; i < 100_000 && snap('c0').match!.view?.phase.kind !== 'ended'; i++) {
-      for (const c of clients) {
-        const m = snap(c).match!
-        if (m.view?.phase.kind !== 'ended' && m.legal.length > 0)
-          table.act(c, { step: m.step, action: chooseAction({ view: m.view!, legal: m.legal, difficulty: 'easy', seed: m.step }) })
-      }
-      if (snap('c0').match!.view?.phase.kind !== 'ended') env.advance(500)
-    }
-    table.readyUp('c1')
-    env.advance(600_000)
-    expect(snap('c0').match!.handIndex).toBe(0)
+    playHand(env, table, clients, snap)
     table.readyUp('c0')
+    expect(snap('c0').match!.allReady).toBe(false)
+    table.drop('c1')
+    expect(snap('c0').match!.allReady).toBe(true)
+    table.deal('c0')
     expect(snap('c0').match!.handIndex).toBe(1)
   })
 

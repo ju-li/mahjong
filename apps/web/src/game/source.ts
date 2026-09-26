@@ -26,12 +26,29 @@ export type MatchSource = {
   /** Seconds left to claim, or null when no timer is running. */
   claimRemaining: Readonly<Ref<number | null>>
   matchOver: Readonly<Ref<boolean>>
-  /** You asked for the next hand and others haven't yet (online only). */
-  waiting?: Readonly<Ref<boolean>>
+  /** Between hands online: who is ready and what your button does; null otherwise (online only). */
+  readiness?: Readonly<Ref<Readiness | null>>
   /** Who paused play, by display name; null while it runs (online only). */
   pausedBy?: Readonly<Ref<string | null>>
   /** Player whose voice memo is playing right now (online only). */
   speaking?: Readonly<Ref<Player | null>>
   act(action: Action): void
+  /** Offline: deal the next hand. Online: say you are ready for it. */
   continueToNextHand(): void
+  /** Take back your ready (online only). */
+  unready?(): void
+  /** Host, once everyone is ready: deal the next hand (online only). */
+  deal?(): void
+}
+
+/**
+ * Your button between online hands: `ready` → `notReady` (take it back) for everyone; the host
+ * instead sees `waiting` until every human is ready, then `start`.
+ */
+export type ReadyButton = 'ready' | 'notReady' | 'waiting' | 'start'
+
+export type Readiness = {
+  /** Per player: ready for the next hand. Bots and players who are away never hold the table up. */
+  ready: boolean[]
+  button: ReadyButton
 }
