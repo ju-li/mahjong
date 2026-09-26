@@ -737,8 +737,29 @@ body {
   flex-wrap: nowrap;
   align-items: flex-end;
   gap: 2px;
+  min-width: 0;
   max-width: 100%;
-  padding-top: 10px;
+  /* A long hand (several kongs, big text) scrolls sideways instead of running off the screen.
+     The padding keeps a raised tile, its shadow and its focus ring inside the scroll box. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding: calc(var(--tile-w) * 0.26) 4px calc(var(--tile-w) * 0.3);
+  margin: calc(10px - var(--tile-w) * 0.26) 0 calc(var(--tile-w) * -0.3);
+}
+
+.hand::-webkit-scrollbar {
+  display: none;
+}
+
+.hand.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.hand.is-dragging .tile {
+  cursor: grabbing;
 }
 
 .hand__gap {
