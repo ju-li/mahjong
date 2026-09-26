@@ -13,7 +13,7 @@ export const MAX_VOICE_MS = 15_000
 export const MAX_VOICE_BYTES = 256 * 1024
 
 /** Claim timer choices for online tables. Unlike solo play there is no "off": one idle player would stall everyone. */
-export const ONLINE_CLAIM_SECONDS = [5, 10, 20] as const
+export const ONLINE_CLAIM_SECONDS = [20, 40, 60, 120] as const
 export type OnlineClaimSeconds = (typeof ONLINE_CLAIM_SECONDS)[number]
 
 /** Options for `client.create` / `client.joinById`. */

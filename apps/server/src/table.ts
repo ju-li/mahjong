@@ -98,7 +98,7 @@ export function cleanAvatar(raw: unknown, fallback: number | null): number | nul
 export class Table {
   readonly code: string
   phase: 'lobby' | 'playing' = 'lobby'
-  settings: TableSettings = { rules: 'mcr', difficulty: 'medium', claimSeconds: 10 }
+  settings: TableSettings = { rules: 'mcr', difficulty: 'medium', claimSeconds: 40 }
   private slots: Slot[] = PLAYERS.map(() => emptySlot())
   private host: Player = 0
   private match: Match | null = null
