@@ -13,8 +13,11 @@ const emit = defineEmits<{ configure: [settings: Partial<TableSettings>]; start:
 
 const { t } = useI18n()
 
-/** Invite links point at the public domain (a build variable) so they work wherever the host is playing from. */
-const SHARE_BASE = import.meta.env.VITE_SHARE_URL || `${location.origin}${location.pathname}`
+/** Invite links point at the public domain (`PUBLIC_DOMAIN` at build time) so they work wherever the host is playing from. */
+const PUBLIC_DOMAIN: string | undefined = import.meta.env.VITE_PUBLIC_DOMAIN
+const SHARE_BASE = PUBLIC_DOMAIN
+  ? /^https?:\/\//.test(PUBLIC_DOMAIN) ? PUBLIC_DOMAIN : `https://${PUBLIC_DOMAIN}`
+  : `${location.origin}${location.pathname}`
 const link = computed(() => {
   const url = new URL(SHARE_BASE)
   url.searchParams.set('room', props.snapshot.code)
