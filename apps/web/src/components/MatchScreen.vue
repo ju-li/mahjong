@@ -29,6 +29,11 @@ const playerAvatars = computed(() =>
   avatarSeeds(props.source.matchSeed.value).map((seed, p) => avatarSvg(props.source.avatarChoices.value[p] ?? seed)),
 )
 const seatAvatars = computed(() => seatPlayers.value.map((p) => playerAvatars.value[p]!))
+/** Online, between hands: who is ready, in seat order. */
+const seatReady = computed(() => {
+  const r = props.source.readiness?.value
+  return r ? seatPlayers.value.map((p) => r.ready[p]!) : undefined
+})
 const handIndex = computed(() => props.source.handIndex.value)
 /** Seat whose player is talking (a voice memo is playing), if any. */
 const speakingSeat = computed(() => {
@@ -63,8 +68,11 @@ const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value +
     :avatars="seatAvatars"
     :match-over="source.matchOver.value || handIndex === HANDS_PER_MATCH - 1"
     :final-scores="seatTotals"
-    :waiting="source.waiting?.value"
+    :ready="seatReady"
+    :ready-button="source.readiness?.value?.button"
     @next="source.continueToNextHand()"
+    @unready="source.unready?.()"
+    @deal="source.deal?.()"
     @new-match="$emit('newMatch')"
     @explain="(id: string) => $emit('explain', id)"
   >

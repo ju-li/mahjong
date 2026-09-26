@@ -204,6 +204,11 @@ export const en = {
 
   'player.away': '{name} (away)',
   'result.waiting': 'Waiting for the others…',
+  'result.ready': 'Ready',
+  'result.notReady': 'Not ready',
+  'result.start': 'Start',
+  'result.status.ready': 'Ready',
+  'result.status.notReady': 'Not ready',
   'online.open': 'Play with friends',
   'online.title': 'Play with friends',
   'online.intro': 'Host a table and share its code, or enter the code a friend sent you. Bots fill any empty seats.',
@@ -464,6 +469,11 @@ export const zhHans: Record<MessageKey, string> = {
 
   'player.away': '{name}（离开）',
   'result.waiting': '等待其他玩家…',
+  'result.ready': '准备',
+  'result.notReady': '取消准备',
+  'result.start': '开始',
+  'result.status.ready': '已准备',
+  'result.status.notReady': '未准备',
   'online.open': '和朋友一起玩',
   'online.title': '和朋友一起玩',
   'online.intro': '开一桌并分享桌号，或输入朋友发给你的桌号。空位由电脑补上。',

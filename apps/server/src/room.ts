@@ -42,6 +42,8 @@ export class TableRoom extends Room {
     )
     this.onMessage('act', (client, message) => this.table.act(client.sessionId, message))
     this.onMessage('ready', (client) => this.table.readyUp(client.sessionId))
+    this.onMessage('unready', (client) => this.table.unready(client.sessionId))
+    this.onMessage('deal', (client) => this.table.deal(client.sessionId))
     this.onMessage('profile', (client, message) => this.table.profile(client.sessionId, message))
     this.onMessage('configure', (client, message) => this.table.configure(client.sessionId, message))
     this.onMessage('start', (client) => this.table.start(client.sessionId))

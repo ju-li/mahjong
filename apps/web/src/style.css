@@ -1586,6 +1586,22 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.summary__ready {
+  grid-column: 2;
+  justify-self: start;
+  margin-top: 2px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  color: var(--felt-muted);
+  background: rgb(255 255 255 / 0.08);
+}
+
+.summary__ready.is-ready {
+  color: #b9f5c9;
+  background: rgb(120 220 150 / 0.16);
+}
+
 .summary__standings {
   display: grid;
   gap: 4px;
@@ -1622,6 +1638,20 @@ body {
 .summary .summary__continue:active {
   transform: translateY(2px);
   box-shadow: 0 2px 0 #5f7a0c, 0 4px 10px rgb(0 0 0 / 0.4);
+}
+
+/* Online, once you are ready: taking it back, or (host) waiting on the others. */
+.summary .summary__continue.is-quiet {
+  border-color: rgb(255 255 255 / 0.4);
+  color: #fff;
+  background: linear-gradient(#8b9995, #56635f);
+  box-shadow: 0 4px 0 #3a4441, 0 8px 18px rgb(0 0 0 / 0.4);
+}
+
+.summary .summary__continue:disabled {
+  cursor: default;
+  transform: none;
+  opacity: 0.85;
 }
 
 @media (max-width: 640px) {

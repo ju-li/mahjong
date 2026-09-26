@@ -323,12 +323,38 @@ export class Table {
     this.commit(chosen)
   }
 
-  /** Ready for the next hand. Deals only once every connected human is ready; there is no timeout. */
+  /** Between hands: a player says they are ready for the next one. */
   readyUp(client: string): void {
+    this.setReady(client, true)
+  }
+
+  /** Between hands: a player takes back their ready. */
+  unready(client: string): void {
+    this.setReady(client, false)
+  }
+
+  private setReady(client: string, ready: boolean): void {
     const p = this.playerOf(client)
-    if (p === null || this.match?.current?.phase.kind !== 'ended' || this.finished()) return
-    this.ready.add(p)
+    if (p === null || !this.betweenHands()) return
+    if (ready) this.ready.add(p)
+    else this.ready.delete(p)
     this.changed()
+  }
+
+  /** Host, once every human at the table is ready: deal the next hand. Nothing deals it otherwise. */
+  deal(client: string): void {
+    if (this.playerOf(client) !== this.host || !this.betweenHands() || this.pausedBy !== null || !this.allReady()) return
+    this.dealNext()
+  }
+
+  /** A hand has been scored and another is still to come. */
+  private betweenHands(): boolean {
+    return this.phase === 'playing' && this.match?.current?.phase.kind === 'ended' && !this.finished()
+  }
+
+  /** Every human at the table is ready; seats of those who dropped are bots' and aren't waited for. */
+  private allReady(): boolean {
+    return this.humans().every((p) => !this.connected(p) || this.ready.has(p))
   }
 
   private commit(action: Action): void {
@@ -370,11 +396,7 @@ export class Table {
     if (s.phase.kind === 'ended') {
       this.claimTimer?.clear()
       this.claimKey = this.claimDeadline = this.claimTimer = null
-      // The last hand's summary stays up until the host picks what's next.
-      if (this.finished()) return
-      // The next hand waits for every human at the table; seats of those who dropped are bots'.
-      const waiting = this.humans().filter((p) => this.connected(p) && !this.ready.has(p))
-      if (waiting.length === 0) this.dealNext()
+      // The summary stays up until the host deals the next hand (see `deal`) or, after the last, picks what's next.
       return
     }
 
@@ -565,6 +587,7 @@ export class Table {
       legal,
       claimMs: claiming ? claimMs : null,
       ready: PLAYERS.map((p) => this.ready.has(p)),
+      allReady: this.betweenHands() && this.allReady(),
       final: this.finished(),
       paused: this.pausedBy,
     }

@@ -5,6 +5,7 @@ import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
 import ScoreExplain from './ScoreExplain.vue'
 import TileFace from './TileFace.vue'
+import type { ReadyButton } from '../game/source'
 
 const props = defineProps<{
   result: HandResult
@@ -13,11 +14,13 @@ const props = defineProps<{
   avatars: string[]
   matchOver: boolean
   finalScores: number[]
-  /** Asked for the next hand; others still reading (online). */
-  waiting?: boolean
+  /** Online, between hands: who is ready, in seat order. */
+  ready?: boolean[]
+  /** Online, between hands: what your button does. Offline it just continues. */
+  readyButton?: ReadyButton
 }>()
 
-defineEmits<{ next: []; newMatch: []; explain: [fanId: string] }>()
+const emit = defineEmits<{ next: []; unready: []; deal: []; newMatch: []; explain: [fanId: string] }>()
 
 const { t, fanName } = useI18n()
 
@@ -79,6 +82,27 @@ const players = computed(() =>
 
 const standings = computed(() => [...players.value].sort((a, b) => b.total - a.total))
 
+const buttonLabel = computed(() => {
+  switch (props.readyButton) {
+    case 'ready':
+      return t('result.ready')
+    case 'notReady':
+      return t('result.notReady')
+    case 'waiting':
+      return t('result.waiting')
+    case 'start':
+      return t('result.start')
+    default:
+      return t('result.continue')
+  }
+})
+
+function press() {
+  if (props.readyButton === 'notReady') emit('unready')
+  else if (props.readyButton === 'start') emit('deal')
+  else emit('next')
+}
+
 const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
 </script>
 
@@ -138,6 +162,9 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
             <span class="summary__name">{{ p.name }}</span>
             <strong class="summary__delta" :class="{ pos: p.delta > 0, neg: p.delta < 0 }">{{ signed(p.delta) }}</strong>
             <span class="summary__running">{{ t('result.runningTotal', { n: p.total }) }}</span>
+            <span v-if="ready" class="summary__ready" :class="{ 'is-ready': ready[p.seat] }">
+              {{ ready[p.seat] ? t('result.status.ready') : t('result.status.notReady') }}
+            </span>
           </button>
         </li>
       </ul>
@@ -154,8 +181,15 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
           <button class="action action--primary summary__continue" @click="$emit('newMatch')">{{ t('result.newMatch') }}</button>
         </slot>
       </template>
-      <button v-else class="action action--primary summary__continue" autofocus :disabled="waiting" @click="$emit('next')">
-        {{ waiting ? t('result.waiting') : t('result.continue') }}
+      <button
+        v-else
+        class="action action--primary summary__continue"
+        :class="{ 'is-quiet': readyButton === 'notReady' || readyButton === 'waiting' }"
+        autofocus
+        :disabled="readyButton === 'waiting'"
+        @click="press"
+      >
+        {{ buttonLabel }}
       </button>
     </div>
 
