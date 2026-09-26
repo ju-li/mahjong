@@ -1,10 +1,12 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { Client, type Room } from '@colyseus/sdk'
 import type { Action } from '@mahjong/engine'
-import { ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type TableSettings } from '@mahjong/protocol'
+import { ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
+import { useSettings } from './settings'
 import type { MatchSource } from './source'
 import { useTableAudio } from './tableAudio'
+import { useVoicePlayer } from './voiceChat'
 
 /** Game server address: set at build time for deploys; the local dev server otherwise. */
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname}:2567`
@@ -54,6 +56,9 @@ export function useOnline() {
   const error = ref<OnlineError | null>(null)
   const name = ref(read(() => localStorage, NAME_KEY) ?? '')
   watch(name, (value) => write(() => localStorage, NAME_KEY, value.trim() || null))
+  const { voiceChat } = useSettings()
+  const voicePlayer = useVoicePlayer()
+  watch(voiceChat, (on) => on || voicePlayer.clear())
 
   function attach(r: Room): void {
     room = r
@@ -61,6 +66,9 @@ export function useOnline() {
       snapshot.value = s
       write(() => localStorage, TOKEN_KEY(s.code), s.token)
       write(() => sessionStorage, CURRENT_KEY, s.code)
+    })
+    r.onMessage('voice', (memo: VoiceMemo) => {
+      if (room === r && voiceChat.value) voicePlayer.enqueue(memo)
     })
     r.onLeave(() => {
       if (room !== r) return // we left on purpose
@@ -71,6 +79,7 @@ export function useOnline() {
       void join(code).then((ok) => {
         if (ok) return
         snapshot.value = null
+        voicePlayer.clear()
         write(() => sessionStorage, CURRENT_KEY, null)
         error.value = 'lost'
       })
@@ -105,6 +114,7 @@ export function useOnline() {
     const r = room
     room = null
     snapshot.value = null
+    voicePlayer.clear()
     error.value = null
     write(() => sessionStorage, CURRENT_KEY, null)
     await r?.leave().catch(() => {})
@@ -174,6 +184,7 @@ export function useOnline() {
     matchOver: computed(() => match.value?.over ?? false),
     waiting: computed(() => !!match.value?.ready[me.value]),
     pausedBy: computed(() => (paused.value === null ? null : (playerNames.value[paused.value] ?? null))),
+    speaking: voicePlayer.speaking,
     act(action: Action) {
       const m = match.value
       if (m) send('act', { step: m.step, action })
@@ -201,5 +212,9 @@ export function useOnline() {
     pause: () => send('pause', {}),
     resume: () => send('resume', {}),
     rename: () => send('rename', { name: name.value }),
+    sendVoice: (clip: VoiceClip) => send('voice', clip),
+    /** Player whose voice memo is playing, if any. */
+    speaking: voicePlayer.speaking,
+    playerNames,
   }
 }

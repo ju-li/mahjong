@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { boot, type ColyseusTestServer } from '@colyseus/testing'
 import type { Room } from '@colyseus/sdk'
-import { ROOM_NAME, type Snapshot } from '@mahjong/protocol'
+import { ROOM_NAME, type Snapshot, type VoiceMemo } from '@mahjong/protocol'
 import { server } from './main'
 
 let colyseus: ColyseusTestServer
@@ -61,6 +61,30 @@ describe('TableRoom', () => {
     const others = [await colyseus.sdk.joinById(host.roomId, {}), await colyseus.sdk.joinById(host.roomId, {}), await colyseus.sdk.joinById(host.roomId, {})]
     await expect(colyseus.sdk.joinById(host.roomId, {})).rejects.toThrow()
     for (const r of [host, ...others]) await r.leave()
+  })
+
+  it('passes a voice memo on to everyone else at the table', async () => {
+    const host = await colyseus.sdk.create(ROOM_NAME, { name: 'Ann' })
+    await next(host)
+    const friend = await colyseus.sdk.joinById(host.roomId, { name: 'Bo' })
+    await next(friend)
+    const echoed: VoiceMemo[] = []
+    host.onMessage('voice', (m: VoiceMemo) => echoed.push(m))
+    const heard = new Promise<VoiceMemo>((resolve) => friend.onMessage('voice', resolve))
+    // Well past the transport's default 4 KB message cap.
+    const data = Uint8Array.from({ length: 50_000 }, (_, i) => i % 251)
+    host.send('voice', { mime: 'audio/webm;codecs=opus', ms: 3000, data })
+    const memo = await heard
+    expect(memo.from).toBe(0)
+    expect(memo.mime).toBe('audio/webm;codecs=opus')
+    expect(new Uint8Array(memo.data)).toEqual(data)
+    // A snapshot round trip later, the sender still has heard nothing back.
+    const renamed = next(host, (s) => s.players[0]?.name === 'Annie')
+    host.send('rename', { name: 'Annie' })
+    await renamed
+    expect(echoed).toEqual([])
+    await friend.leave()
+    await host.leave()
   })
 
   it('answers health checks', async () => {

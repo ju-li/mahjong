@@ -1,11 +1,12 @@
 import { createEndpoint, createRouter, defineRoom, defineServer } from '@colyseus/core'
 import { WebSocketTransport } from '@colyseus/ws-transport'
-import { ROOM_NAME } from '@mahjong/protocol'
+import { MAX_VOICE_BYTES, ROOM_NAME } from '@mahjong/protocol'
 import { TableRoom } from './room'
 
 export const server = defineServer({
   greet: false,
-  transport: new WebSocketTransport(),
+  // The transport's default 4 KB message cap would drop every voice memo.
+  transport: new WebSocketTransport({ maxPayload: MAX_VOICE_BYTES + 16 * 1024 }),
   rooms: { [ROOM_NAME]: defineRoom(TableRoom) },
   routes: createRouter({
     health: createEndpoint('/health', { method: 'GET' }, async () => ({ ok: true })),

@@ -19,7 +19,8 @@ export function soundFor(prev: GameState | PlayerView | null, next: GameState | 
 
 let ctx: AudioContext | null = null
 
-function audio(): AudioContext | null {
+/** The app's one audio context, woken if the browser suspended it; null where Web Audio is missing. */
+export function audio(): AudioContext | null {
   try {
     ctx ??= new AudioContext()
     if (ctx.state === 'suspended') void ctx.resume()
