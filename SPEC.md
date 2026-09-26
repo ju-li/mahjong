@@ -60,7 +60,7 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - ui: pause (top bar) in solo & online: bots & claim timer wait; claim countdown resumes where it stopped; moves ignored while paused.
 - ui: claim timer (default 10 s, setting incl off) → auto-pass. keyboard play for every human action. tile animations & sound (toggle; respect `prefers-reduced-motion`).
 - pwa: web app manifest + service worker; installable; plays offline after first load.
-- deploy: `apps/web/Dockerfile` (repo-root context, Caddy serves `dist` on `$PORT`; build arg `VITE_SERVER_URL` = game server `wss://` URL). Railway service `web` configured manually in dashboard; ⊥ Config as Code, ⊥ IaC.
+- deploy: `apps/web/Dockerfile` (repo-root context, Caddy serves `dist` on `$PORT`; build arg `VITE_SERVER_URL` = game server `wss://` URL, `VITE_SHARE_URL` = public web domain for invite links). Railway service `web` configured manually in dashboard; ⊥ Config as Code, ⊥ IaC.
 - deploy: `apps/server/Dockerfile` (repo-root context, `node server.mjs` on `$PORT`, `GET /health`). Railway service `server` configured manually, own public domain.
 - cmd: root `pnpm dev:server` → server on :2567 (tsx watch); web dev defaults to `ws://<host>:2567`. `pnpm build:server` → `apps/server/dist/server.mjs`.
 - net: room = Colyseus room `table`, `roomId` = code: 4 letters from `ABCDEFGHJKLMNPQRSTUVWXYZ`, rude words skipped. `client.create('table', {name})` / `client.joinById(code, {name, token})`.
@@ -69,7 +69,7 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - net: hop in / hop out: anyone with the code may join anytime, lobby or mid-match, taking a bot's seat (and its score); ≤ 4 humans. chosen leave → seat freed for a bot / newcomer; leaver's token gets it back while still free. dropped connection → bot covers, seat reserved 2 min for its token, then takeable. seat `token` in localStorage per code. room closes after 5 min with no human connected. idle human: claim timer auto-passes; own turn → bot move after 60 s.
 - net: pause: any seated player pauses / resumes during a match. paused ⇒ no bot moves, no timers (claim countdown resumes from where it stopped), `act` rejected.
 - net: last hand scored ⇒ summary stays (no auto-deal); host picks Keep going (`rematch`) or Back to lobby (`restart`); others wait or leave.
-- ui: top bar "Play with friends" → dialog (name, Host a table / code + Join). invite link `?room=CODE` opens it prefilled. lobby: big code, Share invite (Web Share → clipboard), seats, host picks rules/bots/timer, Start. solo match paused while at a table; reload rejoins (sessionStorage).
+- ui: top bar "Play with friends" → dialog (name, Host a table / code + Join). invite link `VITE_SHARE_URL?room=CODE` (else current page) opens it prefilled. lobby: big code, Share invite (Web Share → clipboard), seats, host picks rules/bots/timer, Start. solo match paused while at a table; reload rejoins (sessionStorage).
 
 ## §V INVARIANTS
 V1: engine src ⊥ ref to `window`, `document`, `self`, `navigator`, `fetch`, `Math.random`, `Date.now`, Node builtins.

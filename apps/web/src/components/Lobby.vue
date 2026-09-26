@@ -13,7 +13,13 @@ const emit = defineEmits<{ configure: [settings: Partial<TableSettings>]; start:
 
 const { t } = useI18n()
 
-const link = computed(() => `${location.origin}${location.pathname}?room=${props.snapshot.code}`)
+/** Invite links point at the public domain (a build variable) so they work wherever the host is playing from. */
+const SHARE_BASE = import.meta.env.VITE_SHARE_URL || `${location.origin}${location.pathname}`
+const link = computed(() => {
+  const url = new URL(SHARE_BASE)
+  url.searchParams.set('room', props.snapshot.code)
+  return url.href
+})
 const hostName = computed(() => props.snapshot.players[props.snapshot.host]?.name ?? '')
 const copied = ref(false)
 
