@@ -1,7 +1,7 @@
 {
-  "name": "Mahjong MCR",
-  "short_name": "Mahjong",
-  "description": "Chinese Official (MCR) mahjong against three bots.",
+  "name": "Mommy Mahjong",
+  "short_name": "Mommy Mahjong",
+  "description": "Play mahjong online with friends or against friendly bots. Chinese Official (MCR) and Hong Kong rules, right in your browser.",
   "lang": "en",
   "start_url": "/",
   "scope": "/",
