@@ -39,8 +39,6 @@ export const QUICK_DELAY_MS = 120
 export const CALL_PAUSE_MS = 700
 /** A human who sits on their turn this long gets a bot move made for them. */
 export const TURN_MS = 60_000
-/** The next hand deals once everyone is ready, or after this long. */
-export const NEXT_HAND_MS = 30_000
 /** A dropped player's seat is kept for them this long; after that anyone joining may take it over. */
 export const RESERVE_MS = 2 * 60_000
 
@@ -104,7 +102,6 @@ export class Table {
   private ready = new Set<Player>()
   private botTimer: Timer = null
   private turnTimer: Timer = null
-  private nextHandTimer: Timer = null
   /** The claim window the timer belongs to, so bot replies inside it don't restart the clock. */
   private claimKey: string | null = null
   private claimDeadline: number | null = null
@@ -314,7 +311,7 @@ export class Table {
     this.commit(chosen)
   }
 
-  /** Ready for the next hand. Deals once every connected human is ready. */
+  /** Ready for the next hand. Deals only once every connected human is ready; there is no timeout. */
   readyUp(client: string): void {
     const p = this.playerOf(client)
     if (p === null || this.match?.current?.phase.kind !== 'ended' || this.finished()) return
@@ -331,8 +328,8 @@ export class Table {
   }
 
   private stopTimers(): void {
-    for (const t of [this.botTimer, this.turnTimer, this.nextHandTimer, this.claimTimer]) t?.clear()
-    this.botTimer = this.turnTimer = this.nextHandTimer = this.claimTimer = null
+    for (const t of [this.botTimer, this.turnTimer, this.claimTimer]) t?.clear()
+    this.botTimer = this.turnTimer = this.claimTimer = null
     this.claimKey = this.claimDeadline = this.claimLeft = null
   }
 
@@ -362,22 +359,10 @@ export class Table {
       this.claimTimer?.clear()
       this.claimKey = this.claimDeadline = this.claimTimer = null
       // The last hand's summary stays up until the host picks what's next.
-      if (this.finished()) {
-        this.nextHandTimer?.clear()
-        this.nextHandTimer = null
-        return
-      }
+      if (this.finished()) return
+      // The next hand waits for every human at the table; seats of those who dropped are bots'.
       const waiting = this.humans().filter((p) => this.connected(p) && !this.ready.has(p))
-      if (waiting.length === 0) {
-        this.nextHandTimer?.clear()
-        this.nextHandTimer = null
-        this.dealNext()
-      } else {
-        this.nextHandTimer ??= this.env.setTimeout(() => {
-          this.nextHandTimer = null
-          if (this.match?.current?.phase.kind === 'ended') this.dealNext()
-        }, NEXT_HAND_MS)
-      }
+      if (waiting.length === 0) this.dealNext()
       return
     }
 
@@ -419,8 +404,6 @@ export class Table {
 
   /** Paused: stop every clock, remembering how long the current claim still had. */
   private freeze(): void {
-    this.nextHandTimer?.clear()
-    this.nextHandTimer = null
     if (this.claimTimer && this.claimDeadline !== null) {
       this.claimLeft = Math.max(0, this.claimDeadline - this.env.now())
       this.claimTimer.clear()
