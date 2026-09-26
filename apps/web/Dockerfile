@@ -20,6 +20,9 @@ COPY apps/web apps/web
 # Where browsers reach the game server, e.g. wss://mahjong-server.up.railway.app (a Railway build variable).
 ARG VITE_SERVER_URL
 ENV VITE_SERVER_URL=$VITE_SERVER_URL
+# Public domain invite links point at, e.g. mahjong.example.com (a Railway variable; defaults to the page's own address).
+ARG PUBLIC_DOMAIN
+ENV VITE_PUBLIC_DOMAIN=$PUBLIC_DOMAIN
 RUN pnpm --filter web build
 
 FROM caddy:2-alpine
