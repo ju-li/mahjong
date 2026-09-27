@@ -10,7 +10,7 @@ import { useI18n } from '../i18n/useI18n'
 
 /** The waiting room: the code to share, who has sat down, and the host's match settings. */
 const props = defineProps<{ snapshot: Snapshot; isHost: boolean }>()
-const emit = defineEmits<{ configure: [settings: Partial<TableSettings>]; start: []; editProfile: []; leave: [] }>()
+const emit = defineEmits<{ configure: [settings: Partial<TableSettings>]; start: []; editProfile: []; openPlayer: [player: number]; leave: [] }>()
 
 const { t } = useI18n()
 
@@ -44,9 +44,12 @@ function onRules(e: Event) {
           <span class="lobby__name">{{ p.name }}</span>
           <span class="lobby__edit">{{ t('lobby.edit') }}</span>
         </button>
-        <template v-else>
+        <button v-else-if="p.name !== null" type="button" class="lobby__me" :title="t('friends.viewPlayer', { name: p.name })" @click="emit('openPlayer', i)">
           <span v-if="p.avatar !== null" class="lobby__face" v-html="avatarSvg(p.avatar)" />
-          <span class="lobby__name">{{ p.name ?? t('lobby.emptySeat') }}</span>
+          <span class="lobby__name">{{ p.name }}</span>
+        </button>
+        <template v-else>
+          <span class="lobby__name">{{ t('lobby.emptySeat') }}</span>
         </template>
         <span v-if="i === snapshot.host" class="lobby__tag">{{ t('lobby.host') }}</span>
         <span v-if="i === snapshot.you" class="lobby__tag lobby__tag--you">{{ t('lobby.you') }}</span>

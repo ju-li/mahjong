@@ -1,22 +1,27 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { isRuleSet } from '@mahjong/engine'
 import type { Difficulty } from '@mahjong/bots'
 import FeedbackDialog from './components/FeedbackDialog.vue'
+import FriendsDialog from './components/FriendsDialog.vue'
 import Lobby from './components/Lobby.vue'
 import MatchScreen from './components/MatchScreen.vue'
 import Onboarding from './components/Onboarding.vue'
 import OnlineDialog from './components/OnlineDialog.vue'
+import PlayerCard from './components/PlayerCard.vue'
 import ProfileDialog from './components/ProfileDialog.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import VoiceButton from './components/VoiceButton.vue'
 import { loadLatestVersion } from './game/appUpdate'
+import { friendsCount, parseFriendCode } from './game/friends'
 import { useInstall } from './game/install'
 import { shareInvite } from './game/invite'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useOnline } from './game/useOnline'
 import { useProfile } from './game/profile'
+import { useAccount } from './game/useAccount'
+import { useSocial } from './game/useSocial'
 import { useI18n } from './i18n/useI18n'
 
 const { t, toggle, locale } = useI18n()
@@ -41,10 +46,46 @@ const shownRules = computed(() => source.value.rules.value)
 /** Your name and avatar; opened by clicking your own badge or your lobby seat. */
 const profileOpen = ref(false)
 
-/** A changed profile reaches the online table straight away. */
+/** A changed profile reaches the online table and your account straight away. */
 function profileSaved() {
   if (atTable.value) online.sendProfile()
+  if (account.signedIn.value) social.saveProfile()
 }
+
+/** Optional accounts and friends; everything above works without them. */
+const account = useAccount()
+const social = useSocial()
+const friendsOpen = ref(false)
+const friendsLabel = computed(() => {
+  if (!account.signedIn.value || !social.friends.value) return t('friends.open')
+  const { key, n } = friendsCount(social.friends.value.friends)
+  return t(key, { n })
+})
+const onlineFriends = computed(() => social.friends.value?.friends.some((f) => f.state === 'friend' && f.online) ?? false)
+const incomingRequests = computed(() => social.friends.value?.friends.filter((f) => f.state === 'incoming').length ?? 0)
+
+/** Another player's card at an online table (by player index), to add them as a friend. */
+const playerCard = ref<number | null>(null)
+const cardSlot = computed(() => (playerCard.value === null ? null : (snapshot.value?.players[playerCard.value] ?? null)))
+
+/** A short message at the bottom of the screen, e.g. after opening a friend invite link. */
+const notice = ref<string | null>(null)
+let noticeTimer: ReturnType<typeof setTimeout> | undefined
+function showNotice(text: string) {
+  notice.value = text
+  clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => (notice.value = null), 5000)
+}
+watch(social.inviteResult, (r) => {
+  if (!r) return
+  if (r.ok) showNotice(t('friends.nowFriends', { name: r.name }))
+  else showNotice(t(r.error === 'self' ? 'friends.inviteOwn' : r.error === 'limit' ? 'friends.limit' : 'friends.inviteUnknown'))
+  social.inviteResult.value = null
+})
+watch(social.lastError, (e) => {
+  if (e === 'limit') showNotice(t('friends.limit'))
+  social.lastError.value = null
+})
 
 /** Host / join dialog; opened from the top bar or by an invite link. */
 const onlineOpen = ref(false)
@@ -93,19 +134,29 @@ function onlineMatchDone() {
   else void online.leave()
 }
 
-onMounted(() => {
-  // Invite link (?room=KJXW): open the join dialog with the code filled in, then tidy the address bar.
+onMounted(async () => {
+  // Back from Logto's sign-in page, or a saved session: settles who the player is (guests: instantly).
+  await account.init()
+  social.start()
   const params = new URLSearchParams(location.search)
+  // Friend invite link (?friend=code): befriend its owner now, or once signed in.
+  const friendCode = parseFriendCode(params.get('friend'))
+  if (params.has('friend')) params.delete('friend')
+  if (friendCode && account.enabled) {
+    social.openInvite(friendCode)
+    if (!account.signedIn.value) friendsOpen.value = true
+  }
+  // Invite link (?room=KJXW): open the join dialog with the code filled in, then tidy the address bar.
   const room = params.get('room')
   if (room) {
     inviteCode.value = room.toUpperCase()
     onlineOpen.value = true
     params.delete('room')
-    const rest = params.toString()
-    history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`)
   } else {
     void online.rejoin()
   }
+  const rest = params.toString()
+  if (rest !== location.search.slice(1)) history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`)
 })
 
 /** Phones: the top bar shrinks to the title and a toggle that reveals every control. */
@@ -334,6 +385,14 @@ async function loadLatest() {
         <button v-if="canInstall" class="action action--quiet-light" @click="installApp">{{ t('app.install') }}</button>
         <button class="action action--quiet-light" @click="rulesDialog = { tab: 'rules' }">{{ t('app.howToPlay') }}</button>
         <button class="action action--quiet-light" @click="feedbackOpen = true">{{ t('feedback.open') }}</button>
+        <template v-if="account.enabled">
+          <button class="action action--quiet-light" @click="friendsOpen = true">
+            <span v-if="onlineFriends" class="topbar__online" aria-hidden="true" />{{ friendsLabel }}
+            <span v-if="incomingRequests" class="topbar__badge" :aria-label="t('friends.requestsWaiting', { n: incomingRequests })">{{ incomingRequests }}</span>
+          </button>
+          <button v-if="account.ready.value && !account.signedIn.value" class="action action--quiet-light" @click="account.signIn()">{{ t('account.signIn') }}</button>
+          <button v-else-if="account.signedIn.value" class="action action--quiet-light" @click="profileOpen = true">{{ t('account.open') }}</button>
+        </template>
         <button v-if="canPause" class="action action--quiet-light" @click="pause">{{ t('online.pause') }}</button>
         <template v-if="atTable">
           <button class="action" @click="leaveTable">{{ t('lobby.leave') }}</button>
@@ -352,15 +411,18 @@ async function loadLatest() {
       @configure="online.configure"
       @start="online.start"
       @edit-profile="profileOpen = true"
+      @open-player="(p: number) => (playerCard = p)"
       @leave="leaveTable"
     />
     <MatchScreen
       v-else-if="atTable"
       :key="`online:${snapshot!.code}`"
       :source="online.source"
+      :openable="true"
       @new-match="onlineMatchDone"
       @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
       @edit-profile="profileOpen = true"
+      @open-player="(p: number) => (playerCard = p)"
     >
       <template #matchEnd>
         <div v-if="isHost" class="summary__choices">
@@ -423,6 +485,19 @@ async function loadLatest() {
     <FeedbackDialog v-if="feedbackOpen" :capture="captureFeedback" @close="feedbackOpen = false" />
 
     <ProfileDialog v-if="profileOpen" @save="profileSaved" @close="profileOpen = false" />
+
+    <FriendsDialog v-if="friendsOpen" @close="friendsOpen = false" />
+
+    <PlayerCard
+      v-if="cardSlot && playerCard !== null"
+      :name="online.playerNames.value[playerCard] ?? ''"
+      :avatar="cardSlot.avatar"
+      :user-id="cardSlot.userId"
+      :bot="cardSlot.name === null"
+      @close="playerCard = null"
+    />
+
+    <p v-if="notice" class="notice" role="status">{{ notice }}</p>
 
     <OnlineDialog
       v-if="onlineOpen && !atTable"

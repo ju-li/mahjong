@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { MAX_NAME_LENGTH } from '@mahjong/protocol'
 import { avatarSvg } from '../game/avatar'
 import { randomAvatarSeed, tidyName, useProfile } from '../game/profile'
+import { useAccount } from '../game/useAccount'
 import { useI18n } from '../i18n/useI18n'
 
 /** Your name and face, for solo and online play alike. Changes apply on Save. */
@@ -10,6 +11,7 @@ const emit = defineEmits<{ save: []; close: [] }>()
 
 const { t } = useI18n()
 const profile = useProfile()
+const account = useAccount()
 
 const FACES = 11
 const draftName = ref(profile.name.value)
@@ -75,6 +77,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           v-html="f.svg"
         />
       </fieldset>
+
+      <section v-if="account.enabled" class="account" aria-labelledby="account-title">
+        <template v-if="account.user.value">
+          <h3 id="account-title">{{ t('account.open') }}</h3>
+          <p class="result__note">{{ t('account.signedInAs', { name: account.user.value.email ?? account.user.value.name ?? '' }) }}</p>
+          <button type="button" class="action" @click="account.signOut()">{{ t('account.signOut') }}</button>
+        </template>
+        <template v-else>
+          <h3 id="account-title">{{ t('account.guestTitle') }}</h3>
+          <p class="result__note">{{ t('account.guestBody') }}</p>
+          <div class="summary__choices">
+            <button type="button" class="action action--primary" @click="account.signIn()">{{ t('account.signIn') }}</button>
+            <button type="button" class="action" @click="account.signIn('register')">{{ t('account.createAccount') }}</button>
+          </div>
+        </template>
+      </section>
 
       <div class="profile__buttons">
         <button type="button" class="action profile__shuffle" @click="shuffle">{{ t('profile.shuffle') }}</button>
