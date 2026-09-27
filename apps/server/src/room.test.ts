@@ -1,17 +1,28 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { boot, type ColyseusTestServer } from '@colyseus/testing'
 import type { Room } from '@colyseus/sdk'
-import { FEEDBACK_PATH, ROOM_NAME, type Snapshot, type VoiceMemo } from '@mahjong/protocol'
+import { FEEDBACK_PATH, ROOM_NAME, SOCIAL_ROOM, type FriendsSnapshot, type InviteResult, type Snapshot, type VoiceMemo } from '@mahjong/protocol'
+import { tokenVerifier } from './auth'
 import type { FeedbackMail } from './feedback'
 import { feedbackEnv, server } from './main'
+import { services } from './services'
+import { testIssuer } from './testAuth'
+import { startTestDb } from './db/testDb'
 
 let colyseus: ColyseusTestServer
+let stopDb: () => Promise<void>
+const issuer = await testIssuer()
 
 beforeAll(async () => {
+  const testDb = await startTestDb()
+  stopDb = testDb.stop
+  services.db = testDb.db
+  services.verify = tokenVerifier(issuer.config)
   colyseus = await boot(server)
 })
 afterAll(async () => {
   await colyseus.shutdown()
+  await stopDb()
 })
 
 /** Resolves with the next snapshot matching `test`. */
@@ -52,7 +63,7 @@ describe('TableRoom', () => {
     const back = await colyseus.sdk.joinById(host.roomId, { name: 'Bo', token })
     const again = await next(back)
     expect(again.you).toBe(1)
-    expect(again.players[1]).toEqual({ name: 'Bo', avatar: null, connected: true })
+    expect(again.players[1]).toEqual({ name: 'Bo', avatar: null, connected: true, userId: null })
     await back.leave()
     await host.leave()
   })
@@ -109,5 +120,79 @@ describe('TableRoom', () => {
     expect(game.server.match.current.hands).toHaveLength(4)
     expect(JSON.stringify(game)).not.toContain('token')
     await host.leave()
+  })
+})
+
+/** Resolves with the next friends list matching `test`. */
+function nextFriends(room: Room, test: (s: FriendsSnapshot) => boolean = () => true): Promise<FriendsSnapshot> {
+  return new Promise((resolve) => {
+    const off = room.onMessage('friends', (s: FriendsSnapshot) => {
+      if (!test(s)) return
+      off()
+      resolve(s)
+    })
+  })
+}
+
+describe('accounts at a table', () => {
+  it('shows who is signed in, and a bad token just plays as a guest', async () => {
+    const host = await colyseus.sdk.create(ROOM_NAME, { name: 'Ann', accessToken: await issuer.token('user-ann') })
+    const guest = await colyseus.sdk.joinById(host.roomId, { name: 'Bo', accessToken: 'forged' })
+    const both = await next(guest, (s) => s.players[1]?.name === 'Bo')
+    expect(both.players.map((p) => p.userId)).toEqual(['user-ann', null, null, null])
+
+    // Signing in while seated.
+    const signedIn = next(host, (s) => s.players[1]?.userId === 'user-bo')
+    guest.send('identify', { accessToken: await issuer.token('user-bo') })
+    await signedIn
+    const signedOut = next(host, (s) => s.players[1]?.userId === null)
+    guest.send('identify', { accessToken: null })
+    await signedOut
+    await guest.leave()
+    await host.leave()
+  })
+})
+
+describe('SocialRoom', () => {
+  it('turns guests away', async () => {
+    await expect(colyseus.sdk.joinOrCreate(SOCIAL_ROOM, {})).rejects.toThrow()
+    await expect(colyseus.sdk.joinOrCreate(SOCIAL_ROOM, { accessToken: 'forged' })).rejects.toThrow()
+  })
+
+  it('makes friends through an invite link, then by request, and tracks who is online', async () => {
+    const ann = await colyseus.sdk.joinOrCreate(SOCIAL_ROOM, { accessToken: await issuer.token('s-ann'), name: 'Ann', avatar: 5 })
+    const annFirst = await nextFriends(ann)
+    expect(annFirst.me).toMatchObject({ userId: 's-ann', name: 'Ann', avatar: 5 })
+    expect(annFirst.friends).toEqual([])
+
+    const bo = await colyseus.sdk.joinOrCreate(SOCIAL_ROOM, { accessToken: await issuer.token('s-bo'), name: 'Bo' })
+    await nextFriends(bo)
+    const annSeesBo = nextFriends(ann, (s) => s.friends.some((f) => f.userId === 's-bo' && f.online))
+    const invited = new Promise<InviteResult>((resolve) => bo.onMessage('inviteResult', resolve))
+    bo.send('acceptInvite', { code: annFirst.me.friendCode })
+    expect(await invited).toEqual({ ok: true, name: 'Ann' })
+    expect((await annSeesBo).friends).toEqual([{ userId: 's-bo', name: 'Bo', avatar: null, state: 'friend', online: true }])
+
+    // Bo leaves: Ann sees them go offline.
+    const offline = nextFriends(ann, (s) => s.friends[0]?.online === false)
+    await bo.leave()
+    await offline
+
+    // A request from a third player shows up as incoming, and accepting it makes them a friend.
+    const cy = await colyseus.sdk.joinOrCreate(SOCIAL_ROOM, { accessToken: await issuer.token('s-cy'), name: 'Cy' })
+    await nextFriends(cy)
+    const incoming = nextFriends(ann, (s) => s.friends.some((f) => f.userId === 's-cy' && f.state === 'incoming'))
+    cy.send('friendRequest', { userId: 's-ann' })
+    await incoming
+    const accepted = nextFriends(cy, (s) => s.friends.some((f) => f.userId === 's-ann' && f.state === 'friend' && f.online))
+    ann.send('friendRespond', { userId: 's-cy', accept: true })
+    await accepted
+
+    // Renaming reaches friends.
+    const renamed = nextFriends(cy, (s) => s.friends.some((f) => f.name === 'Annie'))
+    ann.send('profile', { name: 'Annie' })
+    await renamed
+    await cy.leave()
+    await ann.leave()
   })
 })

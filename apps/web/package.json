@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@colyseus/sdk": "^0.18.4",
+    "@logto/browser": "^3.0.14",
     "@mahjong/bots": "workspace:*",
     "@mahjong/engine": "workspace:*",
     "@mahjong/protocol": "workspace:*",

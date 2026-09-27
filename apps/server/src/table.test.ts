@@ -224,7 +224,7 @@ describe('play', () => {
     table.start('c0')
     const token = snap('c1').token
     table.drop('c1')
-    expect(snap('c0').players[1]).toEqual({ name: 'Bo', avatar: null, connected: false })
+    expect(snap('c0').players[1]).toEqual({ name: 'Bo', avatar: null, connected: false, userId: null })
     // With Bo gone, only Ann ever has to act.
     for (let i = 0; i < 300; i++) {
       autoplay(table, ['c0'], snap)
@@ -234,7 +234,7 @@ describe('play', () => {
     // Bo's seat stays reserved: a newcomer hops into a bot's seat instead.
     expect(table.join('c8', { name: 'Cy' })).toBe(2)
     expect(table.join('c9', { token })).toBe(1)
-    expect(table.snapshotFor('c9')!.players[1]).toEqual({ name: 'Bo', avatar: null, connected: true })
+    expect(table.snapshotFor('c9')!.players[1]).toEqual({ name: 'Bo', avatar: null, connected: true, userId: null })
   })
 
   it('pauses while nobody is connected', () => {
@@ -382,7 +382,7 @@ describe('hop in, hop out', () => {
     table.start('c0')
     const token = snap('c1').token
     table.leave('c1')
-    expect(snap('c0').players[1]).toEqual({ name: null, avatar: null, connected: false }) // a bot again
+    expect(snap('c0').players[1]).toEqual({ name: null, avatar: null, connected: false, userId: null }) // a bot again
     expect(table.join('c5', { name: 'Bo', token })).toBe(1)
     expect(table.snapshotFor('c5')!.token).toBe(token)
     // Once someone else has it, the leaver hops into another free seat.
@@ -398,7 +398,7 @@ describe('hop in, hop out', () => {
     expect(table.canJoin(undefined)).toBe(false)
     env.advance(RESERVE_MS)
     expect(table.join('c9', { name: 'Ed' })).toBe(1)
-    expect(snap('c0').players[1]).toEqual({ name: 'Ed', avatar: null, connected: true })
+    expect(snap('c0').players[1]).toEqual({ name: 'Ed', avatar: null, connected: true, userId: null })
   })
 })
 
@@ -481,5 +481,22 @@ describe('voice memos', () => {
     expect(sent).toBe(VOICE_PER_MINUTE)
     env.advance(60_000)
     expect(table.voice('c0', clip())).not.toBeNull()
+  })
+})
+
+describe('accounts', () => {
+  it('shows a verified account on the seat, keeps it through a drop, and follows sign-in and out', () => {
+    const env = new FakeEnv()
+    const table = new Table('ABCD', env, () => {})
+    table.join('c0', { name: 'Ann' }, 'user-ann')
+    table.join('c1', { name: 'Bo', userId: 'forged' } as never)
+    const ids = () => table.snapshotFor('c0')!.players.map((p) => p.userId)
+    expect(ids()).toEqual(['user-ann', null, null, null])
+    table.identify('c1', 'user-bo')
+    expect(ids()).toEqual(['user-ann', 'user-bo', null, null])
+    table.identify('c1', null)
+    expect(ids()).toEqual(['user-ann', null, null, null])
+    table.leave('c1')
+    expect(ids()).toEqual(['user-ann', null, null, null])
   })
 })

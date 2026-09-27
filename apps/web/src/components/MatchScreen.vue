@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { HANDS_PER_MATCH } from '@mahjong/engine'
+import { HANDS_PER_MATCH, type Player } from '@mahjong/engine'
 import GameTable from './GameTable.vue'
 import HandResult from './HandResult.vue'
 import { avatarSeeds, avatarSvg } from '../game/avatar'
@@ -8,8 +8,8 @@ import type { MatchSource } from '../game/source'
 import { useI18n } from '../i18n/useI18n'
 
 /** The table and the end-of-hand dialog for one match, local or online. */
-const props = defineProps<{ source: MatchSource }>()
-defineEmits<{ newMatch: []; explain: [fanId: string]; editProfile: [] }>()
+const props = defineProps<{ source: MatchSource; openable?: boolean }>()
+const emit = defineEmits<{ newMatch: []; explain: [fanId: string]; editProfile: []; openPlayer: [player: Player] }>()
 
 const { t } = useI18n()
 
@@ -55,8 +55,10 @@ const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value +
     :hand-label="handLabel"
     :claim-remaining="source.claimRemaining.value"
     :speaking-seat="speakingSeat"
+    :openable="openable"
     @act="source.act"
-    @edit-profile="$emit('editProfile')"
+    @edit-profile="emit('editProfile')"
+    @open-player="(seat: number) => emit('openPlayer', seatPlayers[seat]!)"
   />
   <p v-if="view" class="keys-help">{{ t('keys.help') }}</p>
 
@@ -73,8 +75,8 @@ const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value +
     @next="source.continueToNextHand()"
     @unready="source.unready?.()"
     @deal="source.deal?.()"
-    @new-match="$emit('newMatch')"
-    @explain="(id: string) => $emit('explain', id)"
+    @new-match="emit('newMatch')"
+    @explain="(id: string) => emit('explain', id)"
   >
     <template v-if="$slots.matchEnd" #matchEnd><slot name="matchEnd" /></template>
   </HandResult>

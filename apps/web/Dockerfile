@@ -23,6 +23,13 @@ ENV VITE_SERVER_URL=$VITE_SERVER_URL
 # Public domain invite links point at, e.g. mahjong.example.com (a Railway variable; defaults to the page's own address).
 ARG PUBLIC_DOMAIN
 ENV VITE_PUBLIC_DOMAIN=$PUBLIC_DOMAIN
+# Optional accounts (Logto). Leave unset for a build without sign-in; guests play either way.
+ARG VITE_LOGTO_ENDPOINT
+ENV VITE_LOGTO_ENDPOINT=$VITE_LOGTO_ENDPOINT
+ARG VITE_LOGTO_APP_ID
+ENV VITE_LOGTO_APP_ID=$VITE_LOGTO_APP_ID
+ARG VITE_LOGTO_RESOURCE
+ENV VITE_LOGTO_RESOURCE=$VITE_LOGTO_RESOURCE
 RUN pnpm --filter web build
 
 FROM caddy:2-alpine
