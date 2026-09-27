@@ -418,6 +418,48 @@ describe('hop in, hop out', () => {
   })
 })
 
+describe('removing players', () => {
+  it('lets only the host remove someone, never themselves or a bot', () => {
+    const { table, snap } = setup(['Ann', 'Bo'])
+    expect(table.kick('c1', 0)).toBeNull()
+    expect(table.kick('c0', 0)).toBeNull()
+    expect(table.kick('c0', 3)).toBeNull()
+    expect(table.kick('c0', 9)).toBeNull()
+    expect(table.kick('c0', 1)).toEqual({ client: 'c1' })
+    expect(snap('c0').players[1]!.name).toBeNull()
+    expect(table.playerOf('c1')).toBeNull()
+  })
+
+  it('keeps a removed player out, by seat token and by account', () => {
+    const env = new FakeEnv()
+    const table = new Table('ABCD', env, () => {})
+    table.join('c0', { name: 'Ann' })
+    table.join('c1', { name: 'Bo' }, 'user-bo')
+    const token = table.snapshotFor('c1')!.token
+    table.kick('c0', 1)
+    expect(table.canJoin(token)).toBe(false)
+    expect(table.isBanned(token, null)).toBe(true)
+    expect(table.isBanned(undefined, 'user-bo')).toBe(true)
+    expect(table.join('c2', { name: 'Bo', token })).toBeNull()
+    expect(table.join('c3', { name: 'Bo' }, 'user-bo')).toBeNull()
+    expect(table.join('c4', { name: 'Cy' })).toBe(1)
+  })
+
+  it('mid-match hands the seat to a bot, keeping its score, and lets a newcomer take it', () => {
+    const { table, snap } = setup(['Ann', 'Bo', 'Cy', 'Di'])
+    table.start('c0')
+    const score = snap('c0').match!.scores[1]
+    // A dropped player can be removed too.
+    table.drop('c2')
+    expect(table.kick('c0', 2)).toEqual({ client: null })
+    expect(table.kick('c0', 1)).toEqual({ client: 'c1' })
+    expect(snap('c0').players[1]!.name).toBeNull()
+    expect(snap('c0').match!.scores[1]).toBe(score)
+    expect(table.openSeats()).toBe(2)
+    expect(table.join('c9', { name: 'Ed' })).toBe(1)
+  })
+})
+
 describe('pause', () => {
   /** Plays Ann's turns until a claim window with a countdown opens for her. */
   function untilClaim(env: FakeEnv, table: Table, snap: (c: string) => Snapshot) {

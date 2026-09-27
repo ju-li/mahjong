@@ -1,5 +1,6 @@
 import { Room, ServerError, type Client } from '@colyseus/core'
 import {
+  DEFAULT_PROFILE_NAME,
   TABLE_INVITE_GAP_MS,
   type Friend,
   type FriendsSnapshot,
@@ -112,7 +113,7 @@ export class SocialRoom extends Room {
   async onJoin(client: SocialClient, options: SocialJoinOptions) {
     const db = services.db!
     const me = client.auth!.userId
-    await ensureProfile(db, me, { name: cleanName(options?.name, 'Player'), avatar: cleanAvatar(options?.avatar, null) })
+    await ensureProfile(db, me, { name: cleanName(options?.name, DEFAULT_PROFILE_NAME), avatar: cleanAvatar(options?.avatar, null) })
     let mine = this.members.get(me)
     if (!mine) {
       mine = new Set()
@@ -175,7 +176,10 @@ export class SocialRoom extends Room {
         return table ? { ...r, online, table } : { ...r, online }
       }),
     )
-    const snapshot: FriendsSnapshot = { me: { userId, name: profile.name, avatar: profile.avatar, friendCode: profile.friendCode }, friends }
+    const me: FriendsSnapshot['me'] = { userId, name: profile.name, avatar: profile.avatar, friendCode: profile.friendCode }
+    const table = await this.presence.hget(AT_KEY, userId)
+    if (table) me.table = table
+    const snapshot: FriendsSnapshot = { me, friends }
     for (const c of clients) c.send('friends', snapshot)
   }
 

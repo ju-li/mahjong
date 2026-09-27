@@ -123,10 +123,18 @@ export type ClientMessages = {
   voice: VoiceClip
   /** Signed in or out while seated: the new access token, or null for guest. */
   identify: { accessToken: string | null }
+  /** Host: remove the player in this seat from the table; they can't come back to it. */
+  kick: { player: number }
 }
+
+/** Close code when the host removes you, and the join error when you try to come back. */
+export const KICKED_CODE = 4006
 
 /** Colyseus room type signed-in players stay connected to for friends and online status. */
 export const SOCIAL_ROOM = 'social'
+
+/** What an account is called until the player picks a name (or signs in with one, e.g. Google). */
+export const DEFAULT_PROFILE_NAME = 'Player'
 
 /** Options for joining the social room. Guests can't: it needs a valid access token. */
 export type SocialJoinOptions = {
@@ -155,7 +163,8 @@ export type FriendTable = { code: string; openSeats: number; playing: boolean }
 
 /** Server → client on the social room, message type `friends`: your profile and everyone linked to you. */
 export type FriendsSnapshot = {
-  me: { userId: string; name: string; avatar: number | null; friendCode: string }
+  /** `table`: code of the table you are seated at, as friends see it; absent when at none. */
+  me: { userId: string; name: string; avatar: number | null; friendCode: string; table?: string }
   friends: Friend[]
 }
 

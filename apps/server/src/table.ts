@@ -121,6 +121,8 @@ export class Table {
   private claimLeft: number | null = null
   /** When each player's recent voice memos were sent, for rate limiting. */
   private voiceLog: number[][] = PLAYERS.map(() => [])
+  /** Seat tokens and accounts the host removed; they can't take a seat here again. */
+  private banned = { tokens: new Set<string>(), userIds: new Set<string>() }
   /** Every action applied in the hand in play, in order: with the hand's seed, a replay of it (for bug reports). */
   private handLog: Action[] = []
 
@@ -168,7 +170,34 @@ export class Table {
 
   /** Whether a join with this token would get a seat. Anyone may hop in while a bot holds one. */
   canJoin(token: string | undefined): boolean {
+    if (this.isBanned(token ?? null, null)) return false
     return this.seatFor(token ?? null) !== null
+  }
+
+  /** Whether the host removed this seat token or account from the table. */
+  isBanned(token: string | null | undefined, userId: string | null): boolean {
+    return (!!token && this.banned.tokens.has(token)) || (!!userId && this.banned.userIds.has(userId))
+  }
+
+  /**
+   * Host: remove the human in seat `target` for good. In a match a bot plays on with their score,
+   * and anyone new may take the seat; they themselves can't come back. Returns the connection to
+   * close, if they were connected; null when refused or nobody was connected.
+   */
+  kick(client: string, target: unknown): { client: string | null } | null {
+    const host = this.playerOf(client)
+    if (host === null || host !== this.host || typeof target !== 'number' || !PLAYERS.includes(target as Player) || target === host) return null
+    const p = target as Player
+    const slot = this.slots[p]!
+    if (slot.token === null) return null
+    this.banned.tokens.add(slot.token)
+    if (slot.userId) this.banned.userIds.add(slot.userId)
+    const kicked = slot.client
+    // No former token either: the seat is not theirs to reclaim.
+    this.slots[p] = emptySlot()
+    this.ready.delete(p)
+    this.changed()
+    return { client: kicked }
   }
 
   /** How many seats someone new could take right now: bot seats and lapsed reservations. */
@@ -194,6 +223,7 @@ export class Table {
    */
   join(client: string, options: { name?: unknown; avatar?: unknown; token?: unknown }, userId: string | null = null): Player | null {
     const token = typeof options.token === 'string' ? options.token : null
+    if (this.isBanned(token, userId)) return null
     const p = this.seatFor(token)
     if (p === null) return null
     const slot = this.slots[p]!

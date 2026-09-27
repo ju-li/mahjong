@@ -112,6 +112,31 @@ async function joinFriendTable(code: string) {
   }
 }
 
+/** From solo: host a new table and ask a friend to it in one go. */
+async function playWithFriend(userId: string) {
+  friendsOpen.value = false
+  if (atTable.value) return
+  if (!(await online.host()) || !snapshot.value) {
+    const error = online.error.value
+    if (error) showNotice(t(`online.error.${error}`))
+    return
+  }
+  social.inviteWhenSeated(userId, snapshot.value.code)
+}
+
+/** Host: remove a player from the table, after checking. */
+function removePlayer(p: number) {
+  const name = online.playerNames.value[p] ?? snapshot.value?.players[p]?.name ?? ''
+  if (!window.confirm(t('lobby.confirmRemove', { name }))) return
+  online.kick(p)
+  playerCard.value = null
+}
+watch(online.removedFrom, (code) => {
+  if (!code) return
+  toasts.push({ text: t('toast.removed', { code }), sticky: true })
+  online.removedFrom.value = null
+})
+
 const inviteKey = (code: string) => `table-invite:${code}`
 social.on('tableInvite', (invite) => {
   if (snapshot.value?.code === invite.code) return
@@ -427,6 +452,7 @@ async function loadLatest() {
       @edit-profile="profileOpen = true"
       @open-player="(p: number) => (playerCard = p)"
       @invite-friends="friendsOpen = true"
+      @remove="removePlayer"
       @leave="leaveTable"
     />
     <MatchScreen
@@ -576,7 +602,7 @@ async function loadLatest() {
         </div>
       </div>
     </div>
-    <FriendsDialog v-if="friendsOpen" :table-code="snapshot?.code ?? null" @join="joinFriendTable" @close="friendsOpen = false" />
+    <FriendsDialog v-if="friendsOpen" :table-code="snapshot?.code ?? null" @join="joinFriendTable" @play-with="playWithFriend" @close="friendsOpen = false" />
 
     <PlayerCard
       v-if="cardSlot && playerCard !== null"
@@ -584,6 +610,8 @@ async function loadLatest() {
       :avatar="cardSlot.avatar"
       :user-id="cardSlot.userId"
       :bot="cardSlot.name === null"
+      :can-remove="isHost && cardSlot.name !== null && playerCard !== snapshot?.you"
+      @remove="removePlayer(playerCard)"
       @close="playerCard = null"
     />
 

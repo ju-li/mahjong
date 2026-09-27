@@ -17,6 +17,7 @@ const emit = defineEmits<{
   editProfile: []
   openPlayer: [player: number]
   inviteFriends: []
+  remove: [player: number]
   leave: []
 }>()
 
@@ -62,6 +63,15 @@ function onRules(e: Event) {
         </template>
         <span v-if="i === snapshot.host" class="lobby__tag">{{ t('lobby.host') }}</span>
         <span v-if="i === snapshot.you" class="lobby__tag lobby__tag--you">{{ t('lobby.you') }}</span>
+        <button
+          v-if="isHost && i !== snapshot.you && p.name !== null"
+          type="button"
+          class="action lobby__remove"
+          :aria-label="`${t('lobby.remove')} ${p.name}`"
+          @click="emit('remove', i)"
+        >
+          {{ t('lobby.remove') }}
+        </button>
       </li>
     </ol>
 

@@ -12,7 +12,7 @@ import {
   type TableInviteResult,
 } from '@mahjong/protocol'
 import { useAccount } from './useAccount'
-import { useProfile } from './profile'
+import { accountNameFor, useProfile } from './profile'
 import { SERVER_URL } from './serverUrl'
 
 /** An invite link opened while signed out, finished once the player has signed in. */
@@ -26,6 +26,10 @@ const friends = shallowRef<FriendsSnapshot | null>(null)
 const inviteResult = shallowRef<InviteResult | null>(null)
 const lastError = ref<FriendError | null>(null)
 let room: Room | null = null
+/** Invites waiting for the table room to record you at the new table: friend id → code and deadline. */
+const pendingInvites = new Map<string, { code: string; timer: ReturnType<typeof setTimeout> }>()
+/** Give up on an invite if you haven't shown up at its table by then. */
+const SEATED_WAIT_MS = 10_000
 /** Who had asked to be friends as of the last list since connecting; null until the first one. */
 let seenIncoming: Set<string> | null = null
 
@@ -81,15 +85,31 @@ export function useSocial() {
     if (started !== generation) return
     // Signed in but no token (offline, auth server down): try again later.
     if (!accessToken) return retry()
-    const options: SocialJoinOptions = { accessToken, name: profile.name.value.trim() || undefined, avatar: profile.avatar.value }
+    // A brand-new account takes the name typed as a guest, else the one from signing in (e.g. Google).
+    const seedName = profile.name.value.trim() || accountNameFor('', account.user.value?.name) || undefined
+    const options: SocialJoinOptions = { accessToken, name: seedName, avatar: profile.avatar.value }
     try {
       const r = await new Client(SERVER_URL).joinOrCreate(SOCIAL_ROOM, options)
       if (started !== generation) return void r.leave()
       room = r
       retryMs = RETRY_MS
       seenIncoming = null
+      let named = false
       r.onMessage('friends', (s: FriendsSnapshot) => {
+        // Still called "Player": take the name from signing in, once per connection.
+        const better = named ? null : accountNameFor(s.me.name, account.user.value?.name)
+        if (better) {
+          named = true
+          send('profile', { name: better })
+          s = { ...s, me: { ...s.me, name: better } }
+        }
         friends.value = s
+        for (const [userId, invite] of pendingInvites) {
+          if (s.me.table !== invite.code) continue
+          clearTimeout(invite.timer)
+          pendingInvites.delete(userId)
+          send('tableInvite', { userId, code: invite.code })
+        }
         // New requests since the last list; ones already waiting when we connected are just badged.
         const incoming = s.friends.filter((f) => f.state === 'incoming')
         if (seenIncoming) for (const f of incoming) if (!seenIncoming.has(f.userId)) emit('friendRequest', f)
@@ -159,6 +179,17 @@ export function useSocial() {
     remove: (userId: string) => send('friendRemove', { userId }),
     /** Ask an online friend to the table you are at. */
     inviteToTable: (userId: string, code: string) => send('tableInvite', { userId, code }),
+    /** Invite a friend to a table you have just sat down at, once the server has you there. */
+    inviteWhenSeated(userId: string, code: string): void {
+      if (friends.value?.me.table === code) return send('tableInvite', { userId, code })
+      clearTimeout(pendingInvites.get(userId)?.timer)
+      const timer = setTimeout(() => {
+        pendingInvites.delete(userId)
+        const name = friends.value?.friends.find((f) => f.userId === userId)?.name ?? null
+        emit('tableInviteResult', { ok: false, name, error: 'notAtTable' })
+      }, SEATED_WAIT_MS)
+      pendingInvites.set(userId, { code, timer })
+    },
     /** Listen for one-off happenings: an invite to a table, how your invite went, a new friend request. */
     on<K extends keyof SocialEvents>(type: K, fn: (e: SocialEvents[K]) => void): () => void {
       listeners[type].add(fn)
