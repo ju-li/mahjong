@@ -118,3 +118,22 @@ export type ClientMessages = {
   /** Anyone at the table: a push-to-talk memo for everyone else. */
   voice: VoiceClip
 }
+
+/** HTTP path on the game server that emails player feedback to the developers. */
+export const FEEDBACK_PATH = '/feedback'
+export const MAX_FEEDBACK_MESSAGE = 5000
+/** Diagnostics ride along as JSON attachments; the console log is the bulk of it. */
+export const MAX_FEEDBACK_ATTACHMENT_BYTES = 400 * 1024
+
+/** Body of a `POST /feedback`. */
+export type FeedbackRequest = {
+  name: string
+  email: string
+  message: string
+  /** About the player's device and app: user agent, settings, recent console output. */
+  diagnostics: unknown
+  /** The game as of the report: enough to replay it. */
+  game: unknown
+  /** Code of the online table the player is at; the server adds its full copy of that game. */
+  tableCode?: string
+}

@@ -1,3 +1,5 @@
+// First import, so console capture starts before any other module runs (for feedback reports).
+import './game/consoleLog'
 import { createApp } from 'vue'
 import './style.css'
 import App from './App.vue'

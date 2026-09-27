@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { isRuleSet } from '@mahjong/engine'
 import type { Difficulty } from '@mahjong/bots'
+import FeedbackDialog from './components/FeedbackDialog.vue'
 import Lobby from './components/Lobby.vue'
 import MatchScreen from './components/MatchScreen.vue'
 import Onboarding from './components/Onboarding.vue'
@@ -15,9 +16,10 @@ import { shareInvite } from './game/invite'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useOnline } from './game/useOnline'
+import { useProfile } from './game/profile'
 import { useI18n } from './i18n/useI18n'
 
-const { t, toggle } = useI18n()
+const { t, toggle, locale } = useI18n()
 
 /** Rules dialog (how to play + fan list tabs); `focus` is the fan to show on the fan list. */
 const rulesDialog = ref<{ tab: RulesTab; focus?: string } | null>(null)
@@ -165,6 +167,38 @@ function changeRules(e: Event) {
   else select.value = rules.value
 }
 
+/** Feedback form; what it attaches is captured when it opens. */
+const feedbackOpen = ref(false)
+const profile = useProfile()
+/** Settings and whereabouts for the report, plus the game: all of it at a solo table, your view (and code) online. */
+function captureFeedback() {
+  const s = snapshot.value
+  const app = {
+    locale: locale.value,
+    profile: { name: profile.name.value, avatar: profile.avatar.value },
+    settings: {
+      rules: preferredRules.value,
+      difficulty: difficulty.value,
+      claimSeconds: claimSeconds.value,
+      sound: sound.value,
+      voice: voice.value,
+      voiceChat: voiceChat.value,
+      textSize: textSize.value,
+    },
+    screen: atTable.value ? `online ${s?.phase}` : 'solo',
+    onBreak: onBreak.value,
+    link: link.value,
+    onlineError: online.error.value,
+    needsOnboarding: needsOnboarding.value,
+  }
+  if (s) {
+    // The seat token is a password for the seat; everything else the player could see goes along.
+    const { token: _token, ...seen } = s
+    return { app, game: { mode: 'online', snapshot: seen }, tableCode: s.code }
+  }
+  return { app, game: { mode: 'solo', difficulty: difficulty.value, ...solo.debugState() } }
+}
+
 /** Install as an app; iOS has no prompt, so explain the Share menu route instead. */
 const { canInstall, install } = useInstall()
 async function installApp() {
@@ -299,6 +333,7 @@ async function loadLatest() {
         </details>
         <button v-if="canInstall" class="action action--quiet-light" @click="installApp">{{ t('app.install') }}</button>
         <button class="action action--quiet-light" @click="rulesDialog = { tab: 'rules' }">{{ t('app.howToPlay') }}</button>
+        <button class="action action--quiet-light" @click="feedbackOpen = true">{{ t('feedback.open') }}</button>
         <button v-if="canPause" class="action action--quiet-light" @click="pause">{{ t('online.pause') }}</button>
         <template v-if="atTable">
           <button class="action" @click="leaveTable">{{ t('lobby.leave') }}</button>
@@ -384,6 +419,8 @@ async function loadLatest() {
     <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :rules="shownRules" @close="rulesDialog = null" />
 
     <Onboarding v-if="needsOnboarding" @done="onboardingDone" />
+
+    <FeedbackDialog v-if="feedbackOpen" :capture="captureFeedback" @close="feedbackOpen = false" />
 
     <ProfileDialog v-if="profileOpen" @save="profileSaved" @close="profileOpen = false" />
 
