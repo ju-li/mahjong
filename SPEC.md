@@ -1,7 +1,7 @@
 # SPEC
 
 ## §G GOAL
-MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human vs 3 bots, adjustable difficulty. Current phase: multiplayer → Jackbox-style tables: host gets a 4-letter code + share link, friends join, no sign-up; bots fill empty & dropped seats.
+MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human vs 3 bots, adjustable difficulty. Current phase: multiplayer → Jackbox-style tables: host gets a 4-letter code + share link, friends join, no sign-up needed; bots fill empty & dropped seats. Optional accounts (email, Google, Apple) add basic friends.
 
 ## §C CONSTRAINTS
 - pnpm workspace monorepo. `pnpm-workspace.yaml` → `apps/*`, `packages/*`.
@@ -12,11 +12,13 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - `apps/web` (pkg `web`): Vite + Vue 3 + TS SPA. client-only, ⊥ SSR. DOM/CSS render, ⊥ canvas engine.
 - `packages/bots` (`@mahjong/bots`): bot strategy + `timeoutAction`. pure TS like engine. runs in Web Worker (solo) & on server (online).
 - `packages/protocol` (`@mahjong/protocol`): room codes + client/server message types. shared by web & server.
-- `apps/server` (pkg `server`): Node + Colyseus 0.18 (`@colyseus/core`, `@colyseus/ws-transport`). authoritative: holds the only full `Match`. rooms in memory only (⊥ DB); redeploy ends open tables. esbuild → single `dist/server.mjs`.
+- `apps/server` (pkg `server`): Node + Colyseus 0.18 (`@colyseus/core`, `@colyseus/ws-transport`). authoritative: holds the only full `Match`. tables in memory only; redeploy ends open tables. esbuild → `dist/server.mjs` + `dist/migrate.mjs`.
+- backend: Railway Postgres (app DB; Logto uses its own `logto` DB on the same instance) + self-hosted Logto (OIDC) as its own Railway service. decision record → `docs/backend.md`. ⊥ BaaS (Supabase/PocketBase/Neon rejected). server = only DB client; ⊥ browser → DB. Kysely + `pg`; migrations listed in code (`apps/server/src/db/migrations.ts`), applied by Railway pre-deploy `node migrate.mjs`. realtime = Colyseus only (online status via Colyseus Presence).
+- accounts optional forever: ∀ modes (solo, multiplayer) playable w/o sign-in. sign-in = Logto hosted page: email + password (verified email), Google, Apple. friends need an account.
 - Vitest for engine tests.
 - engine src also typechecked by web's vue-tsc (`verbatimModuleSyntax`, `erasableSyntaxOnly`, `noUnusedLocals`) ∴ engine ! use `import type` for types, ⊥ `enum`, ⊥ `namespace`.
-- scope now: multiplayer. ⊥ accounts, ⊥ mobile shell.
-- roadmap order (fixed): hardening → multiplayer (Colyseus) → accounts & leaderboards (PocketBase) → Capacitor apps.
+- scope now: multiplayer + optional accounts + basic friends. ⊥ ratings/leaderboards yet, ⊥ mobile shell.
+- roadmap order (fixed): hardening → multiplayer (Colyseus) → accounts & friends → leaderboards (Railway Postgres + Logto) → Capacitor apps.
 - leaderboards ! multiplayer only (server-authoritative results). ⊥ single-player / bot results on leaderboards.
 - rule sets: `mcr` (default) & `hk` playable; picker also lists Japanese Riichi & Taiwanese 16-tile as coming soon (disabled). switching rules → new match.
 - hk: faan scoring, win ! ≥ 3 faan incl flowers, cap 13 (limit hands), half-spicy base table, discarder pays 2b / others b, self-draw each 2b. ⊥ re-seating, ⊥ dealer repeat, ⊥ heavenly/earthly hands. source: en.wikipedia.org/wiki/Hong_Kong_mahjong_scoring_rules.
@@ -26,7 +28,7 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - v0 simplification: ⊥ false-win penalty (UI offers only legal actions).
 - i18n: UI languages `en` & `zh-Hans`. tile faces stay traditional glyphs (萬 筒 條 東 發). engine holds fan names in both; ⊥ other UI strings in engine.
 - engine = single source of truth for rules. web & bots ⊥ reimplement rules; call engine only. same reducer → future Colyseus server.
-- future (not now): Capacitor iOS/Android, PocketBase accounts/leaderboards.
+- future (not now): Capacitor iOS/Android (`@logto/capacitor`), matches/ratings (OpenSkill)/leaderboards in the same Postgres.
 
 ## §I INTERFACES
 - pkg: `@mahjong/engine` → `src/index.ts` re-exports all public symbols.
@@ -61,9 +63,15 @@ MCR (Chinese Official) mahjong web game. v0 = static site, no sign-up, 1 human v
 - ui: claim timer (default 40 s: 20|40|60|120, or off) → auto-pass. keyboard play for every human action. tile animations & sound (toggle; respect `prefers-reduced-motion`).
 - pwa: web app manifest + service worker; installable; plays offline after first load.
 - deploy: `apps/web/Dockerfile` (repo-root context, Caddy serves `dist` on `$PORT`; build arg `VITE_SERVER_URL` = game server `wss://` URL, `PUBLIC_DOMAIN` = public web domain for invite links, passed to Vite as `VITE_PUBLIC_DOMAIN`). Railway service `web` configured manually in dashboard; ⊥ Config as Code, ⊥ IaC.
-- deploy: `apps/server/Dockerfile` (repo-root context, `node server.mjs` on `$PORT`, `GET /health`). Railway service `server` configured manually, own public domain.
+- deploy: `apps/server/Dockerfile` (repo-root context, `node server.mjs` on `$PORT`, `GET /health`; pre-deploy command `node migrate.mjs`). Railway service `server` configured manually, own public domain; `DATABASE_URL=${{Postgres.DATABASE_URL}}`.
+- deploy: Railway service `logto`: pinned official `svhd/logto:<version>` image, `DB_URL` → `logto` DB, `ENDPOINT` = `https://auth.<domain>`, `ADMIN_ENDPOINT` on its own restricted domain, `TRUST_PROXY_HEADER=1`. per environment: Logto SPA app (redirect `<web origin>/callback`, post sign-out `<web origin>`), API resource = `LOGTO_API_RESOURCE`, email+password w/ email verification (SMTP connector), Google & Apple connectors. Postgres backups on.
 - feedback: top bar Feedback → modal {name, email?, message} → `POST /feedback` on the game server → SMTP mail to `yuanmingongling@gmail.com`, `juli@opsinsight.ai` (override: `FEEDBACK_TO`, comma-separated). attachments: `diagnostics.json` (user agent, screen, settings, profile, last 300 console lines + uncaught errors) · `game.json` (solo: full `Match` + this hand's `handLog`; online: player's snapshot ∌ token + server's full `Table.diagnostics()` incl `handLog`). server env: `SMTP_HOST` (unset → 503), `SMTP_PORT` (587; 465 = TLS), `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (default `SMTP_USER`). rate limit 5 / 10 min per IP, 50 / 10 min overall.
 - cmd: root `pnpm dev:server` → server on :2567 (tsx watch); web dev defaults to `ws://<host>:2567`. `pnpm build:server` → `apps/server/dist/server.mjs`.
+- auth: web `@logto/browser`, lazy `import()` only when a saved session exists (`logto:<appId>:idToken`) or the player clicks Sign in; redirect `<origin>/callback` → back to the page they were on. web build vars `VITE_LOGTO_ENDPOINT`, `VITE_LOGTO_APP_ID`, `VITE_LOGTO_RESOURCE` (unset → no account UI). server verifies access tokens (JWT) with `jose` against `${LOGTO_ENDPOINT}/oidc/jwks`, `iss = ${LOGTO_ENDPOINT}/oidc`, `aud = LOGTO_API_RESOURCE`; user id = `sub`. server env `DATABASE_URL`, `LOGTO_ENDPOINT`, `LOGTO_API_RESOURCE`; any unset → accounts off, tables unchanged.
+- db: `profiles(user_id text pk = Logto sub, display_name 1..16, avatar bigint seed, friend_code unique 10 chars, created_at, updated_at)` · `friendships(user_low < user_high, requested_by, status pending|accepted, created_at, accepted_at)`, one row per pair. caps: 200 friends, 50 outgoing requests.
+- net: table join option `accessToken?`; `PlayerSlot.userId` = verified `sub` | null (guest/bot); client → table `identify {accessToken | null}` (signed in/out while seated).
+- net: room `social` (signed-in only; `onAuth` needs a valid token): join `{accessToken, name?, avatar?}` (name/avatar seed the profile on first sign-in; afterwards the account's win). server → client `friends: {me: {userId, name, avatar, friendCode}, friends: [{userId, name, avatar, state: incoming|outgoing|friend, online}]}` pushed on every change; `inviteResult {ok, name} | {ok: false, error}`; `friendError`. client → server `friendRequest {userId}` (reverse pending ⇒ accept) · `friendRespond {userId, accept}` · `friendRemove {userId}` · `acceptInvite {code}` · `profile {name?, avatar?}`. online = ≥ 1 open social connection (Presence hash `social:online`).
+- ui: top bar Friends button: "0 friends" until any friend, else "N online" (+ green dot if any), red badge = incoming requests; Sign in (guest) / Your account (signed in). Friends dialog: scrollable; incoming (Accept/Decline) → online → offline → sent (Cancel); Invite friends shares `?friend=CODE` link (Web Share → clipboard). guest → sign-in prompt. opening `?friend=CODE` ⇒ friends immediately (signed in) or after sign-in (code kept in sessionStorage). click another player (lobby seat, table badge) → player card: Add friend / Request sent / Accept / Friends ✓ / guest or bot note / Sign in to add friends. profile dialog: account section (sign in / create account / sign out).
 - net: room = Colyseus room `table`, `roomId` = code: 4 letters from `ABCDEFGHJKLMNPQRSTUVWXYZ`, rude words skipped. `client.create('table', {name})` / `client.joinById(code, {name, token})`.
 - net: server → client `snapshot`: `{code, phase: lobby|playing, you, token, host, players[4]: {name|null=bot, connected}, settings: {rules, difficulty, claimSeconds ∈ 20|40|60|120}, match: {avatarSeed, handIndex, scores, seatPlayers, over, step, view, legal, claimMs, ready[4], allReady, final, paused: Player | null} | null}`.
 - net: client → server `act {step, action}` · `ready` · `unready` (between hands; bots and away players never hold the table up) · `rename {name}` · `pause` · `resume` (any seated player) · host: `configure {rules?, difficulty?, claimSeconds?}` · `start` · `deal` (next hand, once `allReady` — nothing else deals it) · after last hand: `rematch` (new match, same people & settings) | `restart` (→ lobby).
@@ -120,6 +128,12 @@ V44: join ⇔ a seat is free (bot-held, own token, or dropped > 2 min); ≤ 4 hu
 V45: claim-timer & turn-timer expiry online: claim → `pass` only (V31); turn → bot move for that seat.
 V46: paused ⇒ game state unchanged until resume; remaining claim time preserved.
 V47: last hand scored ⇒ no automatic deal; only host `rematch` / `restart` move on.
+V48: guests never load the Logto SDK nor contact auth or DB; solo & online play work with accounts unconfigured or down.
+V49: `PlayerSlot.userId` & social identity come only from a verified access token (iss, aud, signature, expiry); client-supplied ids ignored. missing/invalid token at a table ⇒ guest, never refused.
+V50: every friend operation acts as the verified `sub` of the connection; ⊥ sender id from the client.
+V51: at most one `friendships` row per pair; states: none → pending → accepted; crossing requests ⇒ accepted; invite link ⇒ accepted.
+V52: friends list order: incoming → online friends → offline friends → sent requests; names A–Z within each.
+V53: server boots & serves tables with no `DATABASE_URL` / Logto env (accounts off).
 
 ## §T TASKS
 id|status|task|cites
@@ -163,6 +177,10 @@ T37|x|`packages/protocol` (codes, messages) + `apps/server`: `Table` (lobby, tur
 T38|x|web: `useOnline`, host/join dialog, lobby, invite link, online match via `MatchScreen`; bilingual strings|V29,I.ui
 T40|x|online pause/resume (any player), end-of-match choice (keep going / back to lobby), hop-in-hop-out seats (take over bots mid-match, chosen leave frees seat, drops reserved 2 min)|V44,V46,V47
 T41|x|solo pause: same button & overlay as online; freezes bots & claim timer, countdown resumes|V46
+T42|x|accounts + friends backend: Kysely/pg schema & migrations (pre-deploy `migrate.mjs`), Logto token verification, `userId` on seats + `identify`, `social` room (Presence online status, requests, invite codes, profile); tests on PGlite|V49,V50,V51,V53,I.db,I.auth
+T43|x|web: lazy Logto sign-in, Friends button/count, Friends dialog, `?friend=` invite links, player card add-friend from lobby & table, account section in profile, Dockerfile build args|V48,V52,V29,I.ui
+T44|.|Railway: add Postgres (+ `logto` DB, backups), Logto service per env, env vars on `server`/`web`, pre-deploy command; configure Logto apps/connectors|I.deploy
+T45|.|Logto Management-API bootstrap script so new environments (PR envs) need no manual console setup|I.deploy
 T39|.|deploy: Railway service `server` from `apps/server/Dockerfile` + public domain; set `VITE_SERVER_URL` build variable on `web`|I.deploy
 
 ## §B BUGS
