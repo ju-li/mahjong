@@ -159,7 +159,10 @@ onMounted(async () => {
   if (rest !== location.search.slice(1)) history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`)
 })
 
-/** Phones: the top bar shrinks to the title and a toggle that reveals every control. */
+/**
+ * The top bar is the title on the left and a toggle on the right that drops down every control
+ * (with Friends beside it on wider screens). On phones the title opens the menu too.
+ */
 const narrowQuery = window.matchMedia('(max-width: 640px)')
 const narrow = ref(narrowQuery.matches)
 const navOpen = ref(false)
@@ -269,7 +272,7 @@ async function loadLatest() {
 
 <template>
   <main class="app">
-    <header ref="topbar" class="topbar" :class="{ 'topbar--narrow': narrow, 'topbar--open': narrow && navOpen }">
+    <header ref="topbar" class="topbar" :class="{ 'topbar--narrow': narrow, 'topbar--open': navOpen }">
       <h1>
         <button
           v-if="narrow"
@@ -301,20 +304,25 @@ async function loadLatest() {
           </svg>
         </button>
       </h1>
-      <button
-        v-if="narrow"
-        type="button"
-        class="topbar__toggle"
-        :aria-label="t('app.menu')"
-        :aria-expanded="navOpen"
-        aria-controls="topbar-controls"
-        @click="navOpen = !navOpen"
-      >
-        <svg class="topbar__chevron" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-      <div v-show="!narrow || navOpen" id="topbar-controls" class="topbar__controls" @click="closeNavAfterAction">
+      <div class="topbar__end">
+        <button v-if="!narrow && account.enabled" class="action action--quiet-light" @click="friendsOpen = true">
+          <span v-if="onlineFriends" class="topbar__online" aria-hidden="true" />{{ friendsLabel }}
+          <span v-if="incomingRequests" class="topbar__badge" :aria-label="t('friends.requestsWaiting', { n: incomingRequests })">{{ incomingRequests }}</span>
+        </button>
+        <button
+          type="button"
+          class="topbar__toggle"
+          :aria-label="t('app.menu')"
+          :aria-expanded="navOpen"
+          aria-controls="topbar-controls"
+          @click="navOpen = !navOpen"
+        >
+          <svg class="topbar__chevron" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+      </div>
+      <div v-show="navOpen" id="topbar-controls" class="topbar__controls" @click="closeNavAfterAction">
         <details ref="settingsMenu" class="menu">
           <summary class="action action--quiet-light">{{ t('app.settings') }}</summary>
           <div class="menu__panel">
