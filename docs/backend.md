@@ -68,6 +68,13 @@ browser (PWA)                    Railway project (per environment)
   `social` room. A Presence hash counts each user's open connections (online
   = at least one), and a per-user Presence channel tells every connection
   to refresh its friends list when something changes.
+- **Friends at tables:** each table room keeps two more Presence hashes up to
+  date: `social:at` (user id → table code, signed-in seated players only) and
+  `social:tables` (code → `{openSeats, playing}`), and refreshes the friends of
+  anyone who sits down or leaves. The friends list reads them to show where a
+  friend is playing. The per-user channel also carries table invites
+  (`{kind: 'invite'}` next to `{kind: 'refresh'}`); the social room checks the
+  friendship and the sender's seat in `social:at` before sending one.
 
 ## Schema (v0)
 

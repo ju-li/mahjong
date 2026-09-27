@@ -400,6 +400,22 @@ describe('hop in, hop out', () => {
     expect(table.join('c9', { name: 'Ed' })).toBe(1)
     expect(snap('c0').players[1]).toEqual({ name: 'Ed', avatar: null, connected: true, userId: null })
   })
+
+  it('counts the seats a newcomer could take: bot seats and lapsed reservations', () => {
+    const { env, table } = setup(['Ann', 'Bo'])
+    expect(table.openSeats()).toBe(2)
+    table.start('c0')
+    expect(table.openSeats()).toBe(2)
+    table.join('c2', { name: 'Cy' })
+    table.join('c3', { name: 'Di' })
+    expect(table.openSeats()).toBe(0)
+    table.drop('c1')
+    expect(table.openSeats()).toBe(0)
+    env.advance(RESERVE_MS)
+    expect(table.openSeats()).toBe(1)
+    table.leave('c2')
+    expect(table.openSeats()).toBe(2)
+  })
 })
 
 describe('pause', () => {
@@ -498,5 +514,19 @@ describe('accounts', () => {
     expect(ids()).toEqual(['user-ann', null, null, null])
     table.leave('c1')
     expect(ids()).toEqual(['user-ann', null, null, null])
+  })
+
+  it('lists the accounts holding a seat, dropped or not', () => {
+    const env = new FakeEnv()
+    const table = new Table('ABCD', env, () => {})
+    table.join('c0', { name: 'Ann' }, 'user-ann')
+    table.join('c1', { name: 'Bo' }, 'user-bo')
+    table.join('c2', { name: 'Cy' })
+    expect(table.seatedUserIds()).toEqual(['user-ann', 'user-bo'])
+    table.start('c0')
+    table.drop('c1')
+    expect(table.seatedUserIds()).toEqual(['user-ann', 'user-bo'])
+    table.leave('c0')
+    expect(table.seatedUserIds()).toEqual(['user-bo'])
   })
 })

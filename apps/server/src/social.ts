@@ -1,14 +1,19 @@
 import { Room, ServerError, type Client } from '@colyseus/core'
-import type { Friend, FriendsSnapshot, InviteResult, SocialJoinOptions } from '@mahjong/protocol'
+import {
+  TABLE_INVITE_GAP_MS,
+  type Friend,
+  type FriendsSnapshot,
+  type InviteResult,
+  type SocialJoinOptions,
+  type TableInvite,
+  type TableInviteError,
+  type TableInviteResult,
+} from '@mahjong/protocol'
 import type { Db } from './db/db'
-import { acceptInvite, ensureProfile, friendIds, getProfile, listFriends, remove, respond, sendRequest, updateProfile } from './db/friends'
+import { acceptInvite, areFriends, ensureProfile, friendIds, getProfile, listFriends, remove, respond, sendRequest, updateProfile } from './db/friends'
 import { services } from './services'
+import { AT_KEY, ONLINE_KEY, publishRefresh, tableOf, topic, type SocialEvent } from './socialBus'
 import { cleanAvatar, cleanName } from './table'
-
-/** Presence hash: user id → how many social connections they have open (tabs, devices). */
-const ONLINE_KEY = 'social:online'
-/** Presence channel that tells every connection of one user to refresh their friends list. */
-const topic = (userId: string) => `social:user:${userId}`
 
 type SocialClient = Client<{ auth: { userId: string } }>
 
@@ -23,7 +28,9 @@ export class SocialRoom extends Room {
   /** Connections in this room, by user. */
   private members = new Map<string, Set<SocialClient>>()
   /** This room's Presence subscription per user it holds. */
-  private listeners = new Map<string, () => void>()
+  private listeners = new Map<string, (event: unknown) => void>()
+  /** When each sender last invited each friend (`sender friend` → ms), for rate limiting. */
+  private invitedAt = new Map<string, number>()
 
   onCreate() {
     this.on('friendRequest', async (db, me, m: { userId?: unknown }, client) => {
@@ -56,6 +63,35 @@ export class SocialRoom extends Room {
       // Friends see the new name too.
       await this.refresh(me, ...(await friendIds(db, me)))
     })
+    this.on('tableInvite', async (db, me, m: { userId?: unknown; code?: unknown }, client) => {
+      client.send('tableInviteResult', await this.tableInvite(db, me, String(m?.userId ?? ''), String(m?.code ?? '')))
+    })
+  }
+
+  /** Ask a friend to the table the sender is seated at, after checking they may. */
+  private async tableInvite(db: Db, me: string, friend: string, code: string): Promise<TableInviteResult> {
+    // A stranger's name is not the sender's to learn.
+    const friendProfile = friend && (await areFriends(db, me, friend)) ? await getProfile(db, friend) : null
+    const fail = (error: TableInviteError): TableInviteResult => ({ ok: false, name: friendProfile?.name ?? null, error })
+    if (!friendProfile) return fail('notFriend')
+    // Only a table the sender really sits at, as the table room recorded it: never the client's word.
+    if (!code || (await this.presence.hget(AT_KEY, me)) !== code) return fail('notAtTable')
+    if (!(await this.isOnline(friend))) return fail('offline')
+    const theirs = await tableOf(this.presence, friend)
+    if (theirs?.code === code) return fail('already')
+    const mine = await tableOf(this.presence, me)
+    if (!mine || mine.openSeats <= 0) return fail('full')
+    const key = `${me} ${friend}`
+    const now = Date.now()
+    if (now - (this.invitedAt.get(key) ?? -Infinity) < TABLE_INVITE_GAP_MS) return fail('tooSoon')
+    this.invitedAt.set(key, now)
+    for (const [k, at] of this.invitedAt) if (now - at >= TABLE_INVITE_GAP_MS) this.invitedAt.delete(k)
+    const sender = await getProfile(db, me)
+    if (!sender) return fail('notFriend')
+    const invite: TableInvite = { from: { userId: me, name: sender.name, avatar: sender.avatar }, code }
+    const event: SocialEvent = { kind: 'invite', invite }
+    await this.presence.publish(topic(friend), event)
+    return { ok: true, name: friendProfile.name }
   }
 
   /** Handle a message from a signed-in connection, with the database and the sender's verified id. */
@@ -81,7 +117,12 @@ export class SocialRoom extends Room {
     if (!mine) {
       mine = new Set()
       this.members.set(me, mine)
-      const listener = () => void this.guard(() => this.sendFriends(me))
+      const listener = (event: unknown) => {
+        const e = event as Partial<SocialEvent> | null
+        if (e?.kind === 'invite' && e.invite) {
+          for (const c of this.members.get(me) ?? []) c.send('tableInvite', e.invite)
+        } else void this.guard(() => this.sendFriends(me))
+      }
       this.listeners.set(me, listener)
       await this.presence.subscribe(topic(me), listener)
     }
@@ -112,7 +153,7 @@ export class SocialRoom extends Room {
 
   /** Tell every connection of these users, in any room, to refresh. */
   private async refresh(...userIds: string[]) {
-    for (const id of new Set(userIds)) if (id) await this.presence.publish(topic(id), 1)
+    await publishRefresh(this.presence, ...userIds)
   }
 
   private async isOnline(userId: string): Promise<boolean> {
@@ -128,7 +169,11 @@ export class SocialRoom extends Room {
     if (!profile) return
     const rows = await listFriends(db, userId)
     const friends: Friend[] = await Promise.all(
-      rows.map(async (r) => ({ ...r, online: r.state === 'friend' && (await this.isOnline(r.userId)) })),
+      rows.map(async (r) => {
+        const online = r.state === 'friend' && (await this.isOnline(r.userId))
+        const table = r.state === 'friend' ? await tableOf(this.presence, r.userId) : null
+        return table ? { ...r, online, table } : { ...r, online }
+      }),
     )
     const snapshot: FriendsSnapshot = { me: { userId, name: profile.name, avatar: profile.avatar, friendCode: profile.friendCode }, friends }
     for (const c of clients) c.send('friends', snapshot)
