@@ -2618,7 +2618,7 @@ body {
 
 .topbar__controls {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   right: 0;
   z-index: 30;
   width: 300px;
@@ -2640,20 +2640,62 @@ body {
   width: auto;
 }
 
-.topbar__controls > .action,
-.topbar__controls .menu > summary {
-  justify-content: center;
+/* The menu reads as lists of icon rows, grouped: play, people, settings, help. */
+.topbar__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.topbar__group + .topbar__group {
+  padding-top: 8px;
+  border-top: 1px solid var(--tile-edge);
+}
+
+.topbar__controls .action {
+  justify-content: flex-start;
+  gap: 10px;
+  text-align: left;
+}
+
+.topbar__controls .action--quiet-light {
+  border-color: transparent;
+}
+
+.topbar__controls .action--quiet-light:hover,
+.topbar__controls .action--quiet-light:focus-visible {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .topbar__controls .menu > summary {
   display: flex;
 }
 
+.topbar__controls .menu > summary::after {
+  margin-left: auto;
+}
+
+.menu-icon {
+  flex: none;
+}
+
+.topbar__menu[aria-expanded='true'] {
+  background: var(--button);
+}
+
+/* Settings open in place: no box of their own, lined up with the rows around them. */
 .topbar__controls .menu__panel {
   position: static;
-  margin-top: 8px;
+  gap: 4px;
   min-width: 0;
+  padding: 4px 0 0;
+  border: 0;
   box-shadow: none;
+}
+
+.topbar__controls .menu__panel .select {
+  min-height: 40px;
+  padding-inline: 14px;
 }
 
 /* Friends list */
