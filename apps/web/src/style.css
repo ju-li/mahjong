@@ -1069,55 +1069,46 @@ body {
 }
 
 
-/* ---- Settings dropdown ---- */
+/* ---- Settings dialog ---- */
 
-.menu {
-  position: relative;
+.settings {
+  width: min(420px, 100%);
 }
 
-.menu > summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-.menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.menu > summary::after {
-  content: '▾';
-  margin-left: 6px;
-  font-size: 0.8em;
-}
-
-.menu[open] > summary::after {
-  content: '▴';
-}
-
-.menu__panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 30;
+.settings__list {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  min-width: 220px;
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid var(--tile-edge);
-  background: var(--button);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  gap: 12px;
 }
 
-.menu__panel .select {
+.settings__list .select {
   justify-content: space-between;
+  min-height: 40px;
+  font-size: var(--fs-md);
+  color: var(--text);
 }
 
-.menu__panel select {
+.settings__list select {
   min-width: 0;
-  max-width: 100%;
+  max-width: 60%;
+}
+
+.settings__help {
+  align-self: flex-end;
+  margin-top: -8px;
+  font-size: var(--fs-sm);
+}
+
+.settings__more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--tile-edge);
+}
+
+.settings__more .action {
+  gap: 8px;
 }
 
 /* ---- Switch ---- */
@@ -1707,16 +1698,6 @@ body {
 @media (max-width: 640px) {
   .topbar h1 {
     font-size: var(--fs-md);
-  }
-
-  .menu {
-    position: static;
-  }
-
-  .menu__panel {
-    left: 0;
-    right: 0;
-    top: calc(100% + 2px);
   }
 
   .result__card h2:not(.summary__banner) {
@@ -2640,7 +2621,7 @@ body {
   width: auto;
 }
 
-/* The menu reads as lists of icon rows, grouped: play, people, settings, help. */
+/* The menu reads as lists of icon rows, grouped: play, people, settings and help. */
 .topbar__group {
   display: flex;
   flex-direction: column;
@@ -2667,35 +2648,12 @@ body {
   background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
-.topbar__controls .menu > summary {
-  display: flex;
-}
-
-.topbar__controls .menu > summary::after {
-  margin-left: auto;
-}
-
 .menu-icon {
   flex: none;
 }
 
 .topbar__menu[aria-expanded='true'] {
   background: var(--button);
-}
-
-/* Settings open in place: no box of their own, lined up with the rows around them. */
-.topbar__controls .menu__panel {
-  position: static;
-  gap: 4px;
-  min-width: 0;
-  padding: 4px 0 0;
-  border: 0;
-  box-shadow: none;
-}
-
-.topbar__controls .menu__panel .select {
-  min-height: 40px;
-  padding-inline: 14px;
 }
 
 /* Friends list */

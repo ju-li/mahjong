@@ -171,21 +171,23 @@ function onNarrowChange() {
   narrow.value = narrowQuery.matches
   navOpen.value = false
 }
-/** Picking an action closes the phone menu; the settings dropdown inside it stays open for more changes. */
+/** Picking an action closes the menu. */
 function closeNavAfterAction(e: Event) {
-  const target = e.target as Element
-  if (target.closest('button') && !target.closest('.menu')) navOpen.value = false
+  if ((e.target as Element).closest('button')) navOpen.value = false
 }
 
-/** Settings dropdown (and the phone menu); closes on a click outside it or Escape. */
+/** The menu closes on a click outside it or Escape; the settings dialog on Escape. */
 const topbar = ref<HTMLElement | null>(null)
-const settingsMenu = ref<HTMLDetailsElement | null>(null)
+const settingsOpen = ref(false)
+/** From Settings, the difficulty explainer opens in place of the dialog. */
+function showDifficulty() {
+  settingsOpen.value = false
+  rulesDialog.value = { tab: 'difficulty' }
+}
 function closeMenus(e: Event) {
-  const outside = (el: Element | null) => !el?.contains(e.target as Node)
-  const dismiss = (el: Element | null) => (e instanceof KeyboardEvent ? e.key === 'Escape' : outside(el))
-  const menu = settingsMenu.value
-  if (menu?.open && dismiss(menu)) menu.open = false
-  if (navOpen.value && dismiss(topbar.value)) navOpen.value = false
+  const escape = e instanceof KeyboardEvent && e.key === 'Escape'
+  if (escape && settingsOpen.value) settingsOpen.value = false
+  else if (navOpen.value && (e instanceof KeyboardEvent ? escape : !topbar.value?.contains(e.target as Node))) navOpen.value = false
 }
 onMounted(() => {
   document.addEventListener('pointerdown', closeMenus)
@@ -354,75 +356,7 @@ async function loadLatest() {
           <button v-else-if="account.signedIn.value" class="action action--quiet-light" @click="profileOpen = true"><MenuIcon name="account" />{{ t('account.open') }}</button>
         </div>
         <div class="topbar__group">
-          <details ref="settingsMenu" class="menu">
-            <summary class="action action--quiet-light"><MenuIcon name="settings" />{{ t('app.settings') }}</summary>
-            <div class="menu__panel">
-              <label v-if="!atTable" class="select">
-                <span>{{ t('app.rules') }}</span>
-                <select :value="rules" :aria-label="t('app.rules')" @change="changeRules">
-                  <option v-for="r in RULE_OPTIONS" :key="r.id" :value="r.id" :disabled="!r.playable">
-                    {{ r.playable ? t(`rules.${r.id}`) : t('rules.comingSoon', { name: t(`rules.${r.id}`) }) }}
-                  </option>
-                </select>
-              </label>
-              <label v-if="!atTable" class="select">
-                <span>{{ t('app.bots') }}</span>
-                <select v-model="difficulty" :aria-label="t('app.botDifficulty')">
-                  <option v-for="l in LEVELS" :key="l" :value="l">{{ t(`level.${l}`) }}</option>
-                </select>
-              </label>
-              <label v-if="!atTable" class="select">
-                <span>{{ t('app.claimTimer') }}</span>
-                <select v-model.number="claimSeconds" :aria-label="t('app.claimTimer')">
-                  <option v-for="s in CLAIM_TIMER_OPTIONS" :key="s" :value="s">{{ s === 0 ? t('timer.off') : t('timer.seconds', { n: s }) }}</option>
-                </select>
-              </label>
-              <label class="select">
-                <span>{{ t('app.textSize') }}</span>
-                <select v-model="textSize" :aria-label="t('app.textSize')">
-                  <option v-for="s in TEXT_SIZE_OPTIONS" :key="s" :value="s">{{ t(`textSize.${s}`) }}</option>
-                </select>
-              </label>
-              <label class="select toggle">
-                <span class="toggle__label">
-                  <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
-                    <template v-if="sound">
-                      <path d="M16 9a4 4 0 0 1 0 6" />
-                      <path d="M18.5 6.5a7.5 7.5 0 0 1 0 11" />
-                    </template>
-                    <path v-else d="M16 9l5 6M21 9l-5 6" />
-                  </svg>
-                  {{ t('app.sound') }}
-                </span>
-                <input v-model="sound" class="toggle__input" type="checkbox" role="switch" />
-              </label>
-              <label class="select toggle">
-                <span class="toggle__label">
-                  <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" :fill="voice ? 'currentColor' : 'none'" />
-                  </svg>
-                  {{ t('app.voice') }}
-                </span>
-                <input v-model="voice" class="toggle__input" type="checkbox" role="switch" />
-              </label>
-              <label v-if="atTable" class="select toggle">
-                <span class="toggle__label">
-                  <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="9" y="3" width="6" height="11" rx="3" :fill="voiceChat ? 'currentColor' : 'none'" />
-                    <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-                    <path v-if="!voiceChat" d="M4 4l16 16" />
-                  </svg>
-                  {{ t('app.voiceChat') }}
-                </span>
-                <input v-model="voiceChat" class="toggle__input" type="checkbox" role="switch" />
-              </label>
-              <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle"><MenuIcon name="language" />{{ t('app.switchLanguage') }}</button>
-              <button class="action action--quiet-light" :disabled="updating" @click="loadLatest"><MenuIcon name="loadLatest" />{{ updating ? t('app.loadingLatest') : t('app.loadLatest') }}</button>
-            </div>
-          </details>
-        </div>
-        <div class="topbar__group">
+          <button class="action action--quiet-light" @click="settingsOpen = true"><MenuIcon name="settings" />{{ t('app.settings') }}</button>
           <button class="action action--quiet-light" @click="rulesDialog = { tab: 'rules' }"><MenuIcon name="rules" />{{ t('app.howToPlay') }}</button>
           <button class="action action--quiet-light" @click="feedbackOpen = true"><MenuIcon name="feedback" />{{ t('feedback.open') }}</button>
           <button v-if="canInstall" class="action action--quiet-light" @click="installApp"><MenuIcon name="install" />{{ t('app.install') }}</button>
@@ -512,6 +446,81 @@ async function loadLatest() {
 
     <ProfileDialog v-if="profileOpen" @save="profileSaved" @close="profileOpen = false" />
 
+    <div v-if="settingsOpen" class="result" role="dialog" aria-modal="true" aria-labelledby="settings-title" @click.self="settingsOpen = false">
+      <div class="result__card settings">
+        <h2 id="settings-title">{{ t('app.settings') }}</h2>
+        <div class="settings__list">
+          <label v-if="!atTable" class="select">
+            <span>{{ t('app.rules') }}</span>
+            <select :value="rules" :aria-label="t('app.rules')" @change="changeRules">
+              <option v-for="r in RULE_OPTIONS" :key="r.id" :value="r.id" :disabled="!r.playable">
+                {{ r.playable ? t(`rules.${r.id}`) : t('rules.comingSoon', { name: t(`rules.${r.id}`) }) }}
+              </option>
+            </select>
+          </label>
+          <label v-if="!atTable" class="select">
+            <span>{{ t('app.bots') }}</span>
+            <select v-model="difficulty" :aria-label="t('app.botDifficulty')">
+              <option v-for="l in LEVELS" :key="l" :value="l">{{ t(`level.${l}`) }}</option>
+            </select>
+          </label>
+          <button v-if="!atTable" type="button" class="linklike settings__help" @click="showDifficulty">{{ t('difficulty.explain') }}</button>
+          <label v-if="!atTable" class="select">
+            <span>{{ t('app.claimTimer') }}</span>
+            <select v-model.number="claimSeconds" :aria-label="t('app.claimTimer')">
+              <option v-for="s in CLAIM_TIMER_OPTIONS" :key="s" :value="s">{{ s === 0 ? t('timer.off') : t('timer.seconds', { n: s }) }}</option>
+            </select>
+          </label>
+          <label class="select">
+            <span>{{ t('app.textSize') }}</span>
+            <select v-model="textSize" :aria-label="t('app.textSize')">
+              <option v-for="s in TEXT_SIZE_OPTIONS" :key="s" :value="s">{{ t(`textSize.${s}`) }}</option>
+            </select>
+          </label>
+          <label class="select toggle">
+            <span class="toggle__label">
+              <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
+                <template v-if="sound">
+                  <path d="M16 9a4 4 0 0 1 0 6" />
+                  <path d="M18.5 6.5a7.5 7.5 0 0 1 0 11" />
+                </template>
+                <path v-else d="M16 9l5 6M21 9l-5 6" />
+              </svg>
+              {{ t('app.sound') }}
+            </span>
+            <input v-model="sound" class="toggle__input" type="checkbox" role="switch" />
+          </label>
+          <label class="select toggle">
+            <span class="toggle__label">
+              <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" :fill="voice ? 'currentColor' : 'none'" />
+              </svg>
+              {{ t('app.voice') }}
+            </span>
+            <input v-model="voice" class="toggle__input" type="checkbox" role="switch" />
+          </label>
+          <label v-if="atTable" class="select toggle">
+            <span class="toggle__label">
+              <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="3" width="6" height="11" rx="3" :fill="voiceChat ? 'currentColor' : 'none'" />
+                <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+                <path v-if="!voiceChat" d="M4 4l16 16" />
+              </svg>
+              {{ t('app.voiceChat') }}
+            </span>
+            <input v-model="voiceChat" class="toggle__input" type="checkbox" role="switch" />
+          </label>
+          <div class="settings__more">
+            <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle"><MenuIcon name="language" />{{ t('app.switchLanguage') }}</button>
+            <button class="action action--quiet-light" :disabled="updating" @click="loadLatest"><MenuIcon name="loadLatest" />{{ updating ? t('app.loadingLatest') : t('app.loadLatest') }}</button>
+          </div>
+        </div>
+        <div class="profile__buttons">
+          <button type="button" class="action action--primary" @click="settingsOpen = false">{{ t('app.done') }}</button>
+        </div>
+      </div>
+    </div>
     <FriendsDialog v-if="friendsOpen" @close="friendsOpen = false" />
 
     <PlayerCard
