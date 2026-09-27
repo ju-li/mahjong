@@ -24,9 +24,11 @@ const props = defineProps<{
   claimRemaining?: number | null
   /** Seat whose player's voice memo is playing. */
   speakingSeat?: number | null
+  /** Online: opponents' badges open their player card (to add them as a friend). */
+  openable?: boolean
 }>()
 
-const emit = defineEmits<{ act: [action: Action]; editProfile: [] }>()
+const emit = defineEmits<{ act: [action: Action]; editProfile: []; openPlayer: [seat: Seat] }>()
 
 const { t } = useI18n()
 
@@ -44,7 +46,7 @@ function onKeydown(e: KeyboardEvent) {
   if (e.ctrlKey || e.metaKey || e.altKey) return
   const target = e.target as HTMLElement | null
   if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
-  if (target?.closest?.('.menu')) return // keys aimed at the settings menu
+  if (target?.closest?.('.topbar')) return // keys aimed at the top bar and its menu
   if (document.querySelector('[role="dialog"]')) return
   const key = e.key.toLowerCase()
   repeat = key === lastKey ? repeat + 1 : 0
@@ -206,6 +208,8 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer-label="t('score.dealer')"
           :active="seatActive(o.seat)"
           :speaking="speakingSeat === o.seat"
+          :open-label="openable ? t('friends.viewPlayer', { name: names[o.seat]! }) : undefined"
+          @open="emit('openPlayer', o.seat)"
         />
         <div class="seat__hand" :data-origin="`hand-${o.seat}`">
           <template v-if="o.side === 'top'">

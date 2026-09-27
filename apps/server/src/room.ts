@@ -1,10 +1,18 @@
 import { randomBytes, randomInt } from 'node:crypto'
 import { Room, ServerError, type Client } from '@colyseus/core'
 import { newRoomCode, type JoinOptions } from '@mahjong/protocol'
+import { services } from './services'
 import { Table } from './table'
 
 /** Codes of every table open in this process. */
 const liveCodes = new Set<string>()
+/** Every open table by code, so a bug report can include the server's full copy of the game. */
+const liveTables = new Map<string, Table>()
+
+/** The server's full state of an open table, or null if no table has that code. */
+export function tableDiagnostics(code: string): ReturnType<Table['diagnostics']> | null {
+  return liveTables.get(code)?.diagnostics() ?? null
+}
 
 /** How long a dropped connection may come straight back before its seat is handed to a bot for good. */
 const RECONNECT_SECONDS = 20
@@ -25,6 +33,8 @@ export class TableRoom extends Room {
   private tokens = new Map<string, string>()
   /** Connections that dropped and may still reconnect. */
   private dropped = new Set<string>()
+  /** Verified account per connection, so a reconnection stays signed in. */
+  private userIds = new Map<string, string | null>()
 
   onCreate() {
     const code = newRoomCode(liveCodes, (n) => randomInt(n))
@@ -40,6 +50,7 @@ export class TableRoom extends Room {
       },
       () => this.sendSnapshots(),
     )
+    liveTables.set(code, this.table)
     this.onMessage('act', (client, message) => this.table.act(client.sessionId, message))
     this.onMessage('ready', (client) => this.table.readyUp(client.sessionId))
     this.onMessage('unready', (client) => this.table.unready(client.sessionId))
@@ -51,6 +62,11 @@ export class TableRoom extends Room {
     this.onMessage('rematch', (client) => this.table.rematch(client.sessionId))
     this.onMessage('pause', (client) => this.table.pause(client.sessionId))
     this.onMessage('resume', (client) => this.table.resume(client.sessionId))
+    this.onMessage('identify', async (client, message: { accessToken?: unknown } | undefined) => {
+      const userId = await services.verify(message?.accessToken)
+      this.userIds.set(client.sessionId, userId)
+      this.table.identify(client.sessionId, userId)
+    })
     this.onMessage('voice', (client, message) => {
       const memo = this.table.voice(client.sessionId, message)
       if (memo) this.broadcast('voice', memo, { except: client })
@@ -58,13 +74,16 @@ export class TableRoom extends Room {
     this.watchEmpty()
   }
 
-  onAuth(_client: Client, options: JoinOptions) {
+  async onAuth(_client: Client, options: JoinOptions): Promise<{ userId: string | null }> {
     if (!this.table.canJoin(options?.token)) throw new ServerError(4003, 'every seat is taken')
-    return true
+    // A bad or missing token just means a guest: signing in is never needed to play.
+    return { userId: await services.verify(options?.accessToken) }
   }
 
-  onJoin(client: Client, options: JoinOptions) {
-    const player = this.table.join(client.sessionId, options ?? {})
+  onJoin(client: Client<{ auth: { userId: string | null } }>, options: JoinOptions) {
+    const userId = client.auth?.userId ?? null
+    this.userIds.set(client.sessionId, userId)
+    const player = this.table.join(client.sessionId, options ?? {}, userId)
     if (player === null) throw new ServerError(4003, 'every seat is taken')
     this.tokens.set(client.sessionId, this.table.snapshotFor(client.sessionId)!.token)
     this.watchEmpty()
@@ -80,7 +99,7 @@ export class TableRoom extends Room {
 
   onReconnect(client: Client) {
     this.dropped.delete(client.sessionId)
-    this.table.join(client.sessionId, { token: this.tokens.get(client.sessionId) })
+    this.table.join(client.sessionId, { token: this.tokens.get(client.sessionId) }, this.userIds.get(client.sessionId) ?? null)
     this.watchEmpty()
   }
 
@@ -88,12 +107,14 @@ export class TableRoom extends Room {
     // A connection that dropped and never came back keeps its reservation; a chosen leave frees the seat.
     if (!this.dropped.delete(client.sessionId)) this.table.leave(client.sessionId)
     this.tokens.delete(client.sessionId)
+    this.userIds.delete(client.sessionId)
     this.watchEmpty()
   }
 
   onDispose() {
     this.table.dispose()
     liveCodes.delete(this.roomId)
+    liveTables.delete(this.roomId)
   }
 
   private sendSnapshots() {

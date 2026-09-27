@@ -72,9 +72,11 @@ type Slot = {
   droppedAt: number | null
   /** Token of whoever left this seat last, so they get it back if it is still free. */
   formerToken: string | null
+  /** Verified account of a signed-in player; null = guest. */
+  userId: string | null
 }
 
-const emptySlot = (formerToken: string | null = null): Slot => ({ token: null, name: '', avatar: null, client: null, droppedAt: null, formerToken })
+const emptySlot = (formerToken: string | null = null): Slot => ({ token: null, name: '', avatar: null, client: null, droppedAt: null, formerToken, userId: null })
 
 type Timer = { clear(): void } | null
 
@@ -119,6 +121,8 @@ export class Table {
   private claimLeft: number | null = null
   /** When each player's recent voice memos were sent, for rate limiting. */
   private voiceLog: number[][] = PLAYERS.map(() => [])
+  /** Every action applied in the hand in play, in order: with the hand's seed, a replay of it (for bug reports). */
+  private handLog: Action[] = []
 
   constructor(
     code: string,
@@ -167,8 +171,11 @@ export class Table {
     return this.seatFor(token ?? null) !== null
   }
 
-  /** Seat a connection, taking over from a bot mid-match if need be. Null if every seat is taken. */
-  join(client: string, options: { name?: unknown; avatar?: unknown; token?: unknown }): Player | null {
+  /**
+   * Seat a connection, taking over from a bot mid-match if need be. Null if every seat is taken.
+   * `userId` must come from a verified access token, never from the client's options.
+   */
+  join(client: string, options: { name?: unknown; avatar?: unknown; token?: unknown }, userId: string | null = null): Player | null {
     const token = typeof options.token === 'string' ? options.token : null
     const p = this.seatFor(token)
     if (p === null) return null
@@ -183,6 +190,7 @@ export class Table {
     seated.droppedAt = null
     seated.name = cleanName(options.name, seated.name || `Player ${p + 1}`)
     seated.avatar = cleanAvatar(options.avatar, seated.avatar)
+    seated.userId = userId
     if (!this.connected(this.host) || this.slots[this.host]!.token === null) this.host = p
     this.changed()
     return p
@@ -231,6 +239,14 @@ export class Table {
     this.changed()
   }
 
+  /** A seated player signed in or out; `userId` is verified by the caller. */
+  identify(client: string, userId: string | null): void {
+    const p = this.playerOf(client)
+    if (p === null || this.slots[p]!.userId === userId) return
+    this.slots[p]!.userId = userId
+    this.changed()
+  }
+
   // ---------------------------------------------------------------------------
   // Lobby
 
@@ -253,6 +269,7 @@ export class Table {
     this.stopTimers()
     this.phase = 'playing'
     this.match = newMatch(this.env.random32(), this.settings.rules)
+    this.handLog = []
     // Steps only ever grow, so a click from the previous match can never match the new one.
     this.step++
     this.lastAction = null
@@ -360,6 +377,7 @@ export class Table {
   private commit(action: Action): void {
     const m = this.match!
     this.match = { ...m, current: applyAction(m.current!, action) }
+    this.handLog.push(action)
     this.lastAction = action
     this.step++
     this.changed()
@@ -506,6 +524,7 @@ export class Table {
       const pass = timeoutAction(legalActions(now, seat))
       if (pass && this.connected(playerAt(m, seat))) {
         this.match = { ...this.match!, current: applyAction(now, pass) }
+        this.handLog.push(pass)
         this.step++
       }
     }
@@ -517,6 +536,7 @@ export class Table {
     const s = m.current!
     if (s.phase.kind !== 'ended') return
     this.match = nextHand(m, s.phase.result)
+    this.handLog = []
     this.lastAction = null
     this.step++
     this.ready.clear()
@@ -561,7 +581,7 @@ export class Table {
       players: PLAYERS.map((p): PlayerSlot => {
         const slot = this.slots[p]!
         const human = slot.token !== null
-        return { name: human ? slot.name : null, avatar: human ? slot.avatar : null, connected: slot.client !== null }
+        return { name: human ? slot.name : null, avatar: human ? slot.avatar : null, connected: slot.client !== null, userId: human ? slot.userId : null }
       }),
       settings: { ...this.settings },
       match: this.matchInfo(you),
@@ -590,6 +610,25 @@ export class Table {
       allReady: this.betweenHands() && this.allReady(),
       final: this.finished(),
       paused: this.pausedBy,
+    }
+  }
+
+  /**
+   * The whole table as the server sees it, for bug reports: every hand, the wall and this hand's
+   * actions. Seat tokens are left out; this never goes to players.
+   */
+  diagnostics() {
+    return {
+      code: this.code,
+      phase: this.phase,
+      settings: this.settings,
+      host: this.host,
+      players: this.slots.map((slot) => ({ human: slot.token !== null, name: slot.name, avatar: slot.avatar, connected: slot.client !== null, droppedAt: slot.droppedAt, signedIn: slot.userId !== null })),
+      step: this.step,
+      pausedBy: this.pausedBy,
+      ready: [...this.ready],
+      match: this.match,
+      handLog: this.handLog,
     }
   }
 

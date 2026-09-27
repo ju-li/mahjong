@@ -131,6 +131,7 @@ body {
 }
 
 .topbar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1068,55 +1069,46 @@ body {
 }
 
 
-/* ---- Settings dropdown ---- */
+/* ---- Settings dialog ---- */
 
-.menu {
-  position: relative;
+.settings {
+  width: min(420px, 100%);
 }
 
-.menu > summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-.menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.menu > summary::after {
-  content: '▾';
-  margin-left: 6px;
-  font-size: 0.8em;
-}
-
-.menu[open] > summary::after {
-  content: '▴';
-}
-
-.menu__panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 30;
+.settings__list {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  min-width: 220px;
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid var(--tile-edge);
-  background: var(--button);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  gap: 12px;
 }
 
-.menu__panel .select {
+.settings__list .select {
   justify-content: space-between;
+  min-height: 40px;
+  font-size: var(--fs-md);
+  color: var(--text);
 }
 
-.menu__panel select {
+.settings__list select {
   min-width: 0;
-  max-width: 100%;
+  max-width: 60%;
+}
+
+.settings__help {
+  align-self: flex-end;
+  margin-top: -8px;
+  font-size: var(--fs-sm);
+}
+
+.settings__more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--tile-edge);
+}
+
+.settings__more .action {
+  gap: 8px;
 }
 
 /* ---- Switch ---- */
@@ -1708,20 +1700,6 @@ body {
     font-size: var(--fs-md);
   }
 
-  .topbar {
-    position: relative;
-  }
-
-  .menu {
-    position: static;
-  }
-
-  .menu__panel {
-    left: 0;
-    right: 0;
-    top: calc(100% + 2px);
-  }
-
   .result__card h2:not(.summary__banner) {
     font-size: var(--fs-lg);
   }
@@ -1882,14 +1860,6 @@ body {
 
 /* ---- Timer, shortcuts ---- */
 
-.topbar {
-  flex-wrap: wrap;
-}
-
-.topbar__controls {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
 
 .action kbd {
   font: 600 var(--fs-xs)/1 var(--mono, ui-monospace, monospace);
@@ -2435,6 +2405,30 @@ body {
   align-self: center;
 }
 
+/* ---- Feedback dialog ---- */
+
+.feedback {
+  width: min(480px, 100%);
+}
+
+.feedback textarea {
+  width: 100%;
+  font: inherit;
+  font-size: var(--fs-md);
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--tile-edge);
+  background: var(--button);
+  color: var(--button-text);
+  resize: vertical;
+  min-height: 7em;
+}
+
+.feedback textarea:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
 /* ---- Profile dialog: your name and face ---- */
 
 .profile {
@@ -2552,7 +2546,7 @@ body {
   text-decoration: underline;
 }
 
-/* ---- Phone top bar: title and a toggle; the controls drop down beneath ---- */
+/* ---- Top bar: title on the left; Friends and a toggle on the right that drops the controls down ---- */
 
 .topbar__title,
 .topbar__toggle {
@@ -2564,13 +2558,19 @@ body {
   cursor: pointer;
 }
 
+.topbar__end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .topbar__toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 40px;
   height: 40px;
-  margin-left: auto;
   border-radius: 999px;
 }
 
@@ -2597,12 +2597,12 @@ body {
   text-overflow: ellipsis;
 }
 
-.topbar--narrow .topbar__controls {
+.topbar__controls {
   position: absolute;
-  top: 100%;
-  left: 0;
+  top: calc(100% + 4px);
   right: 0;
   z-index: 30;
+  width: 300px;
   flex-direction: column;
   flex-wrap: nowrap;
   align-items: stretch;
@@ -2616,18 +2616,214 @@ body {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
-.topbar--narrow .topbar__controls > .action,
-.topbar--narrow .menu > summary {
-  justify-content: center;
+.topbar--narrow .topbar__controls {
+  left: 0;
+  width: auto;
 }
 
-.topbar--narrow .menu > summary {
+/* The menu reads as lists of icon rows, grouped: play, people, settings and help. */
+.topbar__group {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.topbar--narrow .menu__panel {
-  position: static;
-  margin-top: 8px;
+.topbar__group + .topbar__group {
+  padding-top: 8px;
+  border-top: 1px solid var(--tile-edge);
+}
+
+.topbar__controls .action {
+  justify-content: flex-start;
+  gap: 10px;
+  text-align: left;
+}
+
+.topbar__controls .action--quiet-light {
+  border-color: transparent;
+}
+
+.topbar__controls .action--quiet-light:hover,
+.topbar__controls .action--quiet-light:focus-visible {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.menu-icon {
+  flex: none;
+}
+
+.topbar__menu[aria-expanded='true'] {
+  background: var(--button);
+}
+
+/* Friends list */
+.friends {
+  width: min(460px, 100%);
+}
+
+.friends__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.result .friends__head .action {
+  align-self: auto;
+}
+
+.friends__list {
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.friends__section ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.friends__section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.friends__n {
+  font-size: var(--fs-xs);
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--button);
+}
+
+.friends__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--button);
+}
+
+.friends__face {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+
+.friends__face > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.friends__face svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.friends__face.is-online::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 2px var(--button);
+}
+
+.friends__name {
+  flex: 1;
   min-width: 0;
-  box-shadow: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result .friends__btn {
+  align-self: center;
+  padding: 4px 10px;
+  font-size: var(--fs-sm);
+}
+
+.friends__remove {
+  opacity: 0.75;
+}
+
+.topbar__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4em;
+  height: 1.4em;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+.topbar__online {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  vertical-align: middle;
+}
+
+.player-card {
+  width: min(380px, 100%);
+}
+
+.player-card__state {
+  margin: 0;
+  font-weight: 600;
+}
+
+.account {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--tile-edge);
+}
+
+.account h3 {
+  margin: 0;
+}
+
+.notice {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+  z-index: 20;
 }

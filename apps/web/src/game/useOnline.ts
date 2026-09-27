@@ -4,13 +4,13 @@ import type { Action } from '@mahjong/engine'
 import { ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from './profile'
+import { useAccount } from './useAccount'
+import { SERVER_URL } from './serverUrl'
 import { useSettings } from './settings'
 import type { MatchSource, Readiness } from './source'
 import { useTableAudio } from './tableAudio'
 import { useVoicePlayer } from './voiceChat'
 
-/** Game server address: set at build time for deploys; the local dev server otherwise. */
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname}:2567`
 
 const TOKEN_KEY = (code: string) => `mahjong.seat.${code}`
 /** The table this tab is at, so a reload goes straight back to it. */
@@ -58,6 +58,7 @@ export function useOnline() {
   const error = ref<OnlineError | null>(null)
   const link = ref<Link>('up')
   const { name, avatar } = useProfile()
+  const account = useAccount()
   const { voiceChat } = useSettings()
   const voicePlayer = useVoicePlayer()
   watch(voiceChat, (on) => on || voicePlayer.clear())
@@ -117,14 +118,21 @@ export function useOnline() {
     }
   }
 
-  const options = (code?: string): JoinOptions => ({
+  const options = async (code?: string): Promise<JoinOptions> => ({
     name: name.value.trim() || undefined,
     avatar: avatar.value,
     token: code ? (read(() => localStorage, TOKEN_KEY(code)) ?? undefined) : undefined,
+    // Signed-in players show up as themselves, so others at the table can add them as a friend.
+    accessToken: await account.accessToken(),
   })
 
-  const host = () => connect(() => client.create(ROOM_NAME, options()))
-  const join = (code: string) => connect(() => client.joinById(code, options(code)))
+  const host = () => connect(async () => client.create(ROOM_NAME, await options()))
+  const join = (code: string) => connect(async () => client.joinById(code, await options(code)))
+
+  // Signing in or out while seated updates the seat.
+  watch(account.signedIn, async () => {
+    if (room) send('identify', { accessToken: (await account.accessToken()) ?? null })
+  })
 
   /** Back to solo play. Mid-match a bot keeps your seat, and the saved token can bring you back. */
   async function leave(): Promise<void> {

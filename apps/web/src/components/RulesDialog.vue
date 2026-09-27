@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { RuleSet } from '@mahjong/engine'
 import { useI18n } from '../i18n/useI18n'
+import DifficultyReference from './DifficultyReference.vue'
 import FanReference from './FanReference.vue'
 import RulesReference from './RulesReference.vue'
 
-export type RulesTab = 'rules' | 'fans'
+export type RulesTab = 'rules' | 'fans' | 'difficulty'
 
 const props = defineProps<{ tab: RulesTab; focus?: string | null; rules: RuleSet }>()
 const emit = defineEmits<{ close: [] }>()
@@ -14,10 +15,17 @@ const { t } = useI18n()
 const active = ref<RulesTab>(props.tab)
 const closeButton = ref<HTMLButtonElement | null>(null)
 const card = ref<HTMLElement | null>(null)
-const TABS: { id: RulesTab; label: 'app.howToPlay' | 'app.fanReference' }[] = [
+const TABS: { id: RulesTab; label: 'app.howToPlay' | 'app.fanReference' | 'app.difficulty' }[] = [
   { id: 'rules', label: 'app.howToPlay' },
   { id: 'fans', label: 'app.fanReference' },
+  { id: 'difficulty', label: 'app.difficulty' },
 ]
+
+const title = computed(() => {
+  if (active.value === 'rules') return t('guide.title', { rules: t(`rules.${props.rules}`) })
+  if (active.value === 'difficulty') return t('app.botDifficulty')
+  return props.rules === 'hk' ? t('fans.titleHk') : t('fans.title')
+})
 
 function select(tab: RulesTab) {
   active.value = tab
@@ -49,7 +57,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <div ref="card" class="result__card fans__card">
       <header class="fans__head">
         <h2 id="rules-title">
-          {{ active === 'rules' ? t('guide.title', { rules: t(`rules.${rules}`) }) : rules === 'hk' ? t('fans.titleHk') : t('fans.title') }}
+          {{ title }}
         </h2>
         <button ref="closeButton" class="action" @click="emit('close')">{{ t('fans.close') }}</button>
       </header>
@@ -71,7 +79,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </div>
       <div :id="`rules-panel-${active}`" class="tabs__panel" role="tabpanel" :aria-labelledby="`rules-tab-${active}`">
         <RulesReference v-if="active === 'rules'" :rules="rules" @fans="select('fans')" />
-        <FanReference v-else :focus="focus" :rules="rules" />
+        <FanReference v-else-if="active === 'fans'" :focus="focus" :rules="rules" />
+        <DifficultyReference v-else :rules="rules" />
       </div>
     </div>
   </div>

@@ -21,6 +21,7 @@ RUN pnpm --filter server build
 FROM node:24-alpine
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /repo/apps/server/dist/server.mjs ./
+COPY --from=build /repo/apps/server/dist/server.mjs /repo/apps/server/dist/migrate.mjs ./
+# Railway pre-deploy command: `node migrate.mjs` (brings DATABASE_URL up to date; no-op when unset).
 USER node
 CMD ["node", "server.mjs"]

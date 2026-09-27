@@ -35,8 +35,11 @@ const QUICK_DELAY_MS = 120
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-/** Difficulty and preferred rules live in settings; older saves also carry a `difficulty` field, now ignored. */
-type Saved = { match: Match }
+/**
+ * Difficulty and preferred rules live in settings; older saves also carry a `difficulty` field, now ignored.
+ * `handLog` is every action of the hand in play (absent in older saves), so a bug report can replay it.
+ */
+type Saved = { match: Match; handLog?: Action[] }
 
 function load(): Saved | null {
   try {
@@ -77,6 +80,8 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   const { claimSeconds, difficulty, rules: preferredRules, needsOnboarding } = useSettings()
   const { t } = useI18n()
   const match = shallowRef<Match>(saved?.match ?? newMatch(randomSeed(), preferredRules.value))
+  /** Actions applied in the hand in play; null if it was restored from a save that didn't keep them. */
+  let handLog: Action[] | null = saved ? (Array.isArray(saved.handLog) ? saved.handLog : null) : []
   let generation = 0
   let step = 0
   let running = false
@@ -124,10 +129,11 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   })
   const matchOver = computed(() => isMatchOver(match.value))
 
-  watch(match, () => save({ match: match.value }), { immediate: true })
+  watch(match, () => save({ match: match.value, handLog: handLog ?? undefined }), { immediate: true })
 
   function commit(action: Action): void {
     const current = match.value.current!
+    handLog?.push(action)
     match.value = { ...match.value, current: applyAction(current, action) }
     step++
   }
@@ -192,6 +198,7 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   function continueToNextHand(): void {
     const s = match.value.current
     if (!s || s.phase.kind !== 'ended') return
+    handLog = []
     match.value = nextHand(match.value, s.phase.result)
     restartPump()
   }
@@ -201,6 +208,7 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   /** Start a fresh match; keeps the current rule set unless another is given. */
   function startNewMatch(next: RuleSet = match.value.rules): void {
     preferredRules.value = next
+    handLog = []
     match.value = newMatch(randomSeed(), next)
     restartPump()
   }
@@ -255,6 +263,8 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     resume: () => void (onBreak.value = false),
     /** A match was restored from storage rather than dealt fresh. */
     resumed: saved !== null,
+    /** The whole match, every hidden tile included, and this hand's actions so far: for bug reports. */
+    debugState: () => ({ match: match.value, handLog }),
     startNewMatch,
   }
 }

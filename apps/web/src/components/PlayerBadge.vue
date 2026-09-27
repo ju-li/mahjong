@@ -13,18 +13,20 @@ defineProps<{
   speaking?: boolean
   /** Your own badge: a button that opens your profile. */
   editLabel?: string
+  /** Someone else's badge at an online table: a button that opens their player card. */
+  openLabel?: string
 }>()
-defineEmits<{ edit: [] }>()
+defineEmits<{ edit: []; open: [] }>()
 </script>
 
 <template>
   <component
-    :is="editLabel ? 'button' : 'div'"
+    :is="editLabel || openLabel ? 'button' : 'div'"
     class="badge"
-    :class="{ 'badge--active': active, 'badge--speaking': speaking, 'badge--editable': editLabel }"
-    :type="editLabel ? 'button' : undefined"
-    :title="editLabel"
-    @click="editLabel && $emit('edit')"
+    :class="{ 'badge--active': active, 'badge--speaking': speaking, 'badge--editable': editLabel || openLabel }"
+    :type="editLabel || openLabel ? 'button' : undefined"
+    :title="editLabel ?? openLabel"
+    @click="editLabel ? $emit('edit') : openLabel && $emit('open')"
   >
     <div class="badge__photo">
       <span class="badge__face" v-html="avatar" />
@@ -41,6 +43,6 @@ defineEmits<{ edit: [] }>()
       <span class="badge__name">{{ name }}</span>
       <strong class="badge__score" :class="{ pos: score > 0, neg: score < 0 }">{{ score }}</strong>
     </div>
-    <span v-if="editLabel" class="visually-hidden">{{ editLabel }}</span>
+    <span v-if="editLabel || openLabel" class="visually-hidden">{{ editLabel ?? openLabel }}</span>
   </component>
 </template>

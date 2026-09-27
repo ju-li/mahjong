@@ -23,6 +23,8 @@ export type JoinOptions = {
   avatar?: number
   /** Seat token from an earlier join: reclaims that seat (or the one you last left), even mid-match. */
   token?: string
+  /** Logto access token of a signed-in player; absent or invalid = guest. Never needed to play. */
+  accessToken?: string
 }
 
 export type TableSettings = {
@@ -38,6 +40,8 @@ export type PlayerSlot = {
   avatar: number | null
   /** A human is at the table right now (a dropped human's seat is played by a bot until they return). */
   connected: boolean
+  /** Account of a signed-in player (server-verified), so others can add them as a friend; null = guest or bot. */
+  userId: string | null
 }
 
 /** The match part of a snapshot. Never includes the match seed: every hand's wall derives from it. */
@@ -117,4 +121,71 @@ export type ClientMessages = {
   resume: Record<string, never>
   /** Anyone at the table: a push-to-talk memo for everyone else. */
   voice: VoiceClip
+  /** Signed in or out while seated: the new access token, or null for guest. */
+  identify: { accessToken: string | null }
+}
+
+/** Colyseus room type signed-in players stay connected to for friends and online status. */
+export const SOCIAL_ROOM = 'social'
+
+/** Options for joining the social room. Guests can't: it needs a valid access token. */
+export type SocialJoinOptions = {
+  accessToken: string
+  /** Name and avatar chosen as a guest; they seed the profile the first time an account signs in. */
+  name?: string
+  avatar?: number
+}
+
+export type FriendState = 'incoming' | 'outgoing' | 'friend'
+
+export type Friend = {
+  userId: string
+  name: string
+  avatar: number | null
+  /** `incoming` = they asked you; `outgoing` = you asked them; `friend` = accepted. */
+  state: FriendState
+  /** Has the game open and is signed in right now. Only known for accepted friends. */
+  online: boolean
+}
+
+/** Server → client on the social room, message type `friends`: your profile and everyone linked to you. */
+export type FriendsSnapshot = {
+  me: { userId: string; name: string; avatar: number | null; friendCode: string }
+  friends: Friend[]
+}
+
+export type FriendError = 'self' | 'unknown' | 'limit'
+
+/** Server → client, message type `inviteResult`: what opening a friend invite link did. */
+export type InviteResult = { ok: true; name: string } | { ok: false; error: FriendError }
+
+/** Client → server messages on the social room. */
+export type SocialClientMessages = {
+  friendRequest: { userId: string }
+  friendRespond: { userId: string; accept: boolean }
+  /** Unfriend, or withdraw / drop a request. */
+  friendRemove: { userId: string }
+  /** Opened someone's friend invite link. */
+  acceptInvite: { code: string }
+  /** Change your account's name and/or avatar. */
+  profile: { name?: string; avatar?: number }
+}
+
+/** HTTP path on the game server that emails player feedback to the developers. */
+export const FEEDBACK_PATH = '/feedback'
+export const MAX_FEEDBACK_MESSAGE = 5000
+/** Diagnostics ride along as JSON attachments; the console log is the bulk of it. */
+export const MAX_FEEDBACK_ATTACHMENT_BYTES = 400 * 1024
+
+/** Body of a `POST /feedback`. */
+export type FeedbackRequest = {
+  name: string
+  email: string
+  message: string
+  /** About the player's device and app: user agent, settings, recent console output. */
+  diagnostics: unknown
+  /** The game as of the report: enough to replay it. */
+  game: unknown
+  /** Code of the online table the player is at; the server adds its full copy of that game. */
+  tableCode?: string
 }
