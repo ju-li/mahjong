@@ -119,6 +119,8 @@ export class Table {
   private claimLeft: number | null = null
   /** When each player's recent voice memos were sent, for rate limiting. */
   private voiceLog: number[][] = PLAYERS.map(() => [])
+  /** Every action applied in the hand in play, in order: with the hand's seed, a replay of it (for bug reports). */
+  private handLog: Action[] = []
 
   constructor(
     code: string,
@@ -253,6 +255,7 @@ export class Table {
     this.stopTimers()
     this.phase = 'playing'
     this.match = newMatch(this.env.random32(), this.settings.rules)
+    this.handLog = []
     // Steps only ever grow, so a click from the previous match can never match the new one.
     this.step++
     this.lastAction = null
@@ -360,6 +363,7 @@ export class Table {
   private commit(action: Action): void {
     const m = this.match!
     this.match = { ...m, current: applyAction(m.current!, action) }
+    this.handLog.push(action)
     this.lastAction = action
     this.step++
     this.changed()
@@ -506,6 +510,7 @@ export class Table {
       const pass = timeoutAction(legalActions(now, seat))
       if (pass && this.connected(playerAt(m, seat))) {
         this.match = { ...this.match!, current: applyAction(now, pass) }
+        this.handLog.push(pass)
         this.step++
       }
     }
@@ -517,6 +522,7 @@ export class Table {
     const s = m.current!
     if (s.phase.kind !== 'ended') return
     this.match = nextHand(m, s.phase.result)
+    this.handLog = []
     this.lastAction = null
     this.step++
     this.ready.clear()
@@ -590,6 +596,25 @@ export class Table {
       allReady: this.betweenHands() && this.allReady(),
       final: this.finished(),
       paused: this.pausedBy,
+    }
+  }
+
+  /**
+   * The whole table as the server sees it, for bug reports: every hand, the wall and this hand's
+   * actions. Seat tokens are left out; this never goes to players.
+   */
+  diagnostics() {
+    return {
+      code: this.code,
+      phase: this.phase,
+      settings: this.settings,
+      host: this.host,
+      players: this.slots.map((slot) => ({ human: slot.token !== null, name: slot.name, avatar: slot.avatar, connected: slot.client !== null, droppedAt: slot.droppedAt })),
+      step: this.step,
+      pausedBy: this.pausedBy,
+      ready: [...this.ready],
+      match: this.match,
+      handLog: this.handLog,
     }
   }
 

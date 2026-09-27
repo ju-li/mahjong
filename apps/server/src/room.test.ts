@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { boot, type ColyseusTestServer } from '@colyseus/testing'
 import type { Room } from '@colyseus/sdk'
-import { ROOM_NAME, type Snapshot, type VoiceMemo } from '@mahjong/protocol'
-import { server } from './main'
+import { FEEDBACK_PATH, ROOM_NAME, type Snapshot, type VoiceMemo } from '@mahjong/protocol'
+import type { FeedbackMail } from './feedback'
+import { feedbackEnv, server } from './main'
 
 let colyseus: ColyseusTestServer
 
@@ -90,5 +91,23 @@ describe('TableRoom', () => {
   it('answers health checks', async () => {
     const res = await colyseus.http.get('/health')
     expect(res.data).toEqual({ ok: true })
+  })
+
+  it("emails feedback with the server's full copy of the player's table", async () => {
+    const sent: FeedbackMail[] = []
+    feedbackEnv.send = async (mail) => void sent.push(mail)
+    const host = await colyseus.sdk.create(ROOM_NAME, { name: 'Ann' })
+    const started = next(host, (s) => s.phase === 'playing')
+    host.send('start', {})
+    await started
+    const res = await colyseus.http.post(FEEDBACK_PATH, {
+      body: { name: 'Ann', email: 'ann@example.com', message: 'Stuck', diagnostics: { userAgent: 'x' }, game: { view: null }, tableCode: host.roomId },
+    })
+    expect(res.data).toEqual({ ok: true })
+    const game = JSON.parse(sent[0]!.attachments[1]!.content)
+    expect(game.server.code).toBe(host.roomId)
+    expect(game.server.match.current.hands).toHaveLength(4)
+    expect(JSON.stringify(game)).not.toContain('token')
+    await host.leave()
   })
 })

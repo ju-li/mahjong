@@ -5,6 +5,13 @@ import { Table } from './table'
 
 /** Codes of every table open in this process. */
 const liveCodes = new Set<string>()
+/** Every open table by code, so a bug report can include the server's full copy of the game. */
+const liveTables = new Map<string, Table>()
+
+/** The server's full state of an open table, or null if no table has that code. */
+export function tableDiagnostics(code: string): ReturnType<Table['diagnostics']> | null {
+  return liveTables.get(code)?.diagnostics() ?? null
+}
 
 /** How long a dropped connection may come straight back before its seat is handed to a bot for good. */
 const RECONNECT_SECONDS = 20
@@ -40,6 +47,7 @@ export class TableRoom extends Room {
       },
       () => this.sendSnapshots(),
     )
+    liveTables.set(code, this.table)
     this.onMessage('act', (client, message) => this.table.act(client.sessionId, message))
     this.onMessage('ready', (client) => this.table.readyUp(client.sessionId))
     this.onMessage('unready', (client) => this.table.unready(client.sessionId))
@@ -94,6 +102,7 @@ export class TableRoom extends Room {
   onDispose() {
     this.table.dispose()
     liveCodes.delete(this.roomId)
+    liveTables.delete(this.roomId)
   }
 
   private sendSnapshots() {

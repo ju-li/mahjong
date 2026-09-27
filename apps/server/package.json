@@ -16,7 +16,8 @@
     "@mahjong/bots": "workspace:*",
     "@mahjong/engine": "workspace:*",
     "@mahjong/protocol": "workspace:*",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "nodemailer": "^10.0.10"
   },
   "devDependencies": {
     "@colyseus/sdk": "^0.18.4",

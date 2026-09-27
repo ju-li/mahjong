@@ -4,13 +4,12 @@ import type { Action } from '@mahjong/engine'
 import { ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from './profile'
+import { SERVER_URL } from './serverUrl'
 import { useSettings } from './settings'
 import type { MatchSource, Readiness } from './source'
 import { useTableAudio } from './tableAudio'
 import { useVoicePlayer } from './voiceChat'
 
-/** Game server address: set at build time for deploys; the local dev server otherwise. */
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname}:2567`
 
 const TOKEN_KEY = (code: string) => `mahjong.seat.${code}`
 /** The table this tab is at, so a reload goes straight back to it. */
