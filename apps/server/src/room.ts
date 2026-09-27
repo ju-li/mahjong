@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from 'node:crypto'
 import { Room, ServerError, type Client } from '@colyseus/core'
-import { newRoomCode, type JoinOptions } from '@mahjong/protocol'
+import { KICKED_CODE, newRoomCode, type JoinOptions } from '@mahjong/protocol'
 import { friendIds } from './db/friends'
 import { services } from './services'
 import { AT_KEY, publishRefresh, TABLES_KEY } from './socialBus'
@@ -73,6 +73,15 @@ export class TableRoom extends Room {
       this.userIds.set(client.sessionId, userId)
       this.table.identify(client.sessionId, userId)
     })
+    this.onMessage('kick', (client, message: { player?: unknown } | undefined) => {
+      const kicked = this.table.kick(client.sessionId, message?.player)
+      const target = kicked?.client ? this.clients.find((c) => c.sessionId === kicked.client) : undefined
+      if (!target) return
+      // Their seat is already gone: this is neither a drop to wait for nor a leave to process.
+      this.dropped.delete(target.sessionId)
+      this.tokens.delete(target.sessionId)
+      target.leave(KICKED_CODE)
+    })
     this.onMessage('voice', (client, message) => {
       const memo = this.table.voice(client.sessionId, message)
       if (memo) this.broadcast('voice', memo, { except: client })
@@ -81,9 +90,11 @@ export class TableRoom extends Room {
   }
 
   async onAuth(_client: Client, options: JoinOptions): Promise<{ userId: string | null }> {
-    if (!this.table.canJoin(options?.token)) throw new ServerError(4003, 'every seat is taken')
     // A bad or missing token just means a guest: signing in is never needed to play.
-    return { userId: await services.verify(options?.accessToken) }
+    const userId = await services.verify(options?.accessToken)
+    if (this.table.isBanned(options?.token, userId)) throw new ServerError(KICKED_CODE, 'removed by the host')
+    if (!this.table.canJoin(options?.token)) throw new ServerError(4003, 'every seat is taken')
+    return { userId }
   }
 
   onJoin(client: Client<{ auth: { userId: string | null } }>, options: JoinOptions) {
@@ -161,6 +172,8 @@ export class TableRoom extends Room {
     const affected = new Set([...users, ...before])
     const friends = new Set<string>()
     for (const u of affected) for (const f of await friendIds(db, u)) friends.add(f)
+    // Those who sat down or left hear it too: their own list says which table they are at.
+    for (const u of affected) if (users.has(u) !== before.has(u)) friends.add(u)
     await publishRefresh(this.presence, ...friends)
   }
 

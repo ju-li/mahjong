@@ -10,10 +10,11 @@ import { useI18n } from '../i18n/useI18n'
 
 /**
  * Your friends: requests to answer, who's online (and at which table), everyone else, and a link
- * to invite more. At a table (`tableCode`), online friends can be invited to it.
+ * to invite more. At a table (`tableCode`), online friends can be invited to it; in solo play,
+ * Play together hosts a new table and invites them.
  */
 const props = defineProps<{ tableCode: string | null }>()
-const emit = defineEmits<{ close: []; join: [code: string] }>()
+const emit = defineEmits<{ close: []; join: [code: string]; playWith: [userId: string] }>()
 
 const { t } = useI18n()
 const account = useAccount()
@@ -116,7 +117,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 <button class="action friends__btn" @click="social.respond(f.userId, false)">{{ t('friends.decline') }}</button>
               </template>
               <button v-else-if="f.state === 'outgoing'" class="action friends__btn" @click="social.remove(f.userId)">{{ t('friends.cancel') }}</button>
-              <template v-else-if="canInviteToTable(f, tableCode) || joinable(f)">
+              <template v-else-if="canInviteToTable(f, tableCode) || joinable(f) || (!tableCode && f.online)">
+                <button
+                  v-if="!tableCode && f.online"
+                  class="action action--primary friends__btn"
+                  :aria-label="`${t('friends.playTogether')}: ${f.name}`"
+                  @click="emit('playWith', f.userId)"
+                >
+                  {{ t('friends.playTogether') }}
+                </button>
                 <button
                   v-if="canInviteToTable(f, tableCode)"
                   class="action action--primary friends__btn"
@@ -126,7 +135,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 >
                   {{ invited.has(f.userId) ? t('friends.invited') : t('friends.inviteToTable') }}
                 </button>
-                <button v-if="joinable(f)" class="action friends__btn" :class="{ 'action--primary': !tableCode }" :aria-label="`${t('friends.join')} ${f.name}`" @click="emit('join', joinable(f)!)">
+                <button v-if="joinable(f)" class="action friends__btn" :aria-label="`${t('friends.join')} ${f.name}`" @click="emit('join', joinable(f)!)">
                   {{ t('friends.join') }}
                 </button>
               </template>

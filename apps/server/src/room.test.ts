@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { boot, type ColyseusTestServer } from '@colyseus/testing'
 import type { Room } from '@colyseus/sdk'
-import { FEEDBACK_PATH, ROOM_NAME, SOCIAL_ROOM, type FriendsSnapshot, type InviteResult, type Snapshot, type TableInvite, type TableInviteResult, type VoiceMemo } from '@mahjong/protocol'
+import { FEEDBACK_PATH, KICKED_CODE, ROOM_NAME, SOCIAL_ROOM, type FriendsSnapshot, type InviteResult, type Snapshot, type TableInvite, type TableInviteResult, type VoiceMemo } from '@mahjong/protocol'
 import { tokenVerifier } from './auth'
 import type { FeedbackMail } from './feedback'
 import { feedbackEnv, server } from './main'
@@ -134,6 +134,36 @@ function nextFriends(room: Room, test: (s: FriendsSnapshot) => boolean = () => t
   })
 }
 
+describe('removing players', () => {
+  it('closes a removed player\'s connection and keeps them out, by seat and by account', async () => {
+    const host = await colyseus.sdk.create(ROOM_NAME, { name: 'Ann' })
+    const code = host.roomId
+    await next(host)
+    const guest = await colyseus.sdk.joinById(code, { name: 'Bo' })
+    const token = (await next(guest)).token
+    const signedIn = await colyseus.sdk.joinById(code, { name: 'Cy', accessToken: await issuer.token('kick-cy') })
+    await next(signedIn)
+
+    const closed = new Promise<number>((resolve) => guest.onLeave((c) => resolve(c)))
+    const seatFreed = next(host, (s) => s.players[1]!.name === null)
+    host.send('kick', { player: 1 })
+    expect(await closed).toBe(KICKED_CODE)
+    await seatFreed
+    await expect(colyseus.sdk.joinById(code, { name: 'Bo', token })).rejects.toThrow()
+
+    const cyClosed = new Promise<number>((resolve) => signedIn.onLeave((c) => resolve(c)))
+    host.send('kick', { player: 2 })
+    expect(await cyClosed).toBe(KICKED_CODE)
+    // A fresh browser, same account: still out.
+    await expect(colyseus.sdk.joinById(code, { name: 'Cy', accessToken: await issuer.token('kick-cy') })).rejects.toThrow()
+    // Anyone else may take the seat.
+    const di = await colyseus.sdk.joinById(code, { name: 'Di' })
+    await next(di)
+    await di.leave()
+    await host.leave()
+  })
+})
+
 describe('accounts at a table', () => {
   it('shows who is signed in, and a bad token just plays as a guest', async () => {
     const host = await colyseus.sdk.create(ROOM_NAME, { name: 'Ann', accessToken: await issuer.token('user-ann') })
@@ -220,6 +250,7 @@ describe('SocialRoom', () => {
     const table = await colyseus.sdk.create(ROOM_NAME, { name: 'Dee', accessToken: await issuer.token('s-dee') })
     await next(table)
     expect((await eliSees).friends.find((f) => f.userId === 's-dee')!.table).toEqual({ code: table.roomId, openSeats: 3, playing: false })
+    expect((await nextFriends(dee.room, (s) => s.me.table === table.roomId)).me.table).toBe(table.roomId)
 
     // Strangers can't be invited, even to a real table.
     result = inviteResult(dee.room)
@@ -242,8 +273,10 @@ describe('SocialRoom', () => {
 
     // Dee leaves the table: Eli sees they are no longer at one.
     const gone = nextFriends(eli.room, (s) => s.friends.some((f) => f.userId === 's-dee' && f.table === undefined))
+    const deeGone = nextFriends(dee.room, (s) => s.me.table === undefined)
     await table.leave()
     await gone
+    await deeGone
 
     // An offline friend can't be invited.
     const table2 = await colyseus.sdk.create(ROOM_NAME, { name: 'Dee', accessToken: await issuer.token('s-dee') })
