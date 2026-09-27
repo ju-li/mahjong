@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Friend } from '@mahjong/protocol'
-import { friendsCount, groupFriends, parseFriendCode } from './friends'
+import { canInviteToTable, friendsCount, groupFriends, parseFriendCode, seatChanges, tableStatus } from './friends'
 
 const f = (name: string, state: Friend['state'], online = false): Friend => ({ userId: name.toLowerCase(), name, avatar: null, state, online })
 
@@ -30,5 +30,29 @@ describe('parseFriendCode', () => {
     expect(parseFriendCode(null)).toBeNull()
     expect(parseFriendCode('short')).toBeNull()
     expect(parseFriendCode('abcdefgh1l')).toBeNull()
+  })
+})
+
+describe('tables', () => {
+  const at = (code: string, openSeats: number): Friend => ({ ...f('Bo', 'friend', true), table: { code, openSeats, playing: true } })
+
+  it('says where a friend is playing and whether you can join them', () => {
+    expect(tableStatus(f('Bo', 'friend', true), null)).toEqual({ kind: 'none' })
+    expect(tableStatus(at('ABCD', 2), 'ABCD')).toEqual({ kind: 'mine' })
+    expect(tableStatus(at('ABCD', 2), 'WXYZ')).toEqual({ kind: 'other', code: 'ABCD', openSeats: 2, canJoin: true })
+    expect(tableStatus(at('ABCD', 0), null)).toEqual({ kind: 'other', code: 'ABCD', openSeats: 0, canJoin: false })
+  })
+
+  it('offers an invite to online friends who are not already at your table', () => {
+    expect(canInviteToTable(f('Bo', 'friend', true), 'ABCD')).toBe(true)
+    expect(canInviteToTable(at('WXYZ', 1), 'ABCD')).toBe(true)
+    expect(canInviteToTable(at('ABCD', 1), 'ABCD')).toBe(false)
+    expect(canInviteToTable(f('Bo', 'friend', false), 'ABCD')).toBe(false)
+    expect(canInviteToTable(f('Bo', 'outgoing', true), 'ABCD')).toBe(false)
+    expect(canInviteToTable(f('Bo', 'friend', true), null)).toBe(false)
+  })
+
+  it('finds who sat down and who left', () => {
+    expect(seatChanges(new Set(['a', 'b']), new Set(['b', 'c']))).toEqual({ joined: ['c'], left: ['a'] })
   })
 })

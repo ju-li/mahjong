@@ -171,6 +171,23 @@ export class Table {
     return this.seatFor(token ?? null) !== null
   }
 
+  /** How many seats someone new could take right now: bot seats and lapsed reservations. */
+  openSeats(): number {
+    const now = this.env.now()
+    return PLAYERS.filter((p) => {
+      const s = this.slots[p]!
+      return s.token === null || (s.client === null && s.droppedAt !== null && now - s.droppedAt >= RESERVE_MS)
+    }).length
+  }
+
+  /** Accounts of the signed-in players holding a seat, including ones whose connection dropped. */
+  seatedUserIds(): string[] {
+    return PLAYERS.flatMap((p) => {
+      const s = this.slots[p]!
+      return s.token !== null && s.userId ? [s.userId] : []
+    })
+  }
+
   /**
    * Seat a connection, taking over from a bot mid-match if need be. Null if every seat is taken.
    * `userId` must come from a verified access token, never from the client's options.

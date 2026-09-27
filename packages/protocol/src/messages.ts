@@ -146,7 +146,12 @@ export type Friend = {
   state: FriendState
   /** Has the game open and is signed in right now. Only known for accepted friends. */
   online: boolean
+  /** The online table an accepted friend is seated at, if any. Absent otherwise. */
+  table?: FriendTable
 }
+
+/** Where a friend is playing: the table's code, how many seats someone new could take, and whether a match is on. */
+export type FriendTable = { code: string; openSeats: number; playing: boolean }
 
 /** Server → client on the social room, message type `friends`: your profile and everyone linked to you. */
 export type FriendsSnapshot = {
@@ -159,6 +164,17 @@ export type FriendError = 'self' | 'unknown' | 'limit'
 /** Server → client, message type `inviteResult`: what opening a friend invite link did. */
 export type InviteResult = { ok: true; name: string } | { ok: false; error: FriendError }
 
+/** Server → client on the social room, message type `tableInvite`: a friend asks you to their table. */
+export type TableInvite = { from: { userId: string; name: string; avatar: number | null }; code: string }
+
+export type TableInviteError = 'offline' | 'full' | 'already' | 'notFriend' | 'notAtTable' | 'tooSoon'
+
+/** Server → client, message type `tableInviteResult`: what sending a table invite did. */
+export type TableInviteResult = { ok: true; name: string } | { ok: false; name: string | null; error: TableInviteError }
+
+/** A player may invite the same friend at most once in this long. */
+export const TABLE_INVITE_GAP_MS = 20_000
+
 /** Client → server messages on the social room. */
 export type SocialClientMessages = {
   friendRequest: { userId: string }
@@ -169,6 +185,8 @@ export type SocialClientMessages = {
   acceptInvite: { code: string }
   /** Change your account's name and/or avatar. */
   profile: { name?: string; avatar?: number }
+  /** Ask an online friend to the table you are seated at. */
+  tableInvite: { userId: string; code: string }
 }
 
 /** HTTP path on the game server that emails player feedback to the developers. */
