@@ -4,6 +4,7 @@ import { DIFFICULTIES, type Difficulty } from '@mahjong/bots'
 import { isRuleSet } from '@mahjong/engine'
 import { ONLINE_CLAIM_SECONDS, type Snapshot, type TableSettings } from '@mahjong/protocol'
 import { avatarSvg } from '../game/avatar'
+import { shareInvite } from '../game/invite'
 import { RULE_OPTIONS } from '../game/settings'
 import { useI18n } from '../i18n/useI18n'
 
@@ -13,36 +14,13 @@ const emit = defineEmits<{ configure: [settings: Partial<TableSettings>]; start:
 
 const { t } = useI18n()
 
-/** Invite links point at the public domain (`PUBLIC_DOMAIN` at build time) so they work wherever the host is playing from. */
-const PUBLIC_DOMAIN: string | undefined = import.meta.env.VITE_PUBLIC_DOMAIN
-const SHARE_BASE = PUBLIC_DOMAIN
-  ? /^https?:\/\//.test(PUBLIC_DOMAIN) ? PUBLIC_DOMAIN : `https://${PUBLIC_DOMAIN}`
-  : `${location.origin}${location.pathname}`
-const link = computed(() => {
-  const url = new URL(SHARE_BASE)
-  url.searchParams.set('room', props.snapshot.code)
-  return url.href
-})
 const hostName = computed(() => props.snapshot.players[props.snapshot.host]?.name ?? '')
 const copied = ref(false)
 
 async function share() {
-  const text = t('lobby.shareText', { code: props.snapshot.code })
-  if (navigator.share) {
-    try {
-      await navigator.share({ title: t('app.title'), text, url: link.value })
-      return
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') return
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(`${text}\n${link.value}`)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 2000)
-  } catch {
-    window.prompt(t('lobby.copy'), link.value)
-  }
+  if ((await shareInvite(props.snapshot.code, t)) !== 'copied') return
+  copied.value = true
+  setTimeout(() => (copied.value = false), 2000)
 }
 
 function onRules(e: Event) {

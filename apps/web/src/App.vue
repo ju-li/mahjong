@@ -10,6 +10,8 @@ import ProfileDialog from './components/ProfileDialog.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import VoiceButton from './components/VoiceButton.vue'
 import { loadLatestVersion } from './game/appUpdate'
+import { useInstall } from './game/install'
+import { shareInvite } from './game/invite'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useOnline } from './game/useOnline'
@@ -36,6 +38,7 @@ const shownRules = computed(() => source.value.rules.value)
 
 /** Your name and avatar; opened by clicking your own badge or your lobby seat. */
 const profileOpen = ref(false)
+
 /** A changed profile reaches the online table straight away. */
 function profileSaved() {
   if (atTable.value) online.sendProfile()
@@ -56,6 +59,13 @@ function leaveTable() {
 }
 /** Lost the table: go solo on the player's say-so, without the leave-table confirmation. */
 const playSolo = () => void online.leave()
+/** The table chip in the top bar shares the invite link, like the lobby's share button. */
+const codeCopied = ref(false)
+async function shareTable() {
+  if (!snapshot.value || (await shareInvite(snapshot.value.code, t)) !== 'copied') return
+  codeCopied.value = true
+  setTimeout(() => (codeCopied.value = false), 2000)
+}
 const pausedBy = computed(() => online.source.pausedBy?.value ?? null)
 /** On a break: someone paused the online table, or you paused your solo match. */
 const onBreak = computed(() => (atTable.value ? pausedBy.value !== null : solo.onBreak.value))
@@ -96,20 +106,39 @@ onMounted(() => {
   }
 })
 
-/** Settings dropdown; closes on a click outside it or Escape. */
+/** Phones: the top bar shrinks to the title and a toggle that reveals every control. */
+const narrowQuery = window.matchMedia('(max-width: 640px)')
+const narrow = ref(narrowQuery.matches)
+const navOpen = ref(false)
+function onNarrowChange() {
+  narrow.value = narrowQuery.matches
+  navOpen.value = false
+}
+/** Picking an action closes the phone menu; the settings dropdown inside it stays open for more changes. */
+function closeNavAfterAction(e: Event) {
+  const target = e.target as Element
+  if (target.closest('button') && !target.closest('.menu')) navOpen.value = false
+}
+
+/** Settings dropdown (and the phone menu); closes on a click outside it or Escape. */
+const topbar = ref<HTMLElement | null>(null)
 const settingsMenu = ref<HTMLDetailsElement | null>(null)
-function closeSettings(e: Event) {
+function closeMenus(e: Event) {
+  const outside = (el: Element | null) => !el?.contains(e.target as Node)
+  const dismiss = (el: Element | null) => (e instanceof KeyboardEvent ? e.key === 'Escape' : outside(el))
   const menu = settingsMenu.value
-  if (!menu?.open) return
-  if (e instanceof KeyboardEvent ? e.key === 'Escape' : !menu.contains(e.target as Node)) menu.open = false
+  if (menu?.open && dismiss(menu)) menu.open = false
+  if (navOpen.value && dismiss(topbar.value)) navOpen.value = false
 }
 onMounted(() => {
-  document.addEventListener('pointerdown', closeSettings)
-  document.addEventListener('keydown', closeSettings)
+  document.addEventListener('pointerdown', closeMenus)
+  document.addEventListener('keydown', closeMenus)
+  narrowQuery.addEventListener('change', onNarrowChange)
 })
 onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', closeSettings)
-  document.removeEventListener('keydown', closeSettings)
+  document.removeEventListener('pointerdown', closeMenus)
+  document.removeEventListener('keydown', closeMenus)
+  narrowQuery.removeEventListener('change', onNarrowChange)
 })
 
 function confirmNewMatch() {
@@ -136,6 +165,12 @@ function changeRules(e: Event) {
   else select.value = rules.value
 }
 
+/** Install as an app; iOS has no prompt, so explain the Share menu route instead. */
+const { canInstall, install } = useInstall()
+async function installApp() {
+  if (!(await install())) window.alert(t('app.installIos'))
+}
+
 /** Reload onto the newest deploy (installed PWAs can otherwise linger on an old build). */
 const updating = ref(false)
 async function loadLatest() {
@@ -149,12 +184,52 @@ async function loadLatest() {
 
 <template>
   <main class="app">
-    <header class="topbar">
+    <header ref="topbar" class="topbar" :class="{ 'topbar--narrow': narrow, 'topbar--open': narrow && navOpen }">
       <h1>
-        {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
-        <small v-if="snapshot" class="topbar__code">{{ t('lobby.table') }} {{ snapshot.code }}</small>
+        <button
+          v-if="narrow"
+          type="button"
+          class="topbar__title"
+          :aria-expanded="navOpen"
+          aria-controls="topbar-controls"
+          @click="navOpen = !navOpen"
+        >
+          <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
+          {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
+        </button>
+        <template v-else>
+          <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
+          {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
+        </template>
+        <button
+          v-if="snapshot"
+          type="button"
+          class="topbar__code"
+          :title="codeCopied ? t('lobby.copied') : t('lobby.share')"
+          :aria-label="`${t('lobby.table')} ${snapshot.code}: ${codeCopied ? t('lobby.copied') : t('lobby.share')}`"
+          @click="shareTable"
+        >
+          {{ t('lobby.table') }} {{ snapshot.code }}
+          <svg class="topbar__share" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+            <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+          </svg>
+        </button>
       </h1>
-      <div class="topbar__controls">
+      <button
+        v-if="narrow"
+        type="button"
+        class="topbar__toggle"
+        :aria-label="t('app.menu')"
+        :aria-expanded="navOpen"
+        aria-controls="topbar-controls"
+        @click="navOpen = !navOpen"
+      >
+        <svg class="topbar__chevron" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      <div v-show="!narrow || navOpen" id="topbar-controls" class="topbar__controls" @click="closeNavAfterAction">
         <details ref="settingsMenu" class="menu">
           <summary class="action action--quiet-light">{{ t('app.settings') }}</summary>
           <div class="menu__panel">
@@ -222,6 +297,7 @@ async function loadLatest() {
             <button class="action action--quiet-light" :disabled="updating" @click="loadLatest">{{ updating ? t('app.loadingLatest') : t('app.loadLatest') }}</button>
           </div>
         </details>
+        <button v-if="canInstall" class="action action--quiet-light" @click="installApp">{{ t('app.install') }}</button>
         <button class="action action--quiet-light" @click="rulesDialog = { tab: 'rules' }">{{ t('app.howToPlay') }}</button>
         <button v-if="canPause" class="action action--quiet-light" @click="pause">{{ t('online.pause') }}</button>
         <template v-if="atTable">

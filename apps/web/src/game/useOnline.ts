@@ -5,7 +5,7 @@ import { ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type T
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from './profile'
 import { useSettings } from './settings'
-import type { MatchSource } from './source'
+import type { MatchSource, Readiness } from './source'
 import { useTableAudio } from './tableAudio'
 import { useVoicePlayer } from './voiceChat'
 
@@ -160,7 +160,6 @@ export function useOnline() {
     room?.send(type, message)
   }
 
-  const me = computed(() => snapshot.value?.you ?? 0)
   const isHost = computed(() => snapshot.value !== null && snapshot.value.host === snapshot.value.you)
   const match = computed(() => snapshot.value?.match ?? null)
 
@@ -213,7 +212,14 @@ export function useOnline() {
     rules: computed(() => snapshot.value?.settings.rules ?? 'mcr'),
     claimRemaining,
     matchOver: computed(() => match.value?.over ?? false),
-    waiting: computed(() => !!match.value?.ready[me.value]),
+    readiness: computed((): Readiness | null => {
+      const s = snapshot.value
+      const m = match.value
+      if (!s || !m || m.view?.phase.kind !== 'ended' || m.final) return null
+      const ready = s.players.map((slot, p) => m.ready[p]! || slot.name === null || !slot.connected)
+      const button = !m.ready[s.you] ? 'ready' : !isHost.value ? 'notReady' : m.allReady ? 'start' : 'waiting'
+      return { ready, button }
+    }),
     pausedBy: computed(() => (paused.value === null ? null : (playerNames.value[paused.value] ?? null))),
     speaking: voicePlayer.speaking,
     act(action: Action) {
@@ -222,6 +228,12 @@ export function useOnline() {
     },
     continueToNextHand() {
       send('ready', {})
+    },
+    unready() {
+      send('unready', {})
+    },
+    deal() {
+      send('deal', {})
     },
   }
 

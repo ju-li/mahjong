@@ -3,7 +3,7 @@
  * `{name}` placeholders are filled by `t(key, { name })`.
  */
 export const en = {
-  'app.title': 'Mahjong',
+  'app.title': 'Mommy Mahjong',
   'app.rules': 'Rules',
   'app.confirmRules': 'Switch rules? This abandons the current match and starts a new one.',
   'rules.mcr': 'Chinese Official (MCR)',
@@ -23,8 +23,11 @@ export const en = {
   'app.loadLatest': 'Load latest version',
   'app.loadingLatest': 'Loading…',
   'app.loadLatestOffline': 'Can’t reach the server. Check your connection and try again.',
+  'app.install': 'Install app',
+  'app.installIos': 'To install, tap the Share button in Safari, then “Add to Home Screen”.',
   'app.fanReference': 'Fan list',
   'app.settings': 'Settings',
+  'app.menu': 'Menu',
 
   'level.beginner': 'Beginner',
   'level.easy': 'Easy',
@@ -173,7 +176,7 @@ export const en = {
   'guide.match.bodyHk': 'A match is 16 hands: four rounds of four, with the prevailing wind moving East → South → West → North. The dealer passes on every hand and seats stay fixed for the whole match.',
   'guide.seeFans': 'See every scoring pattern in the fan list →',
 
-  'onboarding.welcome': 'Welcome to Mahjong',
+  'onboarding.welcome': 'Welcome to Mommy Mahjong',
   'onboarding.progress': 'Step {n} of {total}',
   'onboarding.language.title': 'Choose your language',
   'onboarding.language.body': 'Menus, rules and scoring will be shown in this language.',
@@ -204,6 +207,11 @@ export const en = {
 
   'player.away': '{name} (away)',
   'result.waiting': 'Waiting for the others…',
+  'result.ready': 'Ready',
+  'result.notReady': 'Not ready',
+  'result.start': 'Start',
+  'result.status.ready': 'Ready',
+  'result.status.notReady': 'Not ready',
   'online.open': 'Play with friends',
   'online.title': 'Play with friends',
   'online.intro': 'Host a table and share its code, or enter the code a friend sent you. Bots fill any empty seats.',
@@ -258,6 +266,8 @@ export const en = {
   'pause.hint': 'Bots and timers wait too. Anyone at the table can carry on.',
   'pause.resume': 'Resume',
   'pause.solo': 'The bots and the claim timer wait until you carry on.',
+  'onboarding.mobile.title': 'Best on a bigger screen',
+  'onboarding.mobile.body': 'This game has not been optimized for mobile yet, so some parts may be cramped or hard to tap. For the best experience, play on a computer or tablet.',
 }
 
 export type MessageKey = keyof typeof en
@@ -283,6 +293,9 @@ export const zhHans: Record<MessageKey, string> = {
   'app.loadLatest': '加载最新版本',
   'app.loadingLatest': '加载中…',
   'app.loadLatestOffline': '无法连接服务器。请检查网络后重试。',
+  'app.install': '安装应用',
+  'app.menu': '菜单',
+  'app.installIos': '安装方法：在 Safari 中点击“分享”按钮，然后选择“添加到主屏幕”。',
   'app.fanReference': '番种表',
   'app.settings': '设置',
 
@@ -464,6 +477,11 @@ export const zhHans: Record<MessageKey, string> = {
 
   'player.away': '{name}（离开）',
   'result.waiting': '等待其他玩家…',
+  'result.ready': '准备',
+  'result.notReady': '取消准备',
+  'result.start': '开始',
+  'result.status.ready': '已准备',
+  'result.status.notReady': '未准备',
   'online.open': '和朋友一起玩',
   'online.title': '和朋友一起玩',
   'online.intro': '开一桌并分享桌号，或输入朋友发给你的桌号。空位由电脑补上。',
@@ -518,6 +536,8 @@ export const zhHans: Record<MessageKey, string> = {
   'pause.hint': '电脑和计时器也会等待。牌桌上任何人都可以继续。',
   'pause.resume': '继续',
   'pause.solo': '电脑和吃碰计时器会等你回来再继续。',
+  'onboarding.mobile.title': '大屏幕体验更佳',
+  'onboarding.mobile.body': '本游戏尚未针对手机进行优化，部分界面可能显得拥挤或不易点按。建议在电脑或平板上游玩以获得最佳体验。',
 }
 
 export const MESSAGES = { en, 'zh-Hans': zhHans } as const

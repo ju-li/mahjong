@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { kindIndex, type Action, type PlayerView, type Seat, type Tile, type Wind } from '@mahjong/engine'
 import { actionForKey, shortcutFor } from '../game/keyboard'
+import { useDragScroll } from '../game/useDragScroll'
 import { useTileMotion } from '../game/useTileMotion'
 import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
@@ -34,6 +35,8 @@ useTileMotion(root)
 
 // ---- Keyboard play (V32) ----
 const handEl = ref<HTMLElement | null>(null)
+// A hand too wide for the screen scrolls sideways: swipe on touch, drag with a mouse.
+useDragScroll(handEl)
 let lastKey = ''
 let repeat = 0
 
@@ -95,6 +98,14 @@ const handTiles = computed(() => {
   const sorted = [...props.view.hand].sort((a, b) => kindIndex(a.kind) - kindIndex(b.kind) || a.id - b.id)
   const drawn = sorted.find((t) => t.id === drawnId.value)
   return { main: sorted.filter((t) => t !== drawn), drawn }
+})
+
+// The drawn tile sits at the right end; bring it into view when the hand overflows.
+watch(drawnId, async (id) => {
+  if (id == null) return
+  await nextTick()
+  const el = handEl.value
+  if (el && el.scrollWidth > el.clientWidth) el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' })
 })
 
 const discardIds = computed(() => new Set(props.actions.flatMap((a) => (a.type === 'discard' ? [a.tileId] : []))))

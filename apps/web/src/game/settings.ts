@@ -6,7 +6,7 @@ const STORAGE_KEY = 'mahjong.settings.v1'
 /** Older builds kept difficulty and rules only inside the saved match. */
 const LEGACY_MATCH_KEY = 'mahjong.match.v2'
 
-export const CLAIM_TIMER_OPTIONS = [0, 5, 10, 20] as const
+export const CLAIM_TIMER_OPTIONS = [0, 20, 40, 60, 120] as const
 export type ClaimSeconds = (typeof CLAIM_TIMER_OPTIONS)[number]
 /** Rule sets in the pickers; only those the engine implements can be chosen. */
 export const RULE_OPTIONS = [
@@ -22,7 +22,7 @@ export const TEXT_SIZE_OPTIONS = ['normal', 'large', 'larger'] as const
 export type TextSize = (typeof TEXT_SIZE_OPTIONS)[number]
 
 type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean; voiceChat: boolean; difficulty: Difficulty; rules: RuleSet; textSize: TextSize }
-const DEFAULTS: Settings = { claimSeconds: 10, sound: true, voice: true, voiceChat: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' }
+const DEFAULTS: Settings = { claimSeconds: 40, sound: true, voice: true, voiceChat: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' }
 
 function read(key: string): Record<string, unknown> | null {
   try {
