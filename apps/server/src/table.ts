@@ -72,9 +72,11 @@ type Slot = {
   droppedAt: number | null
   /** Token of whoever left this seat last, so they get it back if it is still free. */
   formerToken: string | null
+  /** Verified account of a signed-in player; null = guest. */
+  userId: string | null
 }
 
-const emptySlot = (formerToken: string | null = null): Slot => ({ token: null, name: '', avatar: null, client: null, droppedAt: null, formerToken })
+const emptySlot = (formerToken: string | null = null): Slot => ({ token: null, name: '', avatar: null, client: null, droppedAt: null, formerToken, userId: null })
 
 type Timer = { clear(): void } | null
 
@@ -169,8 +171,11 @@ export class Table {
     return this.seatFor(token ?? null) !== null
   }
 
-  /** Seat a connection, taking over from a bot mid-match if need be. Null if every seat is taken. */
-  join(client: string, options: { name?: unknown; avatar?: unknown; token?: unknown }): Player | null {
+  /**
+   * Seat a connection, taking over from a bot mid-match if need be. Null if every seat is taken.
+   * `userId` must come from a verified access token, never from the client's options.
+   */
+  join(client: string, options: { name?: unknown; avatar?: unknown; token?: unknown }, userId: string | null = null): Player | null {
     const token = typeof options.token === 'string' ? options.token : null
     const p = this.seatFor(token)
     if (p === null) return null
@@ -185,6 +190,7 @@ export class Table {
     seated.droppedAt = null
     seated.name = cleanName(options.name, seated.name || `Player ${p + 1}`)
     seated.avatar = cleanAvatar(options.avatar, seated.avatar)
+    seated.userId = userId
     if (!this.connected(this.host) || this.slots[this.host]!.token === null) this.host = p
     this.changed()
     return p
@@ -230,6 +236,14 @@ export class Table {
     const slot = this.slots[p]!
     slot.name = cleanName(u.name, slot.name)
     slot.avatar = cleanAvatar(u.avatar, slot.avatar)
+    this.changed()
+  }
+
+  /** A seated player signed in or out; `userId` is verified by the caller. */
+  identify(client: string, userId: string | null): void {
+    const p = this.playerOf(client)
+    if (p === null || this.slots[p]!.userId === userId) return
+    this.slots[p]!.userId = userId
     this.changed()
   }
 
@@ -567,7 +581,7 @@ export class Table {
       players: PLAYERS.map((p): PlayerSlot => {
         const slot = this.slots[p]!
         const human = slot.token !== null
-        return { name: human ? slot.name : null, avatar: human ? slot.avatar : null, connected: slot.client !== null }
+        return { name: human ? slot.name : null, avatar: human ? slot.avatar : null, connected: slot.client !== null, userId: human ? slot.userId : null }
       }),
       settings: { ...this.settings },
       match: this.matchInfo(you),
@@ -609,7 +623,7 @@ export class Table {
       phase: this.phase,
       settings: this.settings,
       host: this.host,
-      players: this.slots.map((slot) => ({ human: slot.token !== null, name: slot.name, avatar: slot.avatar, connected: slot.client !== null, droppedAt: slot.droppedAt })),
+      players: this.slots.map((slot) => ({ human: slot.token !== null, name: slot.name, avatar: slot.avatar, connected: slot.client !== null, droppedAt: slot.droppedAt, signedIn: slot.userId !== null })),
       step: this.step,
       pausedBy: this.pausedBy,
       ready: [...this.ready],
