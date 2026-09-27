@@ -55,7 +55,9 @@ export function useSocial() {
     clearTimeout(retryTimer)
     const started = ++generation
     const accessToken = await account.accessToken()
-    if (!accessToken || started !== generation) return
+    if (started !== generation) return
+    // Signed in but no token (offline, auth server down): try again later.
+    if (!accessToken) return retry()
     const options: SocialJoinOptions = { accessToken, name: profile.name.value.trim() || undefined, avatar: profile.avatar.value }
     try {
       const r = await new Client(SERVER_URL).joinOrCreate(SOCIAL_ROOM, options)
