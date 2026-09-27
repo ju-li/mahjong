@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="120 44 272 384">
+  <mask id="m">
+    <rect x="136" y="72" width="240" height="340" rx="36" fill="#fff"/>
+    <rect x="136" y="60" width="240" height="340" rx="36" fill="#000" stroke="#000" stroke-width="12"/>
+    <rect x="136" y="60" width="240" height="340" rx="36" fill="#fff"/>
+    <path d="M256 318C256 318 168 264 168 202C168 170 192 148 220 148C236 148 249 157 256 170C263 157 276 148 292 148C320 148 344 170 344 202C344 264 256 318 256 318Z" fill="#000"/>
+  </mask>
+  <rect x="120" y="44" width="272" height="384" fill="#ffffff" mask="url(#m)"/>
+</svg>
