@@ -148,6 +148,13 @@ body {
   font-weight: 500;
 }
 
+.topbar__logo {
+  width: 1.45em;
+  height: 1.45em;
+  margin-right: 0.1em;
+  vertical-align: -0.35em;
+}
+
 
 /* ---- Board: wooden rim around a felt table ---- */
 
@@ -2543,4 +2550,84 @@ body {
   font-size: var(--fs-xs);
   color: var(--muted);
   text-decoration: underline;
+}
+
+/* ---- Phone top bar: title and a toggle; the controls drop down beneath ---- */
+
+.topbar__title,
+.topbar__toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.topbar__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-left: auto;
+  border-radius: 999px;
+}
+
+.topbar__toggle:hover,
+.topbar__toggle:focus-visible {
+  background: var(--button);
+}
+
+.topbar__chevron {
+  transition: transform 0.15s ease;
+}
+
+.topbar--open .topbar__chevron {
+  transform: rotate(180deg);
+}
+
+.topbar--narrow {
+  flex-wrap: nowrap;
+}
+
+.topbar--narrow h1 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar--narrow .topbar__controls {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 8px;
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--tile-edge);
+  background: var(--button);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.topbar--narrow .topbar__controls > .action,
+.topbar--narrow .menu > summary {
+  justify-content: center;
+}
+
+.topbar--narrow .menu > summary {
+  display: flex;
+}
+
+.topbar--narrow .menu__panel {
+  position: static;
+  margin-top: 8px;
+  min-width: 0;
+  box-shadow: none;
 }
