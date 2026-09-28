@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import {
+  HANDS_PER_MATCH,
   applyAction,
   isMatchOver,
   legalActions,
@@ -16,6 +17,7 @@ import {
   type Player,
   type Seat,
 } from '@mahjong/engine'
+import { track } from './analytics'
 import { BotClient } from './botClient'
 import { timeoutAction } from './keyboard'
 import { useProfile } from './profile'
@@ -128,12 +130,17 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     }, 1000)
   })
   const matchOver = computed(() => isMatchOver(match.value))
+  /** The last hand has been scored (the summary shows before moving past it), counted once per match. */
+  const finished = computed(() => matchOver.value || (match.value.handIndex === HANDS_PER_MATCH - 1 && handOver.value))
+  watch(finished, (done) => done && track('solo_match_finished'))
 
   watch(match, () => save({ match: match.value, handLog: handLog ?? undefined }), { immediate: true })
 
   function commit(action: Action): void {
     const current = match.value.current!
     handLog?.push(action)
+    // The match's first move: counts matches actually played, not ones dealt and switched away from.
+    if (match.value.handIndex === 0 && handLog?.length === 1) track('solo_match_started')
     match.value = { ...match.value, current: applyAction(current, action) }
     step++
   }

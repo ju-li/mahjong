@@ -14,6 +14,7 @@ import ProfileDialog from './components/ProfileDialog.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import ToastStack from './components/ToastStack.vue'
 import VoiceButton from './components/VoiceButton.vue'
+import { track } from './game/analytics'
 import { loadLatestVersion } from './game/appUpdate'
 import { friendsCount, parseFriendCode, seatChanges } from './game/friends'
 import { useInstall } from './game/install'
@@ -93,7 +94,7 @@ async function hostTable() {
   if (await online.host()) onlineOpen.value = false
 }
 async function joinTable(code: string) {
-  if (await online.join(code)) onlineOpen.value = false
+  if (await online.join(code, true)) onlineOpen.value = false
 }
 
 /** Sign-in players can invite friends to the table they are at. */
@@ -106,7 +107,7 @@ async function joinFriendTable(code: string) {
   if (current !== null && !window.confirm(t('tableInvite.confirmSwitch', { code }))) return
   friendsOpen.value = false
   if (current !== null) await online.leave()
-  if (!(await online.join(code))) {
+  if (!(await online.join(code, true))) {
     const error = online.error.value
     showNotice(error ? `${t('tableInvite.joinFailed', { code })} ${t(`online.error.${error}`)}` : t('tableInvite.joinFailed', { code }))
   }
@@ -290,6 +291,7 @@ function confirmNewMatch() {
 function onboardingDone() {
   const next = preferredRules.value
   finishOnboarding()
+  track('onboarding_finished')
   if (next === rules.value) return
   if (!resumed || !inProgress() || window.confirm(t('app.confirmRules'))) startNewMatch(next)
   else preferredRules.value = rules.value

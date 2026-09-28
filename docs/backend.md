@@ -131,6 +131,7 @@ match end, in one transaction, with retries:
 | web (build) | `VITE_LOGTO_ENDPOINT` | same as `LOGTO_ENDPOINT` |
 | web (build) | `VITE_LOGTO_APP_ID` | the Logto SPA application's App ID |
 | web (build) | `VITE_LOGTO_RESOURCE` | same as `LOGTO_API_RESOURCE` |
+| web (build) | `VITE_LIWAN_ENDPOINT` | optional; Liwan event API, default `https://a.mommymahjong.com/api/event` |
 | logto | `DB_URL` | the `logto` database on the same Postgres |
 | logto | `ENDPOINT` | `https://auth.<domain>` |
 | logto | `ADMIN_ENDPOINT` | admin console URL (own domain or port) |

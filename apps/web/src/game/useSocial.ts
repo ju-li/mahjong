@@ -11,6 +11,7 @@ import {
   type TableInvite,
   type TableInviteResult,
 } from '@mahjong/protocol'
+import { track } from './analytics'
 import { useAccount } from './useAccount'
 import { accountNameFor, useProfile } from './profile'
 import { SERVER_URL } from './serverUrl'
@@ -118,7 +119,10 @@ export function useSocial() {
         profile.name.value = s.me.name
         if (s.me.avatar !== null) profile.avatar.value = s.me.avatar
       })
-      r.onMessage('inviteResult', (result: InviteResult) => (inviteResult.value = result))
+      r.onMessage('inviteResult', (result: InviteResult) => {
+        if (result.ok) track('friend_added_by_link')
+        inviteResult.value = result
+      })
       r.onMessage('friendError', (error: FriendError) => (lastError.value = error))
       r.onMessage('tableInvite', (invite: TableInvite) => emit('tableInvite', invite))
       r.onMessage('tableInviteResult', (result: TableInviteResult) => emit('tableInviteResult', result))
@@ -174,13 +178,23 @@ export function useSocial() {
     lastError,
     start,
     openInvite,
-    request: (userId: string) => send('friendRequest', { userId }),
-    respond: (userId: string, accept: boolean) => send('friendRespond', { userId, accept }),
+    request(userId: string): void {
+      track('friend_request_sent')
+      send('friendRequest', { userId })
+    },
+    respond(userId: string, accept: boolean): void {
+      if (accept) track('friend_request_accepted')
+      send('friendRespond', { userId, accept })
+    },
     remove: (userId: string) => send('friendRemove', { userId }),
     /** Ask an online friend to the table you are at. */
-    inviteToTable: (userId: string, code: string) => send('tableInvite', { userId, code }),
+    inviteToTable(userId: string, code: string): void {
+      track('friend_invited_to_table')
+      send('tableInvite', { userId, code })
+    },
     /** Invite a friend to a table you have just sat down at, once the server has you there. */
     inviteWhenSeated(userId: string, code: string): void {
+      track('friend_invited_to_table')
       if (friends.value?.me.table === code) return send('tableInvite', { userId, code })
       clearTimeout(pendingInvites.get(userId)?.timer)
       const timer = setTimeout(() => {
