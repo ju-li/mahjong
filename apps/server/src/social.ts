@@ -6,12 +6,14 @@ import {
   type FriendsSnapshot,
   type InviteResult,
   type SocialJoinOptions,
+  type SoloSaved,
   type TableInvite,
   type TableInviteError,
   type TableInviteResult,
 } from '@mahjong/protocol'
 import type { Db } from './db/db'
 import { acceptInvite, areFriends, ensureProfile, friendIds, getProfile, listFriends, remove, respond, sendRequest, updateProfile } from './db/friends'
+import { history, matchDetail, recordSoloMatch, stats } from './db/matches'
 import { services } from './services'
 import { AT_KEY, ONLINE_KEY, publishRefresh, tableOf, topic, type SocialEvent } from './socialBus'
 import { cleanAvatar, cleanName } from './table'
@@ -66,6 +68,20 @@ export class SocialRoom extends Room {
     })
     this.on('tableInvite', async (db, me, m: { userId?: unknown; code?: unknown }, client) => {
       client.send('tableInviteResult', await this.tableInvite(db, me, String(m?.userId ?? ''), String(m?.code ?? '')))
+    })
+    this.on('soloResult', async (db, me, m: { seed?: unknown }, client) => {
+      const saved: SoloSaved = { seed: typeof m?.seed === 'number' ? m.seed : -1, ok: await recordSoloMatch(db, me, m) }
+      client.send('soloSaved', saved)
+    })
+    this.on('history', async (db, me, m: { before?: unknown }, client) => {
+      client.send('historyPage', await history(db, me, { before: typeof m?.before === 'number' ? m.before : undefined }))
+    })
+    this.on('matchDetail', async (db, me, m: { id?: unknown }, client) => {
+      const id = String(m?.id ?? '')
+      client.send('matchDetail', { id, match: await matchDetail(db, me, id) })
+    })
+    this.on('stats', async (db, me, _m: unknown, client) => {
+      client.send('stats', await stats(db, me))
     })
   }
 

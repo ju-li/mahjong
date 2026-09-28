@@ -21,6 +21,7 @@
     "jose": "^6.2.12",
     "kysely": "^0.29.6",
     "nodemailer": "^10.0.10",
+    "openskill": "^5.0.1",
     "pg": "^8.23.0"
   },
   "devDependencies": {

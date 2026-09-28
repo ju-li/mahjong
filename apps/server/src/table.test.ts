@@ -7,6 +7,7 @@ import { cleanAvatar, cleanName, RESERVE_MS, Table, TURN_MS, VOICE_GAP_MS, VOICE
 /** Timers that only fire when the test moves the clock. */
 class FakeEnv implements TableEnv {
   time = 0
+  onMatchEnd?: TableEnv['onMatchEnd']
   private seq = 0
   private timers: { at: number; seq: number; fn: () => void; live: boolean }[] = []
   private counter = 1
@@ -570,5 +571,81 @@ describe('accounts', () => {
     expect(table.seatedUserIds()).toEqual(['user-ann', 'user-bo'])
     table.leave('c0')
     expect(table.seatedUserIds()).toEqual(['user-bo'])
+  })
+})
+
+describe('recording finished matches', () => {
+  /** Signed-in players join; the match skips ahead to its last hand unless `full`. */
+  function start(players: [string, string | null][], full = false) {
+    const env = new FakeEnv()
+    const records: Parameters<NonNullable<TableEnv['onMatchEnd']>>[0][] = []
+    env.onMatchEnd = (r) => records.push(r)
+    let table!: Table
+    const clients = players.map((_, i) => `c${i}`)
+    table = new Table('ABCD', env, () => {})
+    players.forEach(([name, userId], i) => table.join(clients[i]!, { name }, userId))
+    const snap = (c: string) => table.snapshotFor(c)!
+    table.configure('c0', { difficulty: 'easy' })
+    table.start('c0')
+    if (!full) {
+      const internals = table as unknown as { match: Match }
+      internals.match = { ...internals.match, handIndex: 15 }
+    }
+    const finish = () => {
+      for (let i = 0; i < 200_000 && !snap('c0').match!.final; i++) {
+        autoplay(table, clients.filter((c) => table.playerOf(c) !== null), snap)
+        if (!snap('c0').match!.final) env.advance(500)
+      }
+    }
+    return { env, table, clients, snap, records, finish }
+  }
+
+  it('reports a whole match once, with every hand and its actions', () => {
+    const { table, records, finish, snap } = start([['Ann', 'u-ann'], ['Bo', 'u-bo']], true)
+    finish()
+    expect(records).toHaveLength(1)
+    const r = records[0]!
+    expect(r.hands).toHaveLength(16)
+    expect(r.actions).toHaveLength(16)
+    expect(r.actions.every((a) => a.length > 0)).toBe(true)
+    expect(r.scores).toEqual(snap('c0').match!.scores.map((s, p) => s + r.hands[15]!.deltas[p]!))
+    expect(r.players.map((p) => [p.userId, p.bot, p.fullMatch])).toEqual([
+      ['u-ann', false, true],
+      ['u-bo', false, true],
+      [null, true, false],
+      [null, true, false],
+    ])
+    // Looking at the summary longer, or readying up, doesn't report it again.
+    table.readyUp('c0')
+    expect(records).toHaveLength(1)
+    table.rematch('c0')
+    expect(records).toHaveLength(1)
+  })
+
+  it('counts a player who dropped and came back, but not leavers, late joiners or account switches', () => {
+    const { table, env, records, finish, snap } = start([['Ann', 'u-ann'], ['Bo', 'u-bo'], ['Cy', 'u-cy'], ['Guest', null]])
+    // Bo drops and comes back with the seat token.
+    const boToken = snap('c1').token
+    table.drop('c1')
+    env.advance(1000)
+    table.join('c1b', { name: 'Bo', token: boToken }, 'u-bo')
+    // Cy leaves; Di takes the seat over.
+    table.leave('c2')
+    table.join('c4', { name: 'Di' }, 'u-di')
+    // The guest signs in mid-match.
+    table.identify('c3', 'u-guest')
+    finish()
+    expect(records[0]!.players.map((p) => [p.userId, p.fullMatch])).toEqual([
+      ['u-ann', true],
+      ['u-bo', true],
+      ['u-di', false],
+      ['u-guest', false],
+    ])
+  })
+
+  it('reports guests as not full-match players', () => {
+    const { records, finish } = start([['Ann', null], ['Bo', 'u-bo']])
+    finish()
+    expect(records[0]!.players.map((p) => p.fullMatch)).toEqual([false, true, false, false])
   })
 })

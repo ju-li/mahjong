@@ -196,7 +196,122 @@ export type SocialClientMessages = {
   profile: { name?: string; avatar?: number }
   /** Ask an online friend to the table you are seated at. */
   tableInvite: { userId: string; code: string }
+  /** A finished solo match, for your own history and stats (never ranked). Answered by `soloSaved`. */
+  soloResult: SoloResult
+  /** A page of your match history, newest first; `before` = `endedAt` of the last one you have. Answered by `historyPage`. */
+  history: { before?: number }
+  /** One of your matches, hand by hand. Answered by `matchDetail`. */
+  matchDetail: { id: string }
+  /** Your stats. Answered by `stats`. */
+  stats: Record<string, never>
 }
+
+// ---------------------------------------------------------------------------
+// Match history, stats and rankings
+
+/** How one hand ended, by player (not seat). */
+export type HandOutcome =
+  | { type: 'drawn' }
+  | {
+      type: 'win'
+      winner: Player
+      /** Who discarded the winning tile; null = self-drawn. */
+      from: Player | null
+      fans: { id: string; points: number; count: number }[]
+      total: number
+      flowerPoints: number
+    }
+
+export type HandSummary = {
+  handIndex: number
+  /** Player who dealt. */
+  dealer: Player
+  prevailingWind: 'E' | 'S' | 'W' | 'N'
+  outcome: HandOutcome
+  /** Point change per player. */
+  deltas: number[]
+}
+
+/** Client → server: a solo match played on this device, once it is over. */
+export type SoloResult = {
+  rules: RuleSet
+  difficulty: Difficulty
+  /** Match seed: with the account, identifies the match so it is saved once. */
+  seed: number
+  /** Milliseconds since the epoch. */
+  startedAt: number
+  endedAt: number
+  hands: HandSummary[]
+  /** Final totals per player; the uploader is always player 0. */
+  scores: number[]
+}
+
+/** Server → client: the solo match with this seed is stored (or was already), or can't be. */
+export type SoloSaved = { seed: number; ok: boolean }
+
+export type MatchPlayerSummary = {
+  name: string
+  avatar: number | null
+  bot: boolean
+  userId: string | null
+  score: number
+  placement: number
+}
+
+export type MatchSummary = {
+  id: string
+  kind: 'online' | 'solo'
+  rules: RuleSet
+  difficulty: Difficulty | null
+  rated: boolean
+  endedAt: number
+  /** Which player you were. */
+  you: Player
+  players: MatchPlayerSummary[]
+  /** Your displayed rating change from this match, if it was rated for you. */
+  ratingChange: number | null
+}
+
+export type HistoryPage = { matches: MatchSummary[]; more: boolean }
+
+export type MatchDetail = MatchSummary & { hands: HandSummary[] }
+
+/** Server → client, message type `matchDetail`: the match asked for, or null if it isn't yours. */
+export type MatchDetailReply = { id: string; match: MatchDetail | null }
+
+export type RuleStats = {
+  rules: RuleSet
+  /** Displayed rating, or null before your first rated match. */
+  rating: number | null
+  /** Place on the leaderboard, or null until you qualify. */
+  rank: number | null
+  ratedMatches: number
+  matches: number
+  firsts: number
+  avgPlacement: number | null
+}
+
+export type SoloStats = {
+  difficulty: Difficulty
+  matches: number
+  firsts: number
+  avgScore: number
+  /** Your highest-scoring hand. */
+  best: { total: number; fans: string[] } | null
+}
+
+export type PlayerStats = { online: RuleStats[]; solo: SoloStats[] }
+
+/** Rated matches a player needs before appearing on the leaderboard. */
+export const LEADERBOARD_MIN_MATCHES = 5
+
+export type LeaderboardEntry = { rank: number; userId: string; name: string; avatar: number | null; rating: number; matches: number }
+
+/** Public HTTP path: `GET /leaderboard?rules=mcr` → `{ entries: LeaderboardEntry[] }`. */
+export const LEADERBOARD_PATH = '/leaderboard'
+
+/** Server → client on a table, message type `rated`: your rating after a rated match. */
+export type RatingChange = { rules: RuleSet; before: number; after: number }
 
 /** HTTP path on the game server that emails player feedback to the developers. */
 export const FEEDBACK_PATH = '/feedback'

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { boot, type ColyseusTestServer } from '@colyseus/testing'
 import type { Room } from '@colyseus/sdk'
-import { FEEDBACK_PATH, KICKED_CODE, ROOM_NAME, SOCIAL_ROOM, type FriendsSnapshot, type InviteResult, type Snapshot, type TableInvite, type TableInviteResult, type VoiceMemo } from '@mahjong/protocol'
+import { FEEDBACK_PATH, KICKED_CODE, LEADERBOARD_PATH, ROOM_NAME, SOCIAL_ROOM, type HistoryPage, type MatchDetailReply, type PlayerStats, type FriendsSnapshot, type InviteResult, type Snapshot, type TableInvite, type TableInviteResult, type VoiceMemo } from '@mahjong/protocol'
 import { tokenVerifier } from './auth'
 import type { FeedbackMail } from './feedback'
 import { feedbackEnv, server } from './main'
@@ -288,5 +288,58 @@ describe('SocialRoom', () => {
     await table2.leave()
     await fay.room.leave()
     await dee.room.leave()
+  })
+})
+
+describe('history, stats and rankings', () => {
+  it('saves a solo upload once and serves it back as history and stats', async () => {
+    const { applyAction, isMatchOver, legalActions, mulberry32, newMatch, nextHand } = await import('@mahjong/engine')
+    const { handSummaries } = await import('@mahjong/protocol')
+    let match = newMatch(99)
+    const rand = mulberry32(99)
+    while (!isMatchOver(match)) {
+      let state = match.current!
+      while (state.phase.kind !== 'ended') {
+        const seat = ([0, 1, 2, 3] as const).find((x) => legalActions(state, x).length > 0)!
+        const legal = legalActions(state, seat)
+        state = applyAction(state, (legal.find((a) => a.type === 'win') ?? legal[Math.floor(rand() * legal.length)])!)
+      }
+      match = nextHand(match, state.phase.result)
+    }
+    const upload = { rules: 'mcr', difficulty: 'medium', seed: 99, startedAt: Date.now() - 60_000, endedAt: Date.now(), hands: handSummaries(match), scores: match.scores }
+
+    const me = await colyseus.sdk.joinOrCreate(SOCIAL_ROOM, { accessToken: await issuer.token('h-ann'), name: 'Ann' })
+    await nextFriends(me)
+    const reply = <T,>(type: string) => new Promise<T>((resolve) => me.onMessage(type, resolve))
+    const saved = reply<{ seed: number; ok: boolean }>('soloSaved')
+    me.send('soloResult', upload)
+    expect(await saved).toEqual({ seed: 99, ok: true })
+    const again = reply<{ ok: boolean }>('soloSaved')
+    me.send('soloResult', upload)
+    expect((await again).ok).toBe(true)
+    const bad = reply<{ ok: boolean }>('soloSaved')
+    me.send('soloResult', { ...upload, seed: 100, scores: [1, 2, 3, 4] })
+    expect((await bad).ok).toBe(false)
+
+    const page = reply<HistoryPage>('historyPage')
+    me.send('history', {})
+    const { matches } = await page
+    expect(matches).toHaveLength(1)
+    expect(matches[0]).toMatchObject({ kind: 'solo', difficulty: 'medium', you: 0 })
+
+    const detail = reply<MatchDetailReply>('matchDetail')
+    me.send('matchDetail', { id: matches[0]!.id })
+    expect((await detail).match!.hands).toHaveLength(16)
+
+    const st = reply<PlayerStats>('stats')
+    me.send('stats', {})
+    expect((await st).solo).toEqual([expect.objectContaining({ difficulty: 'medium', matches: 1 })])
+    await me.leave()
+  })
+
+  it('serves the public leaderboard', async () => {
+    const res = await colyseus.http.get(`${LEADERBOARD_PATH}?rules=mcr`)
+    expect(res.data).toEqual({ entries: expect.any(Array) })
+    await expect(colyseus.http.get(`${LEADERBOARD_PATH}?rules=chess`)).rejects.toBeTruthy()
   })
 })
