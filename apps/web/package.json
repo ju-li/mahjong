@@ -16,6 +16,7 @@
     "@mahjong/bots": "workspace:*",
     "@mahjong/engine": "workspace:*",
     "@mahjong/protocol": "workspace:*",
+    "liwan-tracker": "^1.3.0",
     "vue": "^3.5.42"
   },
   "devDependencies": {
