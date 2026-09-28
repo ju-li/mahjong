@@ -136,7 +136,8 @@ export function useOnline() {
     accessToken: await account.accessToken(),
   })
 
-  const host = () => connect(async () => client.create(ROOM_NAME, await options()))
+  /** Host a new table; resolves with its code (the room id) once seated, before its first snapshot arrives. */
+  const host = async (): Promise<string | null> => ((await connect(async () => client.create(ROOM_NAME, await options()))) ? (room?.roomId ?? null) : null)
   const join = (code: string) => connect(async () => client.joinById(code, await options(code)))
 
   // Signing in or out while seated updates the seat.
