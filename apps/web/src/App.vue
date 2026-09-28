@@ -116,12 +116,14 @@ async function joinFriendTable(code: string) {
 async function playWithFriend(userId: string) {
   friendsOpen.value = false
   if (atTable.value) return
-  if (!(await online.host()) || !snapshot.value) {
+  // Use the code from hosting itself: the table's first snapshot may not have arrived yet.
+  const code = await online.host()
+  if (!code) {
     const error = online.error.value
     if (error) showNotice(t(`online.error.${error}`))
     return
   }
-  social.inviteWhenSeated(userId, snapshot.value.code)
+  social.inviteWhenSeated(userId, code)
 }
 
 /** Host: remove a player from the table, after checking. */

@@ -11,7 +11,7 @@ import { useI18n } from '../i18n/useI18n'
 /**
  * Your friends: requests to answer, who's online (and at which table), everyone else, and a link
  * to invite more. At a table (`tableCode`), online friends can be invited to it; in solo play,
- * Play together hosts a new table and invites them.
+ * Play hosts a new table and invites them.
  */
 const props = defineProps<{ tableCode: string | null }>()
 const emit = defineEmits<{ close: []; join: [code: string]; playWith: [userId: string] }>()

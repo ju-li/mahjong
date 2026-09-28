@@ -304,7 +304,7 @@ export const en = {
   'lobby.remove': 'Remove',
   'lobby.removeFromTable': 'Remove from table',
   'lobby.confirmRemove': 'Remove {name} from the table? They won’t be able to come back to it.',
-  'friends.playTogether': 'Play together',
+  'friends.playTogether': 'Play',
 
   'feedback.open': 'Feedback',
   'feedback.title': 'Send feedback',
