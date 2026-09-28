@@ -5,7 +5,11 @@ import {
   type Friend,
   type FriendError,
   type FriendsSnapshot,
+  type HistoryPage,
   type InviteResult,
+  type MatchDetailReply,
+  type PlayerStats,
+  type SoloSaved,
   type SocialClientMessages,
   type SocialJoinOptions,
   type TableInvite,
@@ -15,6 +19,7 @@ import { track } from './analytics'
 import { useAccount } from './useAccount'
 import { accountNameFor, useProfile } from './profile'
 import { SERVER_URL } from './serverUrl'
+import { dequeueResult, readQueue } from './stats'
 
 /** An invite link opened while signed out, finished once the player has signed in. */
 const PENDING_INVITE_KEY = 'mahjong.friendInvite'
@@ -69,6 +74,39 @@ function writePending(code: string | null): void {
 
 function send<K extends keyof SocialClientMessages>(type: K, message: SocialClientMessages[K]): void {
   room?.send(type, message)
+}
+
+/** Replies the server sends to one request each, in the order they were asked. */
+type Replies = { historyPage: HistoryPage; matchDetail: MatchDetailReply; stats: PlayerStats }
+const waiting: { [K in keyof Replies]: ((reply: Replies[K] | null) => void)[] } = { historyPage: [], matchDetail: [], stats: [] }
+/** Give up on a reply after this long (the connection dropped, say). */
+const REPLY_TIMEOUT_MS = 15_000
+
+function answer<K extends keyof Replies>(type: K, reply: Replies[K] | null): void {
+  waiting[type].shift()?.(reply)
+}
+
+/** Send a request and wait for its reply; null when not connected or no answer came. */
+function ask<K extends keyof Replies, M extends keyof SocialClientMessages>(message: M, body: SocialClientMessages[M], reply: K): Promise<Replies[K] | null> {
+  if (!room) return Promise.resolve(null)
+  return new Promise((resolve) => {
+    const done = (r: Replies[K] | null) => {
+      clearTimeout(timer)
+      resolve(r)
+    }
+    const timer = setTimeout(() => {
+      const i = waiting[reply].indexOf(done)
+      if (i >= 0) waiting[reply].splice(i, 1)
+      resolve(null)
+    }, REPLY_TIMEOUT_MS)
+    waiting[reply].push(done)
+    send(message, body)
+  })
+}
+
+/** Send every finished solo match still waiting to be saved. */
+function flushResults(): void {
+  for (const result of readQueue()) send('soloResult', result)
 }
 
 /**
@@ -126,11 +164,18 @@ export function useSocial() {
       r.onMessage('friendError', (error: FriendError) => (lastError.value = error))
       r.onMessage('tableInvite', (invite: TableInvite) => emit('tableInvite', invite))
       r.onMessage('tableInviteResult', (result: TableInviteResult) => emit('tableInviteResult', result))
+      // Saved, or refused for good (malformed): either way it leaves the queue.
+      r.onMessage('soloSaved', (saved: SoloSaved) => dequeueResult(saved.seed))
+      r.onMessage('historyPage', (page: HistoryPage) => answer('historyPage', page))
+      r.onMessage('matchDetail', (detail: MatchDetailReply) => answer('matchDetail', detail))
+      r.onMessage('stats', (stats: PlayerStats) => answer('stats', stats))
       r.onLeave(() => {
         if (room !== r) return
         room = null
+        for (const type of Object.keys(waiting) as (keyof Replies)[]) while (waiting[type].length) answer(type, null)
         retry()
       })
+      flushResults()
       const pending = readPending()
       if (pending) {
         writePending(null)
@@ -174,6 +219,12 @@ export function useSocial() {
   return {
     friends,
     connected: computed(() => friends.value !== null),
+    /** Upload finished solo matches now (e.g. one just ended); no-op while not connected. */
+    flushResults,
+    /** A page of your match history, newest first. Null if not connected. */
+    history: (before?: number) => ask('history', before === undefined ? {} : { before }, 'historyPage'),
+    matchDetail: (id: string) => ask('matchDetail', { id }, 'matchDetail'),
+    stats: () => ask('stats', {}, 'stats'),
     inviteResult,
     lastError,
     start,
