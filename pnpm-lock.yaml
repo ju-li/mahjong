@@ -247,6 +247,9 @@ importers:
       '@mahjong/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      liwan-tracker:
+        specifier: ^1.3.0
+        version: 1.3.0
       vue:
         specifier: ^3.5.42
         version: 3.5.43(typescript@6.0.3)
@@ -1204,6 +1207,9 @@ packages:
   lightningcss@1.33.0:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
+
+  liwan-tracker@1.3.0:
+    resolution: {integrity: sha512-wLw4iw4eRuP8uCGDZI9aEV0B19JhP+RWnxUaw0IF6O/XVclk5bEBEILkz4Rqc1SycixPISM98T1uUul7Vn+8Sw==}
 
   lodash@4.18.1:
     resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
@@ -2413,6 +2419,8 @@ snapshots:
       lightningcss-linux-x64-musl: 1.33.0
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
+
+  liwan-tracker@1.3.0: {}
 
   lodash@4.18.1: {}
 
