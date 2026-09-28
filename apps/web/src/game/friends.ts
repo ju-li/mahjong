@@ -24,3 +24,23 @@ export function parseFriendCode(raw: string | null): string | null {
   const code = raw?.trim().toLowerCase() ?? ''
   return /^[a-hjkmnp-z2-9]{10}$/.test(code) ? code : null
 }
+
+/** Where a friend is playing, from where you sit (`myCode`: your table, or null). */
+export type TableStatus = { kind: 'none' } | { kind: 'mine' } | { kind: 'other'; code: string; openSeats: number; canJoin: boolean }
+
+export function tableStatus(friend: Friend, myCode: string | null): TableStatus {
+  const table = friend.state === 'friend' ? friend.table : undefined
+  if (!table) return { kind: 'none' }
+  if (table.code === myCode) return { kind: 'mine' }
+  return { kind: 'other', code: table.code, openSeats: table.openSeats, canJoin: table.openSeats > 0 }
+}
+
+/** You can ask an online friend to your table unless they are already at it. */
+export function canInviteToTable(friend: Friend, myCode: string | null): boolean {
+  return myCode !== null && friend.state === 'friend' && friend.online && friend.table?.code !== myCode
+}
+
+/** Accounts that sat down at or left the table between two snapshots' seat lists. */
+export function seatChanges(before: ReadonlySet<string>, after: ReadonlySet<string>): { joined: string[]; left: string[] } {
+  return { joined: [...after].filter((id) => !before.has(id)), left: [...before].filter((id) => !after.has(id)) }
+}

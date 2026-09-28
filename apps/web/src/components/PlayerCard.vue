@@ -6,8 +6,8 @@ import { useSocial } from '../game/useSocial'
 import { useI18n } from '../i18n/useI18n'
 
 /** Another player at an online table: who they are, and a way to add them as a friend. */
-const props = defineProps<{ name: string; avatar: number | null; userId: string | null; bot: boolean }>()
-const emit = defineEmits<{ close: [] }>()
+const props = defineProps<{ name: string; avatar: number | null; userId: string | null; bot: boolean; canRemove?: boolean }>()
+const emit = defineEmits<{ close: []; remove: [] }>()
 
 const { t } = useI18n()
 const account = useAccount()
@@ -38,6 +38,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <button v-else-if="state === 'incoming'" class="action action--primary" @click="social.respond(userId, true)">{{ t('friends.accept') }}</button>
       <button v-else class="action action--primary" :disabled="!social.connected.value" @click="social.request(userId)">{{ t('friends.add') }}</button>
 
+      <button v-if="canRemove" class="action player-card__remove" @click="emit('remove')">{{ t('lobby.removeFromTable') }}</button>
       <button class="action" @click="emit('close')">{{ t('friends.close') }}</button>
     </div>
   </div>

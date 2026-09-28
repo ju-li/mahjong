@@ -1,7 +1,7 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { Client, type Room } from '@colyseus/sdk'
 import type { Action } from '@mahjong/engine'
-import { ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
+import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from './profile'
 import { useAccount } from './useAccount'
@@ -16,7 +16,7 @@ const TOKEN_KEY = (code: string) => `mahjong.seat.${code}`
 /** The table this tab is at, so a reload goes straight back to it. */
 const CURRENT_KEY = 'mahjong.table'
 
-export type OnlineError = 'notFound' | 'full' | 'network'
+export type OnlineError = 'notFound' | 'full' | 'removed' | 'network'
 /** The link to the table: fine, being restored on its own, or gone until the player picks what to do. */
 export type Link = 'up' | 'reconnecting' | 'lost'
 
@@ -42,6 +42,7 @@ function classify(error: unknown): OnlineError {
   const code = (error as { code?: number })?.code
   if (code === 522) return 'notFound'
   if (code === 4003 || code === 525) return 'full'
+  if (code === KICKED_CODE) return 'removed'
   return 'network'
 }
 
@@ -56,6 +57,8 @@ export function useOnline() {
   const snapshot = shallowRef<Snapshot | null>(null)
   const busy = ref(false)
   const error = ref<OnlineError | null>(null)
+  /** Code of the table the host last removed you from, for a notice; the caller clears it. */
+  const removedFrom = ref<string | null>(null)
   const link = ref<Link>('up')
   const { name, avatar } = useProfile()
   const account = useAccount()
@@ -81,11 +84,18 @@ export function useOnline() {
       if (room === r) link.value = 'up'
       else void r.leave() // the player went solo while this was retrying
     })
-    r.onLeave(() => {
+    r.onLeave((closeCode?: number) => {
       if (room !== r) return // we left on purpose
       const code = snapshot.value?.code
       room = null
       if (!code) return
+      if (closeCode === KICKED_CODE) {
+        // Removed by the host: no coming back, so forget the seat and go back to solo.
+        write(() => localStorage, TOKEN_KEY(code), null)
+        removedFrom.value = code
+        void leave()
+        return
+      }
       // The SDK's own reconnection gave up; try once more with the seat token, then let the player choose.
       link.value = 'reconnecting'
       void join(code).then((ok) => {
@@ -126,7 +136,8 @@ export function useOnline() {
     accessToken: await account.accessToken(),
   })
 
-  const host = () => connect(async () => client.create(ROOM_NAME, await options()))
+  /** Host a new table; resolves with its code (the room id) once seated, before its first snapshot arrives. */
+  const host = async (): Promise<string | null> => ((await connect(async () => client.create(ROOM_NAME, await options()))) ? (room?.roomId ?? null) : null)
   const join = (code: string) => connect(async () => client.joinById(code, await options(code)))
 
   // Signing in or out while seated updates the seat.
@@ -258,6 +269,9 @@ export function useOnline() {
     join,
     leave,
     rejoin,
+    removedFrom,
+    /** Host: remove the player in this seat from the table. */
+    kick: (player: number) => send('kick', { player }),
     configure: (settings: Partial<TableSettings>) => send('configure', settings),
     start: () => send('start', {}),
     restart: () => send('restart', {}),
