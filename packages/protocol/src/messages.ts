@@ -276,6 +276,9 @@ export type HistoryPage = { matches: MatchSummary[]; more: boolean }
 
 export type MatchDetail = MatchSummary & { hands: HandSummary[] }
 
+/** Server → client, message type `matchDetail`: the match asked for, or null if it isn't yours. */
+export type MatchDetailReply = { id: string; match: MatchDetail | null }
+
 export type RuleStats = {
   rules: RuleSet
   /** Displayed rating, or null before your first rated match. */

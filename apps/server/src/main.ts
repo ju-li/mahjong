@@ -1,9 +1,11 @@
 import { createEndpoint, createRouter, defineRoom, defineServer } from '@colyseus/core'
 import { WebSocketTransport } from '@colyseus/ws-transport'
-import { FEEDBACK_PATH, MAX_VOICE_BYTES, ROOM_NAME, SOCIAL_ROOM } from '@mahjong/protocol'
+import { isRuleSet } from '@mahjong/engine'
+import { FEEDBACK_PATH, LEADERBOARD_PATH, MAX_VOICE_BYTES, ROOM_NAME, SOCIAL_ROOM } from '@mahjong/protocol'
+import { leaderboard } from './db/matches'
 import { createFeedbackHandler, smtpSender, type FeedbackEnv } from './feedback'
 import { TableRoom, tableDiagnostics } from './room'
-import { configureServicesFromEnv } from './services'
+import { configureServicesFromEnv, services } from './services'
 import { SocialRoom } from './social'
 
 /** How feedback is mailed; tests swap in their own sender. */
@@ -22,6 +24,20 @@ export const server = defineServer({
   rooms: { [ROOM_NAME]: defineRoom(TableRoom), [SOCIAL_ROOM]: defineRoom(SocialRoom) },
   routes: createRouter({
     health: createEndpoint('/health', { method: 'GET' }, async () => ({ ok: true })),
+    // Public: guests can look at the rankings too.
+    leaderboard: createEndpoint(LEADERBOARD_PATH, { method: 'GET' }, async (ctx) => {
+      const rules = new URL(ctx.request?.url ?? LEADERBOARD_PATH, 'http://local').searchParams.get('rules')
+      const json = (body: unknown, status = 200) =>
+        new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=30' } })
+      if (!isRuleSet(rules)) return json({ error: 'unknown rules' }, 400)
+      if (!services.db) return json({ entries: [] })
+      try {
+        return json({ entries: await leaderboard(services.db, rules) })
+      } catch (error) {
+        console.error('leaderboard:', error)
+        return json({ error: 'unavailable' }, 503)
+      }
+    }),
     feedback: createEndpoint(FEEDBACK_PATH, { method: 'POST' }, async (ctx) => {
       const result = await feedback(ctx.body, senderOf(ctx.request?.headers ?? new Headers()))
       return new Response(JSON.stringify(result.ok ? { ok: true } : { error: result.error }), {
