@@ -119,7 +119,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               <button v-else-if="f.state === 'outgoing'" class="action friends__btn" @click="social.remove(f.userId)">{{ t('friends.cancel') }}</button>
               <template v-else-if="canInviteToTable(f, tableCode) || joinable(f) || (!tableCode && f.online)">
                 <button
-                  v-if="!tableCode && f.online"
+                  v-if="!tableCode && f.online && !joinable(f)"
                   class="action action--primary friends__btn"
                   :aria-label="`${t('friends.playTogether')}: ${f.name}`"
                   @click="emit('playWith', f.userId)"
@@ -135,7 +135,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 >
                   {{ invited.has(f.userId) ? t('friends.invited') : t('friends.inviteToTable') }}
                 </button>
-                <button v-if="joinable(f)" class="action friends__btn" :aria-label="`${t('friends.join')} ${f.name}`" @click="emit('join', joinable(f)!)">
+                <button
+                  v-if="joinable(f)"
+                  class="action friends__btn"
+                  :class="{ 'action--primary': !tableCode }"
+                  :aria-label="`${t('friends.join')} ${f.name}`"
+                  @click="emit('join', joinable(f)!)"
+                >
                   {{ t('friends.join') }}
                 </button>
               </template>
