@@ -13,7 +13,8 @@ export async function startTestDb(): Promise<{ db: Db; url: string; stop(): Prom
   const server = new PGLiteSocketServer({ db: pglite, port, maxConnections: 20 })
   await server.start()
   const url = `postgresql://postgres:postgres@127.0.0.1:${port}/postgres?sslmode=disable`
-  const db = createDb(url)
+  // PGlite is one session: a single connection keeps transactions from interleaving.
+  const db = createDb(url, 1)
   await migrateToLatest(db)
   return {
     db,
