@@ -10,13 +10,14 @@ import MatchScreen from './components/MatchScreen.vue'
 import Onboarding from './components/Onboarding.vue'
 import OnlineDialog from './components/OnlineDialog.vue'
 import PlayerCard from './components/PlayerCard.vue'
-import ProfileDialog from './components/ProfileDialog.vue'
+import ProfilePage from './components/ProfilePage.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import ToastStack from './components/ToastStack.vue'
 import VoiceButton from './components/VoiceButton.vue'
 import { track } from './game/analytics'
 import { loadLatestVersion } from './game/appUpdate'
 import { friendsCount, parseFriendCode, seatChanges } from './game/friends'
+import { signed } from './game/stats'
 import { useInstall } from './game/install'
 import { shareInvite } from './game/invite'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
@@ -27,6 +28,9 @@ import { useAccount } from './game/useAccount'
 import { useSocial } from './game/useSocial'
 import { useToasts } from './game/useToasts'
 import { useI18n } from './i18n/useI18n'
+
+/** Address hash while the profile page is open, so the browser's Back button closes it. */
+const PROFILE_HASH = '#profile'
 
 const { t, toggle, locale } = useI18n()
 
@@ -40,15 +44,31 @@ const online = useOnline()
 const { snapshot, isHost, link } = online
 /** At an online table (lobby or match); the solo match waits meanwhile. */
 const atTable = computed(() => snapshot.value !== null)
-const solo = useMatch(atTable)
-const { difficulty, rules, resumed, inProgress, startNewMatch } = solo
+/** Your profile page (name, face, stats, history, leaderboards); opened by clicking your own badge or seat, or the account button. */
+const profileOpen = ref(location.hash === PROFILE_HASH)
+// Solo play waits while you are at an online table or looking at your profile.
+const solo = useMatch(computed(() => atTable.value || profileOpen.value))
+const { difficulty, rules, resumed, inProgress, startNewMatch, keepGoing } = solo
 /** The match on screen. */
 const source = computed(() => (atTable.value ? online.source : solo))
 const view = computed(() => source.value.view.value)
 const shownRules = computed(() => source.value.rules.value)
 
-/** Your name and avatar; opened by clicking your own badge or your lobby seat. */
-const profileOpen = ref(false)
+function openProfile() {
+  if (profileOpen.value) return
+  profileOpen.value = true
+  history.pushState(null, '', `${location.pathname}${location.search}${PROFILE_HASH}`)
+}
+function closeProfile() {
+  if (!profileOpen.value) return
+  profileOpen.value = false
+  if (location.hash === PROFILE_HASH) history.back()
+}
+function onPopState() {
+  profileOpen.value = location.hash === PROFILE_HASH
+}
+onMounted(() => window.addEventListener('popstate', onPopState))
+onBeforeUnmount(() => window.removeEventListener('popstate', onPopState))
 
 /** A changed profile reaches the online table and your account straight away. */
 function profileSaved() {
@@ -435,7 +455,7 @@ async function loadLatest() {
             <span v-if="incomingRequests" class="topbar__badge" :aria-label="t('friends.requestsWaiting', { n: incomingRequests })">{{ incomingRequests }}</span>
           </button>
           <button v-if="account.ready.value && !account.signedIn.value" class="action action--quiet-light" @click="account.signIn()"><MenuIcon name="signIn" />{{ t('account.signIn') }}</button>
-          <button v-else-if="account.signedIn.value" class="action action--quiet-light" @click="profileOpen = true"><MenuIcon name="account" />{{ t('account.open') }}</button>
+          <button v-else-if="account.signedIn.value" class="action action--quiet-light" @click="openProfile()"><MenuIcon name="account" />{{ t('account.open') }}</button>
         </div>
         <div class="topbar__group">
           <button class="action action--quiet-light" @click="settingsOpen = true"><MenuIcon name="settings" />{{ t('app.settings') }}</button>
@@ -453,7 +473,7 @@ async function loadLatest() {
       :can-invite-friends="canInviteFriends"
       @configure="online.configure"
       @start="online.start"
-      @edit-profile="profileOpen = true"
+      @edit-profile="openProfile()"
       @open-player="(p: number) => (playerCard = p)"
       @invite-friends="friendsOpen = true"
       @remove="removePlayer"
@@ -466,15 +486,19 @@ async function loadLatest() {
       :openable="true"
       @new-match="onlineMatchDone"
       @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
-      @edit-profile="profileOpen = true"
+      @edit-profile="openProfile()"
       @open-player="(p: number) => (playerCard = p)"
     >
       <template #matchEnd>
         <div v-if="isHost" class="summary__choices">
-          <button class="action action--primary summary__continue" autofocus @click="online.rematch">{{ t('online.keepGoing') }}</button>
+          <button class="action action--primary summary__continue" autofocus @click="online.rematch(true)">{{ t('result.keepGoing') }}</button>
+          <button class="action summary__continue" @click="online.rematch(false)">{{ t('result.newMatch') }}</button>
           <button class="action summary__continue" @click="online.restart">{{ t('online.backToLobby') }}</button>
         </div>
-        <template v-else>
+        <p v-if="online.rating.value" class="summary__rating">
+          {{ t('rating.change', { before: online.rating.value.before, after: online.rating.value.after, change: signed(online.rating.value.after - online.rating.value.before) }) }}
+        </p>
+        <template v-if="!isHost">
           <p class="result__note">{{ t('online.waitingHostChoice', { name: hostName }) }}</p>
           <button class="action summary__continue" @click="leaveTable">{{ t('online.leaveMatch') }}</button>
         </template>
@@ -485,8 +509,9 @@ async function loadLatest() {
       v-else
       :source="solo"
       @new-match="startNewMatch()"
+      @keep-going="keepGoing()"
       @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
-      @edit-profile="profileOpen = true"
+      @edit-profile="openProfile()"
     />
 
     <!-- A break: everyone at the online table sees this until someone resumes. -->
@@ -529,7 +554,7 @@ async function loadLatest() {
 
     <FeedbackDialog v-if="feedbackOpen" :capture="captureFeedback" @close="feedbackOpen = false" />
 
-    <ProfileDialog v-if="profileOpen" @save="profileSaved" @close="profileOpen = false" />
+    <ProfilePage v-if="profileOpen" @save="profileSaved" @close="closeProfile" />
 
     <div v-if="settingsOpen" class="result" role="dialog" aria-modal="true" aria-labelledby="settings-title" @click.self="settingsOpen = false">
       <div class="result__card settings">

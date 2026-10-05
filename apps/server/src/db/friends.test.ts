@@ -15,7 +15,7 @@ afterAll(async () => {
   await stop()
 })
 beforeEach(async () => {
-  await sql`truncate friendships, profiles`.execute(db)
+  await sql`truncate friendships, profiles cascade`.execute(db)
 })
 
 const seed = (name: string) => ({ name, avatar: 7 })

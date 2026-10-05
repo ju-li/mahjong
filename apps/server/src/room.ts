@@ -2,6 +2,8 @@ import { randomBytes, randomInt } from 'node:crypto'
 import { Room, ServerError, type Client } from '@colyseus/core'
 import { KICKED_CODE, newRoomCode, type JoinOptions } from '@mahjong/protocol'
 import { friendIds } from './db/friends'
+import type { OnlineMatchRecord } from './db/matches'
+import { saveMatch } from './matchRecorder'
 import { services } from './services'
 import { AT_KEY, publishRefresh, TABLES_KEY } from './socialBus'
 import { Table } from './table'
@@ -53,6 +55,7 @@ export class TableRoom extends Room {
         now: () => Date.now(),
         random32: () => randomInt(2 ** 32),
         newToken: () => randomBytes(18).toString('base64url'),
+        onMatchEnd: (record) => void this.recordMatch(record),
       },
       () => this.sendSnapshots(),
     )
@@ -65,7 +68,9 @@ export class TableRoom extends Room {
     this.onMessage('configure', (client, message) => this.table.configure(client.sessionId, message))
     this.onMessage('start', (client) => this.table.start(client.sessionId))
     this.onMessage('restart', (client) => this.table.restart(client.sessionId))
-    this.onMessage('rematch', (client) => this.table.rematch(client.sessionId))
+    this.onMessage('rematch', (client, message: { keepScores?: unknown } | undefined) =>
+      this.table.rematch(client.sessionId, message?.keepScores === true),
+    )
     this.onMessage('pause', (client) => this.table.pause(client.sessionId))
     this.onMessage('resume', (client) => this.table.resume(client.sessionId))
     this.onMessage('identify', async (client, message: { accessToken?: unknown } | undefined) => {
@@ -133,6 +138,16 @@ export class TableRoom extends Room {
     this.table.dispose()
     liveCodes.delete(this.roomId)
     liveTables.delete(this.roomId)
+  }
+
+  /** Save a finished match, then tell each rated player at the table their new rating. */
+  private async recordMatch(record: OnlineMatchRecord) {
+    const changes = await saveMatch(services.db, record)
+    if (!changes?.size) return
+    for (const client of this.clients) {
+      const change = changes.get(this.userIds.get(client.sessionId) ?? '')
+      if (change) client.send('rated', change)
+    }
   }
 
   private sendSnapshots() {

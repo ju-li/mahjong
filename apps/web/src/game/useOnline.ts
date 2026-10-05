@@ -1,7 +1,7 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { Client, type Room } from '@colyseus/sdk'
 import type { Action } from '@mahjong/engine'
-import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
+import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
 import { track } from './analytics'
 import { useProfile } from './profile'
@@ -61,6 +61,9 @@ export function useOnline() {
   /** Code of the table the host last removed you from, for a notice; the caller clears it. */
   const removedFrom = ref<string | null>(null)
   const link = ref<Link>('up')
+  /** Your rating change from the match just finished, once the server has saved it. */
+  const rating = shallowRef<RatingChange | null>(null)
+  watch(() => snapshot.value?.match?.final ?? false, (final) => final || (rating.value = null))
   const { name, avatar } = useProfile()
   const account = useAccount()
   const { voiceChat } = useSettings()
@@ -74,6 +77,9 @@ export function useOnline() {
       snapshot.value = s
       write(() => localStorage, TOKEN_KEY(s.code), s.token)
       write(() => sessionStorage, CURRENT_KEY, s.code)
+    })
+    r.onMessage('rated', (change: RatingChange) => {
+      if (room === r) rating.value = change
     })
     r.onMessage('voice', (memo: VoiceMemo) => {
       if (room === r && voiceChat.value) voicePlayer.enqueue(memo)
@@ -276,6 +282,7 @@ export function useOnline() {
   }
 
   return {
+    rating,
     snapshot,
     source,
     busy,
@@ -294,7 +301,7 @@ export function useOnline() {
     configure: (settings: Partial<TableSettings>) => send('configure', settings),
     start: () => send('start', {}),
     restart: () => send('restart', {}),
-    rematch: () => send('rematch', {}),
+    rematch: (keepScores: boolean) => send('rematch', { keepScores }),
     pause: () => send('pause', {}),
     resume: () => send('resume', {}),
     /** Tell the table about your current name and avatar. */

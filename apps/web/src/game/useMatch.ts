@@ -2,13 +2,16 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue
 import {
   HANDS_PER_MATCH,
   applyAction,
+  completedMatch,
   isMatchOver,
   legalActions,
+  matchPoints,
   newMatch,
   nextHand,
   playerAt,
   sameAction,
   seatOf,
+  settledScores,
   viewFor,
   isRuleSet,
   type Action,
@@ -17,11 +20,14 @@ import {
   type Player,
   type Seat,
 } from '@mahjong/engine'
+import { handSummaries } from '@mahjong/protocol'
 import { track } from './analytics'
 import { BotClient } from './botClient'
 import { timeoutAction } from './keyboard'
 import { useProfile } from './profile'
 import { useSettings } from './settings'
+import { enqueueResult } from './stats'
+import { useSocial } from './useSocial'
 import { calloutsDone } from './callout'
 import type { MatchSource } from './source'
 import { useTableAudio } from './tableAudio'
@@ -41,7 +47,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
  * Difficulty and preferred rules live in settings; older saves also carry a `difficulty` field, now ignored.
  * `handLog` is every action of the hand in play (absent in older saves), so a bug report can replay it.
  */
-type Saved = { match: Match; handLog?: Action[] }
+type Saved = { match: Match; handLog?: Action[]; startedAt?: number }
 
 function load(): Saved | null {
   try {
@@ -84,6 +90,8 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   const match = shallowRef<Match>(saved?.match ?? newMatch(randomSeed(), preferredRules.value))
   /** Actions applied in the hand in play; null if it was restored from a save that didn't keep them. */
   let handLog: Action[] | null = saved ? (Array.isArray(saved.handLog) ? saved.handLog : null) : []
+  /** When this match was dealt, for the player's history. */
+  let startedAt = typeof saved?.startedAt === 'number' ? saved.startedAt : Date.now()
   let generation = 0
   let step = 0
   let running = false
@@ -132,9 +140,25 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   const matchOver = computed(() => isMatchOver(match.value))
   /** The last hand has been scored (the summary shows before moving past it), counted once per match. */
   const finished = computed(() => matchOver.value || (match.value.handIndex === HANDS_PER_MATCH - 1 && handOver.value))
-  watch(finished, (done) => done && track('solo_match_finished'))
+  watch(finished, (done) => {
+    if (!done) return
+    track('solo_match_finished')
+    // Kept until the player's account has it: straight away if signed in, else once they sign in.
+    const complete = completedMatch(match.value)
+    if (complete)
+      enqueueResult({
+        rules: complete.rules,
+        difficulty: difficulty.value,
+        seed: complete.seed,
+        startedAt,
+        endedAt: Date.now(),
+        hands: handSummaries(complete),
+        scores: matchPoints(complete),
+      })
+    useSocial().flushResults()
+  })
 
-  watch(match, () => save({ match: match.value, handLog: handLog ?? undefined }), { immediate: true })
+  watch(match, () => save({ match: match.value, handLog: handLog ?? undefined, startedAt }), { immediate: true })
 
   function commit(action: Action): void {
     const current = match.value.current!
@@ -216,7 +240,17 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   function startNewMatch(next: RuleSet = match.value.rules): void {
     preferredRules.value = next
     handLog = []
+    startedAt = Date.now()
     match.value = newMatch(randomSeed(), next)
+    restartPump()
+  }
+
+  /** After the last hand: another match with the same rules, carrying the totals over. */
+  function keepGoing(): void {
+    const scores = settledScores(match.value)
+    handLog = []
+    startedAt = Date.now()
+    match.value = newMatch(randomSeed(), match.value.rules, scores)
     restartPump()
   }
 
@@ -273,5 +307,6 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     /** The whole match, every hidden tile included, and this hand's actions so far: for bug reports. */
     debugState: () => ({ match: match.value, handLog }),
     startNewMatch,
+    keepGoing,
   }
 }
