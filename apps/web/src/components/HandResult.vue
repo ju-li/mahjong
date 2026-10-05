@@ -20,7 +20,7 @@ const props = defineProps<{
   readyButton?: ReadyButton
 }>()
 
-const emit = defineEmits<{ next: []; unready: []; deal: []; newMatch: []; explain: [fanId: string] }>()
+const emit = defineEmits<{ next: []; unready: []; deal: []; newMatch: []; keepGoing: []; explain: [fanId: string] }>()
 
 const { t, fanName } = useI18n()
 
@@ -176,9 +176,12 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
             <span>{{ s.name }}</span><strong>{{ s.total }}</strong>
           </li>
         </ol>
-        <!-- What comes after the match: a new one by default; online tables offer their own choices. -->
+        <!-- What comes after the match: keep the totals or start from zero; online tables offer their own choices. -->
         <slot name="matchEnd">
-          <button class="action action--primary summary__continue" @click="$emit('newMatch')">{{ t('result.newMatch') }}</button>
+          <div class="summary__choices">
+            <button class="action action--primary summary__continue" autofocus @click="$emit('keepGoing')">{{ t('result.keepGoing') }}</button>
+            <button class="action summary__continue" @click="$emit('newMatch')">{{ t('result.newMatch') }}</button>
+          </div>
         </slot>
       </template>
       <button

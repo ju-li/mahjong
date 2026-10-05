@@ -8,6 +8,7 @@ import {
   playerAt,
   sameAction,
   seatOf,
+  settledScores,
   viewFor,
   isRuleSet,
   type Action,
@@ -213,6 +214,14 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     restartPump()
   }
 
+  /** After the last hand: another match with the same rules, carrying the totals over. */
+  function keepGoing(): void {
+    const scores = settledScores(match.value)
+    handLog = []
+    match.value = newMatch(randomSeed(), match.value.rules, scores)
+    restartPump()
+  }
+
   onBeforeUnmount(() => {
     generation++
     clearInterval(claimTimer)
@@ -266,5 +275,6 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     /** The whole match, every hidden tile included, and this hand's actions so far: for bug reports. */
     debugState: () => ({ match: match.value, handLog }),
     startNewMatch,
+    keepGoing,
   }
 }

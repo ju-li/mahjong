@@ -10,6 +10,7 @@ import {
   playerAt,
   sameAction,
   seatOf,
+  settledScores,
   viewFor,
   type Action,
   type Match,
@@ -265,10 +266,10 @@ export class Table {
     this.newMatch()
   }
 
-  private newMatch(): void {
+  private newMatch(scores?: readonly number[]): void {
     this.stopTimers()
     this.phase = 'playing'
-    this.match = newMatch(this.env.random32(), this.settings.rules)
+    this.match = newMatch(this.env.random32(), this.settings.rules, scores)
     this.handLog = []
     // Steps only ever grow, so a click from the previous match can never match the new one.
     this.step++
@@ -278,10 +279,10 @@ export class Table {
     this.changed()
   }
 
-  /** Host, once the last hand is scored: another match with the same people and settings. */
-  rematch(client: string): void {
+  /** Host, once the last hand is scored: another match with the same people and settings, scores carried over or reset. */
+  rematch(client: string, keepScores = false): void {
     if (this.phase !== 'playing' || this.playerOf(client) !== this.host || !this.finished()) return
-    this.newMatch()
+    this.newMatch(keepScores ? settledScores(this.match!) : undefined)
   }
 
   /** Host, once the match is over: everyone still here goes back to the lobby. */

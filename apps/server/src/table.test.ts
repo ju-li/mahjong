@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { chooseAction } from '@mahjong/bots'
-import { seatOf, type GameState, type Match, type Player } from '@mahjong/engine'
+import { seatOf, settledScores, type GameState, type Match, type Player } from '@mahjong/engine'
 import { MAX_VOICE_BYTES, MAX_VOICE_MS, type Snapshot } from '@mahjong/protocol'
 import { cleanAvatar, cleanName, RESERVE_MS, Table, TURN_MS, VOICE_GAP_MS, VOICE_PER_MINUTE, type TableEnv } from './table'
 
@@ -320,6 +320,24 @@ describe('play', () => {
     expect(again.final).toBe(false)
     expect(again.scores).toEqual([0, 0, 0, 0])
     expect(snap('c1').players.map((p) => p.name)).toEqual(['Ann', 'Bo', null, null])
+  })
+
+  it('carries the final totals into the next match when the host keeps going', () => {
+    const { env, table, clients, snap } = setup(['Ann', 'Bo'])
+    table.start('c0')
+    const internals = table as unknown as { match: Match }
+    internals.match = { ...internals.match, handIndex: 15, scores: [40, -10, -10, -20] }
+    for (let i = 0; i < 100_000 && !snap('c0').match!.final; i++) {
+      autoplay(table, clients, snap)
+      if (!snap('c0').match!.final) env.advance(500)
+    }
+    const final = settledScores(internals.match)
+    expect(final.reduce((a, b) => a + b, 0)).toBe(0)
+    table.rematch('c0', true)
+    const again = snap('c1').match!
+    expect(again.handIndex).toBe(0)
+    expect(again.final).toBe(false)
+    expect(again.scores).toEqual(final)
   })
 
   it('takes everyone back to the lobby after the last hand if the host chooses', () => {

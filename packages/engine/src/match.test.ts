@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { applyAction, HANDS_PER_MATCH, isMatchOver, legalActions, mulberry32, newMatch, nextHand, playerAt, seatOf, SEATING, type Match, type Player, type Seat } from './index'
 
 /** Play a whole match with seeded random legal actions (claims favoured, so some hands are won). */
-function playMatch(seed: number): Match {
+function playMatch(seed: number, scores?: number[]): Match {
   const rand = mulberry32(seed)
-  let match = newMatch(seed)
+  let match = newMatch(seed, undefined, scores)
   while (!isMatchOver(match)) {
     let state = match.current!
     while (state.phase.kind !== 'ended') {
@@ -62,6 +62,14 @@ describe('match', () => {
       if (seed <= 2) expect(playMatch(seed)).toEqual(m)
     }
     expect(wins).toBeGreaterThan(0)
+  })
+
+  it('carries scores over from an earlier match when given', () => {
+    const start = [10, -5, 0, -5]
+    expect(newMatch(7, undefined, start).scores).toEqual(start)
+    const m = playMatch(3, start)
+    expect(m.scores.reduce((a, b) => a + b, 0)).toBe(0)
+    expect(m.scores).toEqual(playMatch(3).scores.map((s, p) => s + start[p]!))
   })
 })
 

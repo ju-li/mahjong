@@ -59,7 +59,9 @@ export class TableRoom extends Room {
     this.onMessage('configure', (client, message) => this.table.configure(client.sessionId, message))
     this.onMessage('start', (client) => this.table.start(client.sessionId))
     this.onMessage('restart', (client) => this.table.restart(client.sessionId))
-    this.onMessage('rematch', (client) => this.table.rematch(client.sessionId))
+    this.onMessage('rematch', (client, message: { keepScores?: unknown } | undefined) =>
+      this.table.rematch(client.sessionId, message?.keepScores === true),
+    )
     this.onMessage('pause', (client) => this.table.pause(client.sessionId))
     this.onMessage('resume', (client) => this.table.resume(client.sessionId))
     this.onMessage('identify', async (client, message: { accessToken?: unknown } | undefined) => {

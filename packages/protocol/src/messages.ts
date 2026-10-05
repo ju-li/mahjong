@@ -113,8 +113,8 @@ export type ClientMessages = {
   start: Record<string, never>
   /** Host, after the last hand: back to the lobby with the same people. */
   restart: Record<string, never>
-  /** Host, after the last hand: another match straight away, same people and settings. */
-  rematch: Record<string, never>
+  /** Host, after the last hand: another match straight away, same people and settings; `keepScores` carries the totals over. */
+  rematch: { keepScores?: boolean }
   /** Anyone at the table: stop play for a break. */
   pause: Record<string, never>
   /** Anyone at the table: carry on. */
