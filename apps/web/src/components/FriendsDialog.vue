@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { Friend } from '@mahjong/protocol'
+import { TABLE_INVITE_GAP_MS, type Friend } from '@mahjong/protocol'
 import { avatarSvg } from '../game/avatar'
-import { groupFriends } from '../game/friends'
+import { canInviteToTable, groupFriends, tableStatus } from '../game/friends'
 import { shareFriendInvite } from '../game/invite'
 import { useAccount } from '../game/useAccount'
 import { useSocial } from '../game/useSocial'
 import { useI18n } from '../i18n/useI18n'
 
-/** Your friends: requests to answer, who's online, everyone else, and a link to invite more. */
-const emit = defineEmits<{ close: [] }>()
+/**
+ * Your friends: requests to answer, who's online (and at which table), everyone else, and a link
+ * to invite more. At a table (`tableCode`), online friends can be invited to it; in solo play,
+ * Play hosts a new table and invites them.
+ */
+const props = defineProps<{ tableCode: string | null }>()
+const emit = defineEmits<{ close: []; join: [code: string]; playWith: [userId: string] }>()
 
 const { t } = useI18n()
 const account = useAccount()
@@ -34,6 +39,32 @@ async function invite() {
   if (!code || (await shareFriendInvite(code, t)) !== 'copied') return
   copied.value = true
   setTimeout(() => (copied.value = false), 2000)
+}
+
+/** Friends just invited, so the button says so for a while instead of inviting again. */
+const invited = ref(new Set<string>())
+function inviteToTable(f: Friend) {
+  if (!props.tableCode) return
+  social.inviteToTable(f.userId, props.tableCode)
+  invited.value = new Set(invited.value).add(f.userId)
+  setTimeout(() => {
+    const next = new Set(invited.value)
+    next.delete(f.userId)
+    invited.value = next
+  }, TABLE_INVITE_GAP_MS)
+}
+
+function where(f: Friend): string | null {
+  const s = tableStatus(f, props.tableCode)
+  if (s.kind === 'mine') return t('friends.atYourTable')
+  if (s.kind === 'other') return `${t('friends.atTable', { code: s.code })} · ${s.canJoin ? t('friends.seatsOpen', { n: s.openSeats }) : t('friends.tableFull')}`
+  return null
+}
+
+/** Code of the friend's table if you could join it from here, else null. */
+function joinable(f: Friend): string | null {
+  const s = tableStatus(f, props.tableCode)
+  return s.kind === 'other' && s.canJoin ? s.code : null
 }
 
 function removeFriend(f: Friend) {
@@ -66,8 +97,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </template>
       <p v-else-if="!social.connected.value" class="result__note">{{ t('friends.connecting') }}</p>
       <p v-else-if="total === 0" class="result__note">{{ t('friends.empty') }}</p>
+      <p v-else-if="tableCode" class="result__note">{{ groups.online.length ? t('friends.inviteHint') : t('friends.noneOnline') }}</p>
 
-      <div v-else class="friends__list">
+      <div v-if="account.signedIn.value && social.connected.value && total > 0" class="friends__list">
         <section v-for="s in sections" :key="s.key" class="friends__section" :aria-label="s.title">
           <h3>{{ s.title }} <span class="friends__n">{{ s.list.length }}</span></h3>
           <ul>
@@ -75,13 +107,44 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               <span class="friends__face" :class="{ 'is-online': f.online }">
                 <span v-html="avatarSvg(f.avatar ?? 0)" />
               </span>
-              <span class="friends__name">{{ f.name }}</span>
+              <span class="friends__who">
+                <span class="friends__name">{{ f.name }}</span>
+                <span v-if="where(f)" class="friends__where">{{ where(f) }}</span>
+              </span>
               <span v-if="f.state === 'friend'" class="visually-hidden">{{ f.online ? t('friends.isOnline') : t('friends.isOffline') }}</span>
               <template v-if="f.state === 'incoming'">
                 <button class="action action--primary friends__btn" @click="social.respond(f.userId, true)">{{ t('friends.accept') }}</button>
                 <button class="action friends__btn" @click="social.respond(f.userId, false)">{{ t('friends.decline') }}</button>
               </template>
               <button v-else-if="f.state === 'outgoing'" class="action friends__btn" @click="social.remove(f.userId)">{{ t('friends.cancel') }}</button>
+              <template v-else-if="canInviteToTable(f, tableCode) || joinable(f) || (!tableCode && f.online)">
+                <button
+                  v-if="!tableCode && f.online && !joinable(f)"
+                  class="action action--primary friends__btn"
+                  :aria-label="`${t('friends.playTogether')}: ${f.name}`"
+                  @click="emit('playWith', f.userId)"
+                >
+                  {{ t('friends.playTogether') }}
+                </button>
+                <button
+                  v-if="canInviteToTable(f, tableCode)"
+                  class="action action--primary friends__btn"
+                  :disabled="invited.has(f.userId)"
+                  :aria-label="`${t('friends.inviteToTable')} ${f.name}`"
+                  @click="inviteToTable(f)"
+                >
+                  {{ invited.has(f.userId) ? t('friends.invited') : t('friends.inviteToTable') }}
+                </button>
+                <button
+                  v-if="joinable(f)"
+                  class="action friends__btn"
+                  :class="{ 'action--primary': !tableCode }"
+                  :aria-label="`${t('friends.join')} ${f.name}`"
+                  @click="emit('join', joinable(f)!)"
+                >
+                  {{ t('friends.join') }}
+                </button>
+              </template>
               <button v-else class="action friends__btn friends__remove" :aria-label="`${t('friends.remove')} ${f.name}`" @click="removeFriend(f)">
                 {{ t('friends.remove') }}
               </button>

@@ -136,3 +136,25 @@ export function nextHand(match: Match, result: HandResult): Match {
     current: handIndex < HANDS_PER_MATCH ? startHand(match.seed, handIndex, match.rules) : null,
   }
 }
+
+/**
+ * The match with every hand recorded, once it is over: if the last hand has ended but was not
+ * yet passed to `nextHand` (tables wait for a rematch / restart), it is recorded here. Null while
+ * hands are still to play.
+ */
+export function completedMatch(match: Match): Match | null {
+  if (isMatchOver(match)) return match
+  const s = match.current
+  if (match.handIndex !== HANDS_PER_MATCH - 1 || s?.phase.kind !== 'ended') return null
+  return nextHand(match, s.phase.result)
+}
+
+/** Points won in this match's own hands, per player: its scores minus any totals carried in from an earlier match. */
+export function matchPoints(match: Match): number[] {
+  return [0, 1, 2, 3].map((p) => match.history.reduce((sum, h) => sum + h.playerDeltas[p]!, 0))
+}
+
+/** Finishing places 1..4 by score, highest first; tied players share the better place. */
+export function placements(scores: readonly number[]): number[] {
+  return scores.map((s) => 1 + scores.filter((o) => o > s).length)
+}

@@ -30,6 +30,9 @@ ARG VITE_LOGTO_APP_ID
 ENV VITE_LOGTO_APP_ID=$VITE_LOGTO_APP_ID
 ARG VITE_LOGTO_RESOURCE
 ENV VITE_LOGTO_RESOURCE=$VITE_LOGTO_RESOURCE
+# Optional: Liwan analytics event endpoint (defaults to https://a.mommymahjong.com/api/event).
+ARG VITE_LIWAN_ENDPOINT
+ENV VITE_LIWAN_ENDPOINT=$VITE_LIWAN_ENDPOINT
 RUN pnpm --filter web build
 
 FROM caddy:2-alpine

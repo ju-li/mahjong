@@ -68,6 +68,13 @@ browser (PWA)                    Railway project (per environment)
   `social` room. A Presence hash counts each user's open connections (online
   = at least one), and a per-user Presence channel tells every connection
   to refresh its friends list when something changes.
+- **Friends at tables:** each table room keeps two more Presence hashes up to
+  date: `social:at` (user id → table code, signed-in seated players only) and
+  `social:tables` (code → `{openSeats, playing}`), and refreshes the friends of
+  anyone who sits down or leaves. The friends list reads them to show where a
+  friend is playing. The per-user channel also carries table invites
+  (`{kind: 'invite'}` next to `{kind: 'refresh'}`); the social room checks the
+  friendship and the sender's seat in `social:at` before sending one.
 
 ## Schema (v0)
 
@@ -101,18 +108,20 @@ create table friendships (                 -- one row per pair
 Rules: crossing requests become a friendship; opening an invite link makes
 you friends immediately; caps of 200 friends and 50 outgoing requests.
 
-### Next (not built yet)
+### Match history and ratings (migration 0002)
 
-Keyed on the same `profiles.user_id`, written only by the game server at
-match end, in one transaction, with retries:
-
-- `matches`, `match_players`, `match_hands` (seed + action log, so any match
-  replays deterministically).
-- `ratings` (OpenSkill `mu`/`sigma` per rule set and season) and
-  `rating_history`.
-- Leaderboards and public profiles served by the Colyseus server's HTTP
-  routes, refetched on view; rating changes pushed by the server after the
-  write.
+- `matches`, `match_players`, `match_hands` (hand seeds and every action, so
+  any online match replays with the engine), `ratings`, `rating_history`.
+- Written only by the game server: online matches when their last hand is
+  scored (idempotent, retried), solo matches uploaded by the signed-in
+  player who played them (validated, never rated).
+- Ratings: OpenSkill (Plackett–Luce) per rule set. A match is rated when at
+  least two signed-in players held their seat for the whole match; they
+  are ranked by final score among themselves. Displayed rating =
+  1000 + 40 × (μ − 3σ). Leaderboard: ≥ 5 rated matches, public
+  `GET /leaderboard?rules=mcr|hk`.
+- History and stats are read over the social room; nothing about another
+  player's matches is served except the public leaderboard.
 
 ## Environment variables
 
@@ -124,6 +133,7 @@ match end, in one transaction, with retries:
 | web (build) | `VITE_LOGTO_ENDPOINT` | same as `LOGTO_ENDPOINT` |
 | web (build) | `VITE_LOGTO_APP_ID` | the Logto SPA application's App ID |
 | web (build) | `VITE_LOGTO_RESOURCE` | same as `LOGTO_API_RESOURCE` |
+| web (build) | `VITE_LIWAN_ENDPOINT` | optional; Liwan event API, default `https://a.mommymahjong.com/api/event` |
 | logto | `DB_URL` | the `logto` database on the same Postgres |
 | logto | `ENDPOINT` | `https://auth.<domain>` |
 | logto | `ADMIN_ENDPOINT` | admin console URL (own domain or port) |

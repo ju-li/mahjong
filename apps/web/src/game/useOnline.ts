@@ -1,8 +1,9 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { Client, type Room } from '@colyseus/sdk'
 import type { Action } from '@mahjong/engine'
-import { ROOM_NAME, type ClientMessages, type JoinOptions, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
+import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
+import { track } from './analytics'
 import { useProfile } from './profile'
 import { useAccount } from './useAccount'
 import { SERVER_URL } from './serverUrl'
@@ -16,7 +17,7 @@ const TOKEN_KEY = (code: string) => `mahjong.seat.${code}`
 /** The table this tab is at, so a reload goes straight back to it. */
 const CURRENT_KEY = 'mahjong.table'
 
-export type OnlineError = 'notFound' | 'full' | 'network'
+export type OnlineError = 'notFound' | 'full' | 'removed' | 'network'
 /** The link to the table: fine, being restored on its own, or gone until the player picks what to do. */
 export type Link = 'up' | 'reconnecting' | 'lost'
 
@@ -42,6 +43,7 @@ function classify(error: unknown): OnlineError {
   const code = (error as { code?: number })?.code
   if (code === 522) return 'notFound'
   if (code === 4003 || code === 525) return 'full'
+  if (code === KICKED_CODE) return 'removed'
   return 'network'
 }
 
@@ -56,7 +58,12 @@ export function useOnline() {
   const snapshot = shallowRef<Snapshot | null>(null)
   const busy = ref(false)
   const error = ref<OnlineError | null>(null)
+  /** Code of the table the host last removed you from, for a notice; the caller clears it. */
+  const removedFrom = ref<string | null>(null)
   const link = ref<Link>('up')
+  /** Your rating change from the match just finished, once the server has saved it. */
+  const rating = shallowRef<RatingChange | null>(null)
+  watch(() => snapshot.value?.match?.final ?? false, (final) => final || (rating.value = null))
   const { name, avatar } = useProfile()
   const account = useAccount()
   const { voiceChat } = useSettings()
@@ -66,9 +73,13 @@ export function useOnline() {
   function attach(r: Room): void {
     room = r
     r.onMessage('snapshot', (s: Snapshot) => {
+      countMilestones(snapshot.value, s)
       snapshot.value = s
       write(() => localStorage, TOKEN_KEY(s.code), s.token)
       write(() => sessionStorage, CURRENT_KEY, s.code)
+    })
+    r.onMessage('rated', (change: RatingChange) => {
+      if (room === r) rating.value = change
     })
     r.onMessage('voice', (memo: VoiceMemo) => {
       if (room === r && voiceChat.value) voicePlayer.enqueue(memo)
@@ -81,17 +92,32 @@ export function useOnline() {
       if (room === r) link.value = 'up'
       else void r.leave() // the player went solo while this was retrying
     })
-    r.onLeave(() => {
+    r.onLeave((closeCode?: number) => {
       if (room !== r) return // we left on purpose
       const code = snapshot.value?.code
       room = null
       if (!code) return
+      if (closeCode === KICKED_CODE) {
+        // Removed by the host: no coming back, so forget the seat and go back to solo.
+        write(() => localStorage, TOKEN_KEY(code), null)
+        removedFrom.value = code
+        void leave()
+        return
+      }
       // The SDK's own reconnection gave up; try once more with the seat token, then let the player choose.
       link.value = 'reconnecting'
       void join(code).then((ok) => {
         if (!ok && snapshot.value?.code === code) link.value = 'lost'
       })
     })
+  }
+
+  /** A match starting or ending at the table you are at; not ones already under way when you (re)joined. */
+  function countMilestones(before: Snapshot | null, now: Snapshot): void {
+    if (before?.code !== now.code) return
+    // From the lobby, or "keep going" after the last hand.
+    if ((before.phase === 'lobby' && now.phase === 'playing') || (before.match?.final && now.match && !now.match.final)) track('online_match_started')
+    if (before.match && now.match && !before.match.final && now.match.final) track('online_match_finished')
   }
 
   /** Bumped on every leave, so a join still in flight when the player goes solo is dropped. */
@@ -126,8 +152,18 @@ export function useOnline() {
     accessToken: await account.accessToken(),
   })
 
-  const host = () => connect(async () => client.create(ROOM_NAME, await options()))
-  const join = (code: string) => connect(async () => client.joinById(code, await options(code)))
+  /** Host a new table; resolves with its code (the room id) once seated, before its first snapshot arrives. */
+  async function host(): Promise<string | null> {
+    if (!(await connect(async () => client.create(ROOM_NAME, await options())))) return null
+    track('table_hosted')
+    return room?.roomId ?? null
+  }
+  /** Sit at a table by its code: from an invite, the join dialog, or to rejoin (only the first two are counted). */
+  async function join(code: string, count = false): Promise<boolean> {
+    const ok = await connect(async () => client.joinById(code, await options(code)))
+    if (ok && count) track('table_joined')
+    return ok
+  }
 
   // Signing in or out while seated updates the seat.
   watch(account.signedIn, async () => {
@@ -246,6 +282,7 @@ export function useOnline() {
   }
 
   return {
+    rating,
     snapshot,
     source,
     busy,
@@ -258,6 +295,9 @@ export function useOnline() {
     join,
     leave,
     rejoin,
+    removedFrom,
+    /** Host: remove the player in this seat from the table. */
+    kick: (player: number) => send('kick', { player }),
     configure: (settings: Partial<TableSettings>) => send('configure', settings),
     start: () => send('start', {}),
     restart: () => send('restart', {}),

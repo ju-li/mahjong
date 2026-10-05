@@ -37,6 +37,71 @@ export const migrations: Record<string, Migration> = {
       await db.schema.dropTable('profiles').execute()
     },
   },
+  '0002_matches_ratings': {
+    async up(db: Kysely<unknown>) {
+      for (const statement of [
+        sql`create table matches (
+          id uuid primary key,
+          kind text not null check (kind in ('online', 'solo')),
+          rule_set text not null check (rule_set in ('mcr', 'hk')),
+          difficulty text,
+          rated boolean not null default false,
+          client_key text unique,
+          started_at timestamptz not null,
+          ended_at timestamptz not null
+        )`,
+        sql`create table match_players (
+          match_id uuid not null references matches on delete cascade,
+          player smallint not null check (player between 0 and 3),
+          user_id text references profiles on delete set null,
+          name text not null,
+          avatar bigint,
+          bot boolean not null,
+          final_score integer not null,
+          placement smallint not null check (placement between 1 and 4),
+          full_match boolean not null,
+          primary key (match_id, player)
+        )`,
+        sql`create index match_players_user on match_players (user_id, match_id)`,
+        sql`create table match_hands (
+          match_id uuid not null references matches on delete cascade,
+          hand_index smallint not null check (hand_index between 0 and 15),
+          dealer smallint not null,
+          prevailing_wind text not null,
+          seed bigint not null,
+          result jsonb not null,
+          player_deltas integer[] not null,
+          actions jsonb,
+          primary key (match_id, hand_index)
+        )`,
+        sql`create table ratings (
+          user_id text not null references profiles on delete cascade,
+          rule_set text not null check (rule_set in ('mcr', 'hk')),
+          mu double precision not null,
+          sigma double precision not null,
+          matches integer not null default 0,
+          firsts integer not null default 0,
+          updated_at timestamptz not null default now(),
+          primary key (user_id, rule_set)
+        )`,
+        sql`create index ratings_board on ratings (rule_set, (mu - 3 * sigma) desc)`,
+        sql`create table rating_history (
+          match_id uuid not null references matches on delete cascade,
+          user_id text not null references profiles on delete cascade,
+          rule_set text not null,
+          mu_before double precision not null,
+          sigma_before double precision not null,
+          mu_after double precision not null,
+          sigma_after double precision not null,
+          primary key (match_id, user_id)
+        )`,
+      ])
+        await statement.execute(db)
+    },
+    async down(db: Kysely<unknown>) {
+      for (const t of ['rating_history', 'ratings', 'match_hands', 'match_players', 'matches']) await db.schema.dropTable(t).execute()
+    },
+  },
 }
 
 const provider: MigrationProvider = { getMigrations: async () => migrations }

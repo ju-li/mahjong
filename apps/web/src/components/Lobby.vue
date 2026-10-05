@@ -3,14 +3,23 @@ import { computed, ref } from 'vue'
 import { DIFFICULTIES, type Difficulty } from '@mahjong/bots'
 import { isRuleSet } from '@mahjong/engine'
 import { ONLINE_CLAIM_SECONDS, type Snapshot, type TableSettings } from '@mahjong/protocol'
+import MenuIcon from './MenuIcon.vue'
 import { avatarSvg } from '../game/avatar'
 import { shareInvite } from '../game/invite'
 import { RULE_OPTIONS } from '../game/settings'
 import { useI18n } from '../i18n/useI18n'
 
 /** The waiting room: the code to share, who has sat down, and the host's match settings. */
-const props = defineProps<{ snapshot: Snapshot; isHost: boolean }>()
-const emit = defineEmits<{ configure: [settings: Partial<TableSettings>]; start: []; editProfile: []; openPlayer: [player: number]; leave: [] }>()
+const props = defineProps<{ snapshot: Snapshot; isHost: boolean; canInviteFriends: boolean }>()
+const emit = defineEmits<{
+  configure: [settings: Partial<TableSettings>]
+  start: []
+  editProfile: []
+  openPlayer: [player: number]
+  inviteFriends: []
+  remove: [player: number]
+  leave: []
+}>()
 
 const { t } = useI18n()
 
@@ -35,6 +44,7 @@ function onRules(e: Event) {
     <h2 id="lobby-code" class="lobby__code" :aria-label="snapshot.code.split('').join(' ')">{{ snapshot.code }}</h2>
     <p class="result__note">{{ t('lobby.shareHint') }}</p>
     <button class="action action--primary lobby__share" @click="share">{{ copied ? t('lobby.copied') : t('lobby.share') }}</button>
+    <button v-if="canInviteFriends" class="action lobby__share" @click="emit('inviteFriends')"><MenuIcon name="friends" />{{ t('tableInvite.button') }}</button>
 
     <h3>{{ t('lobby.players') }}</h3>
     <ol class="lobby__seats">
@@ -53,6 +63,15 @@ function onRules(e: Event) {
         </template>
         <span v-if="i === snapshot.host" class="lobby__tag">{{ t('lobby.host') }}</span>
         <span v-if="i === snapshot.you" class="lobby__tag lobby__tag--you">{{ t('lobby.you') }}</span>
+        <button
+          v-if="isHost && i !== snapshot.you && p.name !== null"
+          type="button"
+          class="action lobby__remove"
+          :aria-label="`${t('lobby.remove')} ${p.name}`"
+          @click="emit('remove', i)"
+        >
+          {{ t('lobby.remove') }}
+        </button>
       </li>
     </ol>
 

@@ -1,7 +1,11 @@
 import { randomBytes, randomInt } from 'node:crypto'
 import { Room, ServerError, type Client } from '@colyseus/core'
-import { newRoomCode, type JoinOptions } from '@mahjong/protocol'
+import { KICKED_CODE, newRoomCode, type JoinOptions } from '@mahjong/protocol'
+import { friendIds } from './db/friends'
+import type { OnlineMatchRecord } from './db/matches'
+import { saveMatch } from './matchRecorder'
 import { services } from './services'
+import { AT_KEY, publishRefresh, TABLES_KEY } from './socialBus'
 import { Table } from './table'
 
 /** Codes of every table open in this process. */
@@ -35,6 +39,10 @@ export class TableRoom extends Room {
   private dropped = new Set<string>()
   /** Verified account per connection, so a reconnection stays signed in. */
   private userIds = new Map<string, string | null>()
+  /** What friends last heard about this table: who sits here and its seats, as a comparable key. */
+  private published = { users: new Set<string>(), key: '' }
+  /** Presence updates run one after another, so they land in order. */
+  private presenceQueue: Promise<void> = Promise.resolve()
 
   onCreate() {
     const code = newRoomCode(liveCodes, (n) => randomInt(n))
@@ -47,6 +55,7 @@ export class TableRoom extends Room {
         now: () => Date.now(),
         random32: () => randomInt(2 ** 32),
         newToken: () => randomBytes(18).toString('base64url'),
+        onMatchEnd: (record) => void this.recordMatch(record),
       },
       () => this.sendSnapshots(),
     )
@@ -69,6 +78,15 @@ export class TableRoom extends Room {
       this.userIds.set(client.sessionId, userId)
       this.table.identify(client.sessionId, userId)
     })
+    this.onMessage('kick', (client, message: { player?: unknown } | undefined) => {
+      const kicked = this.table.kick(client.sessionId, message?.player)
+      const target = kicked?.client ? this.clients.find((c) => c.sessionId === kicked.client) : undefined
+      if (!target) return
+      // Their seat is already gone: this is neither a drop to wait for nor a leave to process.
+      this.dropped.delete(target.sessionId)
+      this.tokens.delete(target.sessionId)
+      target.leave(KICKED_CODE)
+    })
     this.onMessage('voice', (client, message) => {
       const memo = this.table.voice(client.sessionId, message)
       if (memo) this.broadcast('voice', memo, { except: client })
@@ -77,9 +95,11 @@ export class TableRoom extends Room {
   }
 
   async onAuth(_client: Client, options: JoinOptions): Promise<{ userId: string | null }> {
-    if (!this.table.canJoin(options?.token)) throw new ServerError(4003, 'every seat is taken')
     // A bad or missing token just means a guest: signing in is never needed to play.
-    return { userId: await services.verify(options?.accessToken) }
+    const userId = await services.verify(options?.accessToken)
+    if (this.table.isBanned(options?.token, userId)) throw new ServerError(KICKED_CODE, 'removed by the host')
+    if (!this.table.canJoin(options?.token)) throw new ServerError(4003, 'every seat is taken')
+    return { userId }
   }
 
   onJoin(client: Client<{ auth: { userId: string | null } }>, options: JoinOptions) {
@@ -114,9 +134,20 @@ export class TableRoom extends Room {
   }
 
   onDispose() {
+    this.queuePresence(true)
     this.table.dispose()
     liveCodes.delete(this.roomId)
     liveTables.delete(this.roomId)
+  }
+
+  /** Save a finished match, then tell each rated player at the table their new rating. */
+  private async recordMatch(record: OnlineMatchRecord) {
+    const changes = await saveMatch(services.db, record)
+    if (!changes?.size) return
+    for (const client of this.clients) {
+      const change = changes.get(this.userIds.get(client.sessionId) ?? '')
+      if (change) client.send('rated', change)
+    }
   }
 
   private sendSnapshots() {
@@ -124,6 +155,41 @@ export class TableRoom extends Room {
       const snap = this.table.snapshotFor(client.sessionId)
       if (snap) client.send('snapshot', snap)
     }
+    this.queuePresence(false)
+  }
+
+  private queuePresence(closing: boolean) {
+    if (!services.db) return
+    this.presenceQueue = this.presenceQueue.then(() => this.publishPresence(closing)).catch((error) => console.error('table presence:', error))
+  }
+
+  /**
+   * Let signed-in players' friends see who sits at this table and whether there is room, and tell
+   * them when that changes.
+   */
+  private async publishPresence(closing: boolean) {
+    const db = services.db
+    if (!db) return
+    const code = this.roomId
+    const users = new Set(closing ? [] : this.table.seatedUserIds())
+    const info = { openSeats: this.table.openSeats(), playing: this.table.phase === 'playing' }
+    const key = closing ? '' : `${[...users].sort().join(',')}|${info.openSeats}|${info.playing}`
+    if (key === this.published.key) return
+    const before = this.published.users
+    this.published = { users, key }
+    for (const u of users) await this.presence.hset(AT_KEY, u, code)
+    for (const u of before) {
+      // Only clear it if they have not sat down somewhere else since.
+      if (!users.has(u) && (await this.presence.hget(AT_KEY, u)) === code) await this.presence.hdel(AT_KEY, u)
+    }
+    if (closing || users.size === 0) await this.presence.hdel(TABLES_KEY, code)
+    else await this.presence.hset(TABLES_KEY, code, JSON.stringify(info))
+    const affected = new Set([...users, ...before])
+    const friends = new Set<string>()
+    for (const u of affected) for (const f of await friendIds(db, u)) friends.add(f)
+    // Those who sat down or left hear it too: their own list says which table they are at.
+    for (const u of affected) if (users.has(u) !== before.has(u)) friends.add(u)
+    await publishRefresh(this.presence, ...friends)
   }
 
   /** Close the table once nobody has been at it for a while. */

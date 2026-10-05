@@ -1,10 +1,13 @@
+import { randomUUID } from 'node:crypto'
 import { chooseAction, DIFFICULTIES, timeoutAction } from '@mahjong/bots'
 import {
   applyAction,
+  completedMatch,
   HANDS_PER_MATCH,
   isMatchOver,
   isRuleSet,
   legalActions,
+  matchPoints,
   newMatch,
   nextHand,
   playerAt,
@@ -18,6 +21,7 @@ import {
   type Seat,
 } from '@mahjong/engine'
 import {
+  handSummaries,
   MAX_NAME_LENGTH,
   MAX_VOICE_BYTES,
   MAX_VOICE_MS,
@@ -29,6 +33,7 @@ import {
   type VoiceClip,
   type VoiceMemo,
 } from '@mahjong/protocol'
+import type { OnlineMatchRecord } from './db/matches'
 
 const PLAYERS: Player[] = [0, 1, 2, 3]
 const SEATS: Seat[] = [0, 1, 2, 3]
@@ -59,6 +64,8 @@ export type TableEnv = {
   random32(): number
   /** Unguessable token for a seat. */
   newToken(): string
+  /** Called once when a match's last hand has been scored, with everything needed to record it. */
+  onMatchEnd?(record: OnlineMatchRecord): void
 }
 
 type Slot = {
@@ -122,8 +129,20 @@ export class Table {
   private claimLeft: number | null = null
   /** When each player's recent voice memos were sent, for rate limiting. */
   private voiceLog: number[][] = PLAYERS.map(() => [])
+  /** Seat tokens and accounts the host removed; they can't take a seat here again. */
+  private banned = { tokens: new Set<string>(), userIds: new Set<string>() }
   /** Every action applied in the hand in play, in order: with the hand's seed, a replay of it (for bug reports). */
   private handLog: Action[] = []
+  /** Actions of the match's earlier hands (the current one is `handLog`). */
+  private handLogs: Action[][] = []
+  private matchId = ''
+  private matchStartedAt = 0
+  /** Who sat in each seat when the match began; `null` = a bot. */
+  private startOccupants: ({ token: string; userId: string | null } | null)[] = []
+  /** Seats whose occupant (or account) changed since the match began. */
+  private occupantChanged: boolean[] = []
+  /** `onMatchEnd` already called for this match. */
+  private matchReported = false
 
   constructor(
     code: string,
@@ -169,7 +188,52 @@ export class Table {
 
   /** Whether a join with this token would get a seat. Anyone may hop in while a bot holds one. */
   canJoin(token: string | undefined): boolean {
+    if (this.isBanned(token ?? null, null)) return false
     return this.seatFor(token ?? null) !== null
+  }
+
+  /** Whether the host removed this seat token or account from the table. */
+  isBanned(token: string | null | undefined, userId: string | null): boolean {
+    return (!!token && this.banned.tokens.has(token)) || (!!userId && this.banned.userIds.has(userId))
+  }
+
+  /**
+   * Host: remove the human in seat `target` for good. In a match a bot plays on with their score,
+   * and anyone new may take the seat; they themselves can't come back. Returns the connection to
+   * close, if they were connected; null when refused or nobody was connected.
+   */
+  kick(client: string, target: unknown): { client: string | null } | null {
+    const host = this.playerOf(client)
+    if (host === null || host !== this.host || typeof target !== 'number' || !PLAYERS.includes(target as Player) || target === host) return null
+    const p = target as Player
+    const slot = this.slots[p]!
+    if (slot.token === null) return null
+    this.banned.tokens.add(slot.token)
+    if (slot.userId) this.banned.userIds.add(slot.userId)
+    const kicked = slot.client
+    // No former token either: the seat is not theirs to reclaim.
+    this.slots[p] = emptySlot()
+    this.seatChanged(p)
+    this.ready.delete(p)
+    this.changed()
+    return { client: kicked }
+  }
+
+  /** How many seats someone new could take right now: bot seats and lapsed reservations. */
+  openSeats(): number {
+    const now = this.env.now()
+    return PLAYERS.filter((p) => {
+      const s = this.slots[p]!
+      return s.token === null || (s.client === null && s.droppedAt !== null && now - s.droppedAt >= RESERVE_MS)
+    }).length
+  }
+
+  /** Accounts of the signed-in players holding a seat, including ones whose connection dropped. */
+  seatedUserIds(): string[] {
+    return PLAYERS.flatMap((p) => {
+      const s = this.slots[p]!
+      return s.token !== null && s.userId ? [s.userId] : []
+    })
   }
 
   /**
@@ -178,6 +242,7 @@ export class Table {
    */
   join(client: string, options: { name?: unknown; avatar?: unknown; token?: unknown }, userId: string | null = null): Player | null {
     const token = typeof options.token === 'string' ? options.token : null
+    if (this.isBanned(token, userId)) return null
     const p = this.seatFor(token)
     if (p === null) return null
     const slot = this.slots[p]!
@@ -185,8 +250,10 @@ export class Table {
       // A new occupant: keep a returning player's token, otherwise issue one.
       const returning = token !== null && slot.formerToken === token
       this.slots[p] = { ...emptySlot(), token: returning ? token : this.env.newToken() }
+      this.seatChanged(p)
     }
     const seated = this.slots[p]!
+    if (seated.userId !== userId) this.seatChanged(p)
     seated.client = client
     seated.droppedAt = null
     seated.name = cleanName(options.name, seated.name || `Player ${p + 1}`)
@@ -212,7 +279,10 @@ export class Table {
     if (p === null) return
     const slot = this.slots[p]!
     if (this.phase === 'lobby') this.slots[p] = emptySlot()
-    else if (forGood) this.slots[p] = emptySlot(slot.token)
+    else if (forGood) {
+      this.slots[p] = emptySlot(slot.token)
+      this.seatChanged(p)
+    }
     else {
       slot.client = null
       slot.droppedAt = this.env.now()
@@ -245,6 +315,7 @@ export class Table {
     const p = this.playerOf(client)
     if (p === null || this.slots[p]!.userId === userId) return
     this.slots[p]!.userId = userId
+    this.seatChanged(p)
     this.changed()
   }
 
@@ -271,6 +342,12 @@ export class Table {
     this.phase = 'playing'
     this.match = newMatch(this.env.random32(), this.settings.rules, scores)
     this.handLog = []
+    this.handLogs = []
+    this.matchId = randomUUID()
+    this.matchStartedAt = this.env.now()
+    this.startOccupants = this.slots.map((s) => (s.token === null ? null : { token: s.token, userId: s.userId }))
+    this.occupantChanged = PLAYERS.map(() => false)
+    this.matchReported = false
     // Steps only ever grow, so a click from the previous match can never match the new one.
     this.step++
     this.lastAction = null
@@ -294,6 +371,42 @@ export class Table {
     this.pausedBy = null
     for (const p of PLAYERS) if (!this.connected(p)) this.slots[p] = emptySlot()
     this.changed()
+  }
+
+  /** Mid-match, a seat changed hands (or accounts): whoever sits there now didn't play all of it. */
+  private seatChanged(p: Player): void {
+    if (this.phase === 'playing') this.occupantChanged[p] = true
+  }
+
+  /** The same signed-in player has held seat `p` since the match began (short drops allowed). */
+  private playedFullMatch(p: Player): boolean {
+    const start = this.startOccupants[p]
+    const slot = this.slots[p]!
+    return !!start?.userId && !this.occupantChanged[p] && slot.token === start.token && slot.userId === start.userId
+  }
+
+  /** The last hand was just scored: hand the finished match to whoever records it, once. */
+  private reportIfFinished(): void {
+    const m = this.match
+    if (this.matchReported || !m || !this.finished()) return
+    const done = completedMatch(m)
+    if (!done) return
+    this.matchReported = true
+    this.env.onMatchEnd?.({
+      id: this.matchId,
+      rules: done.rules,
+      seed: done.seed,
+      startedAt: new Date(this.matchStartedAt),
+      endedAt: new Date(this.env.now()),
+      hands: handSummaries(done),
+      actions: [...this.handLogs, this.handLog],
+      scores: matchPoints(done),
+      players: PLAYERS.map((p) => {
+        const slot = this.slots[p]!
+        const human = slot.token !== null
+        return { userId: human ? slot.userId : null, name: human ? slot.name : '', avatar: human ? slot.avatar : null, bot: !human, fullMatch: this.playedFullMatch(p) }
+      }),
+    })
   }
 
   /** The match is over, or its last hand has been scored. */
@@ -392,6 +505,7 @@ export class Table {
 
   /** Something changed: work out what happens next, then tell everyone. */
   private changed(): void {
+    this.reportIfFinished()
     this.schedule()
     this.onChange()
   }
@@ -537,6 +651,7 @@ export class Table {
     const s = m.current!
     if (s.phase.kind !== 'ended') return
     this.match = nextHand(m, s.phase.result)
+    this.handLogs.push(this.handLog)
     this.handLog = []
     this.lastAction = null
     this.step++

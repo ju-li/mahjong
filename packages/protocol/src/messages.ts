@@ -123,10 +123,18 @@ export type ClientMessages = {
   voice: VoiceClip
   /** Signed in or out while seated: the new access token, or null for guest. */
   identify: { accessToken: string | null }
+  /** Host: remove the player in this seat from the table; they can't come back to it. */
+  kick: { player: number }
 }
+
+/** Close code when the host removes you, and the join error when you try to come back. */
+export const KICKED_CODE = 4006
 
 /** Colyseus room type signed-in players stay connected to for friends and online status. */
 export const SOCIAL_ROOM = 'social'
+
+/** What an account is called until the player picks a name (or signs in with one, e.g. Google). */
+export const DEFAULT_PROFILE_NAME = 'Player'
 
 /** Options for joining the social room. Guests can't: it needs a valid access token. */
 export type SocialJoinOptions = {
@@ -146,11 +154,17 @@ export type Friend = {
   state: FriendState
   /** Has the game open and is signed in right now. Only known for accepted friends. */
   online: boolean
+  /** The online table an accepted friend is seated at, if any. Absent otherwise. */
+  table?: FriendTable
 }
+
+/** Where a friend is playing: the table's code, how many seats someone new could take, and whether a match is on. */
+export type FriendTable = { code: string; openSeats: number; playing: boolean }
 
 /** Server → client on the social room, message type `friends`: your profile and everyone linked to you. */
 export type FriendsSnapshot = {
-  me: { userId: string; name: string; avatar: number | null; friendCode: string }
+  /** `table`: code of the table you are seated at, as friends see it; absent when at none. */
+  me: { userId: string; name: string; avatar: number | null; friendCode: string; table?: string }
   friends: Friend[]
 }
 
@@ -158,6 +172,17 @@ export type FriendError = 'self' | 'unknown' | 'limit'
 
 /** Server → client, message type `inviteResult`: what opening a friend invite link did. */
 export type InviteResult = { ok: true; name: string } | { ok: false; error: FriendError }
+
+/** Server → client on the social room, message type `tableInvite`: a friend asks you to their table. */
+export type TableInvite = { from: { userId: string; name: string; avatar: number | null }; code: string }
+
+export type TableInviteError = 'offline' | 'full' | 'already' | 'notFriend' | 'notAtTable' | 'tooSoon'
+
+/** Server → client, message type `tableInviteResult`: what sending a table invite did. */
+export type TableInviteResult = { ok: true; name: string } | { ok: false; name: string | null; error: TableInviteError }
+
+/** A player may invite the same friend at most once in this long. */
+export const TABLE_INVITE_GAP_MS = 20_000
 
 /** Client → server messages on the social room. */
 export type SocialClientMessages = {
@@ -169,7 +194,124 @@ export type SocialClientMessages = {
   acceptInvite: { code: string }
   /** Change your account's name and/or avatar. */
   profile: { name?: string; avatar?: number }
+  /** Ask an online friend to the table you are seated at. */
+  tableInvite: { userId: string; code: string }
+  /** A finished solo match, for your own history and stats (never ranked). Answered by `soloSaved`. */
+  soloResult: SoloResult
+  /** A page of your match history, newest first; `before` = `endedAt` of the last one you have. Answered by `historyPage`. */
+  history: { before?: number }
+  /** One of your matches, hand by hand. Answered by `matchDetail`. */
+  matchDetail: { id: string }
+  /** Your stats. Answered by `stats`. */
+  stats: Record<string, never>
 }
+
+// ---------------------------------------------------------------------------
+// Match history, stats and rankings
+
+/** How one hand ended, by player (not seat). */
+export type HandOutcome =
+  | { type: 'drawn' }
+  | {
+      type: 'win'
+      winner: Player
+      /** Who discarded the winning tile; null = self-drawn. */
+      from: Player | null
+      fans: { id: string; points: number; count: number }[]
+      total: number
+      flowerPoints: number
+    }
+
+export type HandSummary = {
+  handIndex: number
+  /** Player who dealt. */
+  dealer: Player
+  prevailingWind: 'E' | 'S' | 'W' | 'N'
+  outcome: HandOutcome
+  /** Point change per player. */
+  deltas: number[]
+}
+
+/** Client → server: a solo match played on this device, once it is over. */
+export type SoloResult = {
+  rules: RuleSet
+  difficulty: Difficulty
+  /** Match seed: with the account, identifies the match so it is saved once. */
+  seed: number
+  /** Milliseconds since the epoch. */
+  startedAt: number
+  endedAt: number
+  hands: HandSummary[]
+  /** Final totals per player; the uploader is always player 0. */
+  scores: number[]
+}
+
+/** Server → client: the solo match with this seed is stored (or was already), or can't be. */
+export type SoloSaved = { seed: number; ok: boolean }
+
+export type MatchPlayerSummary = {
+  name: string
+  avatar: number | null
+  bot: boolean
+  userId: string | null
+  score: number
+  placement: number
+}
+
+export type MatchSummary = {
+  id: string
+  kind: 'online' | 'solo'
+  rules: RuleSet
+  difficulty: Difficulty | null
+  rated: boolean
+  endedAt: number
+  /** Which player you were. */
+  you: Player
+  players: MatchPlayerSummary[]
+  /** Your displayed rating change from this match, if it was rated for you. */
+  ratingChange: number | null
+}
+
+export type HistoryPage = { matches: MatchSummary[]; more: boolean }
+
+export type MatchDetail = MatchSummary & { hands: HandSummary[] }
+
+/** Server → client, message type `matchDetail`: the match asked for, or null if it isn't yours. */
+export type MatchDetailReply = { id: string; match: MatchDetail | null }
+
+export type RuleStats = {
+  rules: RuleSet
+  /** Displayed rating, or null before your first rated match. */
+  rating: number | null
+  /** Place on the leaderboard, or null until you qualify. */
+  rank: number | null
+  ratedMatches: number
+  matches: number
+  firsts: number
+  avgPlacement: number | null
+}
+
+export type SoloStats = {
+  difficulty: Difficulty
+  matches: number
+  firsts: number
+  avgScore: number
+  /** Your highest-scoring hand. */
+  best: { total: number; fans: string[] } | null
+}
+
+export type PlayerStats = { online: RuleStats[]; solo: SoloStats[] }
+
+/** Rated matches a player needs before appearing on the leaderboard. */
+export const LEADERBOARD_MIN_MATCHES = 5
+
+export type LeaderboardEntry = { rank: number; userId: string; name: string; avatar: number | null; rating: number; matches: number }
+
+/** Public HTTP path: `GET /leaderboard?rules=mcr` → `{ entries: LeaderboardEntry[] }`. */
+export const LEADERBOARD_PATH = '/leaderboard'
+
+/** Server → client on a table, message type `rated`: your rating after a rated match. */
+export type RatingChange = { rules: RuleSet; before: number; after: number }
 
 /** HTTP path on the game server that emails player feedback to the developers. */
 export const FEEDBACK_PATH = '/feedback'

@@ -10,11 +10,14 @@ import MatchScreen from './components/MatchScreen.vue'
 import Onboarding from './components/Onboarding.vue'
 import OnlineDialog from './components/OnlineDialog.vue'
 import PlayerCard from './components/PlayerCard.vue'
-import ProfileDialog from './components/ProfileDialog.vue'
+import ProfilePage from './components/ProfilePage.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
+import ToastStack from './components/ToastStack.vue'
 import VoiceButton from './components/VoiceButton.vue'
+import { track } from './game/analytics'
 import { loadLatestVersion } from './game/appUpdate'
-import { friendsCount, parseFriendCode } from './game/friends'
+import { friendsCount, parseFriendCode, seatChanges } from './game/friends'
+import { signed } from './game/stats'
 import { useInstall } from './game/install'
 import { shareInvite } from './game/invite'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
@@ -23,7 +26,11 @@ import { useOnline } from './game/useOnline'
 import { useProfile } from './game/profile'
 import { useAccount } from './game/useAccount'
 import { useSocial } from './game/useSocial'
+import { useToasts } from './game/useToasts'
 import { useI18n } from './i18n/useI18n'
+
+/** Address hash while the profile page is open, so the browser's Back button closes it. */
+const PROFILE_HASH = '#profile'
 
 const { t, toggle, locale } = useI18n()
 
@@ -37,15 +44,31 @@ const online = useOnline()
 const { snapshot, isHost, link } = online
 /** At an online table (lobby or match); the solo match waits meanwhile. */
 const atTable = computed(() => snapshot.value !== null)
-const solo = useMatch(atTable)
+/** Your profile page (name, face, stats, history, leaderboards); opened by clicking your own badge or seat, or the account button. */
+const profileOpen = ref(location.hash === PROFILE_HASH)
+// Solo play waits while you are at an online table or looking at your profile.
+const solo = useMatch(computed(() => atTable.value || profileOpen.value))
 const { difficulty, rules, resumed, inProgress, startNewMatch, keepGoing } = solo
 /** The match on screen. */
 const source = computed(() => (atTable.value ? online.source : solo))
 const view = computed(() => source.value.view.value)
 const shownRules = computed(() => source.value.rules.value)
 
-/** Your name and avatar; opened by clicking your own badge or your lobby seat. */
-const profileOpen = ref(false)
+function openProfile() {
+  if (profileOpen.value) return
+  profileOpen.value = true
+  history.pushState(null, '', `${location.pathname}${location.search}${PROFILE_HASH}`)
+}
+function closeProfile() {
+  if (!profileOpen.value) return
+  profileOpen.value = false
+  if (location.hash === PROFILE_HASH) history.back()
+}
+function onPopState() {
+  profileOpen.value = location.hash === PROFILE_HASH
+}
+onMounted(() => window.addEventListener('popstate', onPopState))
+onBeforeUnmount(() => window.removeEventListener('popstate', onPopState))
 
 /** A changed profile reaches the online table and your account straight away. */
 function profileSaved() {
@@ -69,14 +92,9 @@ const incomingRequests = computed(() => social.friends.value?.friends.filter((f)
 const playerCard = ref<number | null>(null)
 const cardSlot = computed(() => (playerCard.value === null ? null : (snapshot.value?.players[playerCard.value] ?? null)))
 
-/** A short message at the bottom of the screen, e.g. after opening a friend invite link. */
-const notice = ref<string | null>(null)
-let noticeTimer: ReturnType<typeof setTimeout> | undefined
-function showNotice(text: string) {
-  notice.value = text
-  clearTimeout(noticeTimer)
-  noticeTimer = setTimeout(() => (notice.value = null), 5000)
-}
+/** Short messages at the bottom of the screen, e.g. after opening a friend invite link. */
+const toasts = useToasts()
+const showNotice = (text: string) => void toasts.push({ text })
 watch(social.inviteResult, (r) => {
   if (!r) return
   if (r.ok) showNotice(t('friends.nowFriends', { name: r.name }))
@@ -96,8 +114,90 @@ async function hostTable() {
   if (await online.host()) onlineOpen.value = false
 }
 async function joinTable(code: string) {
-  if (await online.join(code)) onlineOpen.value = false
+  if (await online.join(code, true)) onlineOpen.value = false
 }
+
+/** Sign-in players can invite friends to the table they are at. */
+const canInviteFriends = computed(() => account.signedIn.value && social.connected.value)
+
+/** Join a friend's table from an invite or the friends list, leaving yours first if you agree. */
+async function joinFriendTable(code: string) {
+  const current = snapshot.value?.code ?? null
+  if (current === code) return
+  if (current !== null && !window.confirm(t('tableInvite.confirmSwitch', { code }))) return
+  friendsOpen.value = false
+  if (current !== null) await online.leave()
+  if (!(await online.join(code, true))) {
+    const error = online.error.value
+    showNotice(error ? `${t('tableInvite.joinFailed', { code })} ${t(`online.error.${error}`)}` : t('tableInvite.joinFailed', { code }))
+  }
+}
+
+/** From solo: host a new table and ask a friend to it in one go. */
+async function playWithFriend(userId: string) {
+  friendsOpen.value = false
+  if (atTable.value) return
+  // Use the code from hosting itself: the table's first snapshot may not have arrived yet.
+  const code = await online.host()
+  if (!code) {
+    const error = online.error.value
+    if (error) showNotice(t(`online.error.${error}`))
+    return
+  }
+  social.inviteWhenSeated(userId, code)
+}
+
+/** Host: remove a player from the table, after checking. */
+function removePlayer(p: number) {
+  const name = online.playerNames.value[p] ?? snapshot.value?.players[p]?.name ?? ''
+  if (!window.confirm(t('lobby.confirmRemove', { name }))) return
+  online.kick(p)
+  playerCard.value = null
+}
+watch(online.removedFrom, (code) => {
+  if (!code) return
+  toasts.push({ text: t('toast.removed', { code }), sticky: true })
+  online.removedFrom.value = null
+})
+
+const inviteKey = (code: string) => `table-invite:${code}`
+social.on('tableInvite', (invite) => {
+  if (snapshot.value?.code === invite.code) return
+  toasts.push({
+    key: inviteKey(invite.code),
+    text: t('tableInvite.received', { name: invite.from.name, code: invite.code }),
+    sticky: true,
+    actions: [{ label: t('friends.join'), primary: true, run: () => void joinFriendTable(invite.code) }],
+  })
+})
+social.on('tableInviteResult', (r) => {
+  const name = r.name ?? ''
+  showNotice(r.ok ? t('tableInvite.sent', { name }) : t(`tableInvite.error.${r.error}`, { name }))
+})
+social.on('friendRequest', (f) => {
+  toasts.push({
+    key: `friend-request:${f.userId}`,
+    text: t('toast.friendRequest', { name: f.name }),
+    sticky: true,
+    actions: [{ label: t('friends.accept'), primary: true, run: () => social.respond(f.userId, true) }],
+  })
+})
+
+/** Friends sitting down at or leaving your table get a passing mention. */
+let seated: { code: string; users: Set<string> } | null = null
+watch(snapshot, (s) => {
+  if (!s) return void (seated = null)
+  // Invites to the table you are now at are done with.
+  toasts.dismissKey(inviteKey(s.code))
+  const users = new Set(s.players.flatMap((p, i) => (p.userId && i !== s.you ? [p.userId] : [])))
+  const before = seated?.code === s.code ? seated.users : null
+  seated = { code: s.code, users }
+  if (!before) return
+  const friends = new Map((social.friends.value?.friends ?? []).filter((f) => f.state === 'friend').map((f) => [f.userId, f.name]))
+  const { joined, left } = seatChanges(before, users)
+  for (const id of joined) if (friends.has(id)) showNotice(t('toast.friendJoined', { name: friends.get(id)! }))
+  for (const id of left) if (friends.has(id)) showNotice(t('toast.friendLeft', { name: friends.get(id)! }))
+})
 function leaveTable() {
   if (snapshot.value?.phase === 'lobby' || window.confirm(t('lobby.confirmLeave'))) void online.leave()
 }
@@ -211,6 +311,7 @@ function confirmNewMatch() {
 function onboardingDone() {
   const next = preferredRules.value
   finishOnboarding()
+  track('onboarding_finished')
   if (next === rules.value) return
   if (!resumed || !inProgress() || window.confirm(t('app.confirmRules'))) startNewMatch(next)
   else preferredRules.value = rules.value
@@ -340,6 +441,7 @@ async function loadLatest() {
         <div class="topbar__group">
           <template v-if="atTable">
             <button class="action" @click="leaveTable"><MenuIcon name="leave" />{{ t('lobby.leave') }}</button>
+            <button v-if="canInviteFriends" class="action action--quiet-light" @click="friendsOpen = true"><MenuIcon name="friends" />{{ t('tableInvite.button') }}</button>
           </template>
           <template v-else>
             <button class="action" @click="confirmNewMatch"><MenuIcon name="newMatch" />{{ t('app.newMatch') }}</button>
@@ -353,7 +455,7 @@ async function loadLatest() {
             <span v-if="incomingRequests" class="topbar__badge" :aria-label="t('friends.requestsWaiting', { n: incomingRequests })">{{ incomingRequests }}</span>
           </button>
           <button v-if="account.ready.value && !account.signedIn.value" class="action action--quiet-light" @click="account.signIn()"><MenuIcon name="signIn" />{{ t('account.signIn') }}</button>
-          <button v-else-if="account.signedIn.value" class="action action--quiet-light" @click="profileOpen = true"><MenuIcon name="account" />{{ t('account.open') }}</button>
+          <button v-else-if="account.signedIn.value" class="action action--quiet-light" @click="openProfile()"><MenuIcon name="account" />{{ t('account.open') }}</button>
         </div>
         <div class="topbar__group">
           <button class="action action--quiet-light" @click="settingsOpen = true"><MenuIcon name="settings" />{{ t('app.settings') }}</button>
@@ -368,10 +470,13 @@ async function loadLatest() {
       v-if="snapshot?.phase === 'lobby'"
       :snapshot="snapshot"
       :is-host="isHost"
+      :can-invite-friends="canInviteFriends"
       @configure="online.configure"
       @start="online.start"
-      @edit-profile="profileOpen = true"
+      @edit-profile="openProfile()"
       @open-player="(p: number) => (playerCard = p)"
+      @invite-friends="friendsOpen = true"
+      @remove="removePlayer"
       @leave="leaveTable"
     />
     <MatchScreen
@@ -381,7 +486,7 @@ async function loadLatest() {
       :openable="true"
       @new-match="onlineMatchDone"
       @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
-      @edit-profile="profileOpen = true"
+      @edit-profile="openProfile()"
       @open-player="(p: number) => (playerCard = p)"
     >
       <template #matchEnd>
@@ -390,7 +495,10 @@ async function loadLatest() {
           <button class="action summary__continue" @click="online.rematch(false)">{{ t('result.newMatch') }}</button>
           <button class="action summary__continue" @click="online.restart">{{ t('online.backToLobby') }}</button>
         </div>
-        <template v-else>
+        <p v-if="online.rating.value" class="summary__rating">
+          {{ t('rating.change', { before: online.rating.value.before, after: online.rating.value.after, change: signed(online.rating.value.after - online.rating.value.before) }) }}
+        </p>
+        <template v-if="!isHost">
           <p class="result__note">{{ t('online.waitingHostChoice', { name: hostName }) }}</p>
           <button class="action summary__continue" @click="leaveTable">{{ t('online.leaveMatch') }}</button>
         </template>
@@ -403,7 +511,7 @@ async function loadLatest() {
       @new-match="startNewMatch()"
       @keep-going="keepGoing()"
       @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
-      @edit-profile="profileOpen = true"
+      @edit-profile="openProfile()"
     />
 
     <!-- A break: everyone at the online table sees this until someone resumes. -->
@@ -446,7 +554,7 @@ async function loadLatest() {
 
     <FeedbackDialog v-if="feedbackOpen" :capture="captureFeedback" @close="feedbackOpen = false" />
 
-    <ProfileDialog v-if="profileOpen" @save="profileSaved" @close="profileOpen = false" />
+    <ProfilePage v-if="profileOpen" @save="profileSaved" @close="closeProfile" />
 
     <div v-if="settingsOpen" class="result" role="dialog" aria-modal="true" aria-labelledby="settings-title" @click.self="settingsOpen = false">
       <div class="result__card settings">
@@ -523,7 +631,7 @@ async function loadLatest() {
         </div>
       </div>
     </div>
-    <FriendsDialog v-if="friendsOpen" @close="friendsOpen = false" />
+    <FriendsDialog v-if="friendsOpen" :table-code="snapshot?.code ?? null" @join="joinFriendTable" @play-with="playWithFriend" @close="friendsOpen = false" />
 
     <PlayerCard
       v-if="cardSlot && playerCard !== null"
@@ -531,10 +639,12 @@ async function loadLatest() {
       :avatar="cardSlot.avatar"
       :user-id="cardSlot.userId"
       :bot="cardSlot.name === null"
+      :can-remove="isHost && cardSlot.name !== null && playerCard !== snapshot?.you"
+      @remove="removePlayer(playerCard)"
       @close="playerCard = null"
     />
 
-    <p v-if="notice" class="notice" role="status">{{ notice }}</p>
+    <ToastStack />
 
     <OnlineDialog
       v-if="onlineOpen && !atTable"

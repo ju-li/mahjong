@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyAction, HANDS_PER_MATCH, isMatchOver, legalActions, mulberry32, newMatch, nextHand, playerAt, seatOf, SEATING, type Match, type Player, type Seat } from './index'
+import { applyAction, completedMatch, HANDS_PER_MATCH, isMatchOver, legalActions, matchPoints, mulberry32, newMatch, nextHand, placements, playerAt, seatOf, SEATING, type Match, type Player, type Seat } from './index'
 
 /** Play a whole match with seeded random legal actions (claims favoured, so some hands are won). */
 function playMatch(seed: number, scores?: number[]): Match {
@@ -70,6 +70,7 @@ describe('match', () => {
     const m = playMatch(3, start)
     expect(m.scores.reduce((a, b) => a + b, 0)).toBe(0)
     expect(m.scores).toEqual(playMatch(3).scores.map((s, p) => s + start[p]!))
+    expect(matchPoints(m)).toEqual(playMatch(3).scores)
   })
 })
 
@@ -111,5 +112,28 @@ describe('official re-seating (V27)', () => {
     m = nextHand(m, result)
     expect(m.scores).toEqual([-16, 48, -16, -16])
     expect(m.history.at(-1)!.playerDeltas).toEqual([-16, 48, -16, -16])
+  })
+})
+
+describe('completedMatch', () => {
+  it('is null mid-match, records an ended last hand, and returns a finished match as is', () => {
+    let m = newMatch(3)
+    expect(completedMatch(m)).toBeNull()
+    for (let i = 0; i < HANDS_PER_MATCH - 1; i++) m = nextHand(m, { type: 'drawn' })
+    // Last hand dealt but not over yet.
+    expect(completedMatch(m)).toBeNull()
+    const ended = { ...m, current: { ...m.current!, phase: { kind: 'ended' as const, result: { type: 'drawn' as const } } } }
+    const done = completedMatch(ended)!
+    expect(done.history).toHaveLength(HANDS_PER_MATCH)
+    expect(isMatchOver(done)).toBe(true)
+    expect(completedMatch(done)).toBe(done)
+  })
+})
+
+describe('placements', () => {
+  it('ranks by score, ties share the better place', () => {
+    expect(placements([10, -5, 30, -35])).toEqual([2, 3, 1, 4])
+    expect(placements([8, 8, -8, -8])).toEqual([1, 1, 3, 3])
+    expect(placements([0, 0, 0, 0])).toEqual([1, 1, 1, 1])
   })
 })

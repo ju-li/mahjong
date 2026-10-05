@@ -1,5 +1,5 @@
 import { ref, watch } from 'vue'
-import { MAX_NAME_LENGTH } from '@mahjong/protocol'
+import { DEFAULT_PROFILE_NAME, MAX_NAME_LENGTH } from '@mahjong/protocol'
 
 /** Shared with the online dialog from before profiles existed, so earlier names carry over. */
 const NAME_KEY = 'mahjong.name'
@@ -36,6 +36,16 @@ export function parseAvatarSeed(raw: string | null): number | null {
 /** Tidies a typed name the way the server will: one line, trimmed, bounded. */
 export function tidyName(raw: string): string {
   return raw.replace(/[\p{C}]/gu, '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME_LENGTH)
+}
+
+/**
+ * The name from the player's sign-in (e.g. their Google name) to use in place of `current`, or null
+ * to keep `current`. Only a name never chosen ('' or the default "Player") is replaced.
+ */
+export function accountNameFor(current: string, accountName: string | null | undefined): string | null {
+  const unset = current.trim() === '' || current.trim() === DEFAULT_PROFILE_NAME
+  const name = tidyName(accountName ?? '')
+  return unset && name && name !== current.trim() ? name : null
 }
 
 /** Your name ('' = none chosen yet); used at solo and online tables alike. */

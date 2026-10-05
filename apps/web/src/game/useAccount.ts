@@ -1,6 +1,7 @@
 import { computed, ref, shallowRef } from 'vue'
 import type LogtoClient from '@logto/browser'
 import { useI18n } from '../i18n/useI18n'
+import { track } from './analytics'
 
 /**
  * Optional accounts through Logto's hosted sign-in page (email + password, Google, Apple). Guests
@@ -61,6 +62,7 @@ async function init(): Promise<boolean> {
       const c = await logto()
       await c.handleSignInCallback(location.href)
       await loadUser(c)
+      if (user.value) track('signed_in')
       let back = '/'
       try {
         back = sessionStorage.getItem(RETURN_KEY) ?? '/'
@@ -103,6 +105,7 @@ async function signOut(): Promise<void> {
   if (!accountsEnabled) return
   const c = await logto()
   user.value = null
+  track('signed_out')
   await c.signOut(location.origin)
 }
 

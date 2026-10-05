@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { track } from './analytics'
 
 /** Chromium's install prompt event (not in the DOM typings). */
 interface BeforeInstallPromptEvent extends Event {
@@ -22,6 +23,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('appinstalled', () => {
     deferred.value = null
     installed.value = true
+    track('app_installed')
   })
 }
 

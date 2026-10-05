@@ -95,6 +95,14 @@ export async function friendIds(db: Db, userId: string): Promise<string[]> {
   return (await listFriends(db, userId)).filter((f) => f.state === 'friend').map((f) => f.userId)
 }
 
+/** Whether the two players are accepted friends. */
+export async function areFriends(db: Db, a: string, b: string): Promise<boolean> {
+  if (a === b) return false
+  const key = pair(a, b)
+  const row = await db.selectFrom('friendships').select('status').where('user_low', '=', key.user_low).where('user_high', '=', key.user_high).executeTakeFirst()
+  return row?.status === 'accepted'
+}
+
 async function friendCount(db: Db, userId: string): Promise<number> {
   const row = await db
     .selectFrom('friendships')
