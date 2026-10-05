@@ -301,7 +301,7 @@ export function useOnline() {
     configure: (settings: Partial<TableSettings>) => send('configure', settings),
     start: () => send('start', {}),
     restart: () => send('restart', {}),
-    rematch: () => send('rematch', {}),
+    rematch: (keepScores: boolean) => send('rematch', { keepScores }),
     pause: () => send('pause', {}),
     resume: () => send('resume', {}),
     /** Tell the table about your current name and avatar. */

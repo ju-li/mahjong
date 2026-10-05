@@ -48,7 +48,7 @@ const atTable = computed(() => snapshot.value !== null)
 const profileOpen = ref(location.hash === PROFILE_HASH)
 // Solo play waits while you are at an online table or looking at your profile.
 const solo = useMatch(computed(() => atTable.value || profileOpen.value))
-const { difficulty, rules, resumed, inProgress, startNewMatch } = solo
+const { difficulty, rules, resumed, inProgress, startNewMatch, keepGoing } = solo
 /** The match on screen. */
 const source = computed(() => (atTable.value ? online.source : solo))
 const view = computed(() => source.value.view.value)
@@ -491,7 +491,8 @@ async function loadLatest() {
     >
       <template #matchEnd>
         <div v-if="isHost" class="summary__choices">
-          <button class="action action--primary summary__continue" autofocus @click="online.rematch">{{ t('online.keepGoing') }}</button>
+          <button class="action action--primary summary__continue" autofocus @click="online.rematch(true)">{{ t('result.keepGoing') }}</button>
+          <button class="action summary__continue" @click="online.rematch(false)">{{ t('result.newMatch') }}</button>
           <button class="action summary__continue" @click="online.restart">{{ t('online.backToLobby') }}</button>
         </div>
         <p v-if="online.rating.value" class="summary__rating">
@@ -508,6 +509,7 @@ async function loadLatest() {
       v-else
       :source="solo"
       @new-match="startNewMatch()"
+      @keep-going="keepGoing()"
       @explain="(id: string) => (rulesDialog = { tab: 'fans', focus: id })"
       @edit-profile="openProfile()"
     />

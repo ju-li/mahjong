@@ -9,7 +9,7 @@ import { useI18n } from '../i18n/useI18n'
 
 /** The table and the end-of-hand dialog for one match, local or online. */
 const props = defineProps<{ source: MatchSource; openable?: boolean }>()
-const emit = defineEmits<{ newMatch: []; explain: [fanId: string]; editProfile: []; openPlayer: [player: Player] }>()
+const emit = defineEmits<{ newMatch: []; keepGoing: []; explain: [fanId: string]; editProfile: []; openPlayer: [player: Player] }>()
 
 const { t } = useI18n()
 
@@ -76,6 +76,7 @@ const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value +
     @unready="source.unready?.()"
     @deal="source.deal?.()"
     @new-match="emit('newMatch')"
+    @keep-going="emit('keepGoing')"
     @explain="(id: string) => emit('explain', id)"
   >
     <template v-if="$slots.matchEnd" #matchEnd><slot name="matchEnd" /></template>
