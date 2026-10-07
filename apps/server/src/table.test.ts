@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { chooseAction } from '@mahjong/bots'
 import { seatOf, settledScores, type GameState, type Match, type Player } from '@mahjong/engine'
-import type { Snapshot } from '@mahjong/protocol'
+import { REACTION_BURST, REACTION_WINDOW_MS, type Snapshot } from '@mahjong/protocol'
 import { cleanAvatar, cleanName, RESERVE_MS, Table, TURN_MS, type TableEnv } from './table'
 
 /** Timers that only fire when the test moves the clock. */
@@ -524,6 +524,33 @@ describe('pause', () => {
     table.pause('c0')
     table.pause('c1')
     expect(snap('c1').match!.paused).toBe(0)
+  })
+})
+
+describe('reactions', () => {
+  it('stamps a seated player’s reaction with who sent it', () => {
+    const { table } = setup(['Ann', 'Bo'])
+    expect(table.react('c1', { reaction: 'fire' })).toEqual({ from: 1, reaction: 'fire' })
+    expect(table.react('c0', { reaction: 'party', extra: 'x' })).toEqual({ from: 0, reaction: 'party' })
+  })
+
+  it('drops reactions from strangers and anything malformed', () => {
+    const { table } = setup(['Ann'])
+    expect(table.react('nobody', { reaction: 'fire' })).toBeNull()
+    expect(table.react('c0', null)).toBeNull()
+    expect(table.react('c0', 'fire')).toBeNull()
+    expect(table.react('c0', { reaction: 'poop' })).toBeNull()
+    expect(table.react('c0', { reaction: 'toString' })).toBeNull()
+    expect(table.react('c0', {})).toBeNull()
+  })
+
+  it('limits how fast each player may react', () => {
+    const { env, table } = setup(['Ann', 'Bo'])
+    for (let i = 0; i < REACTION_BURST; i++) expect(table.react('c0', { reaction: 'clap' })).not.toBeNull()
+    expect(table.react('c0', { reaction: 'clap' })).toBeNull() // too many
+    expect(table.react('c1', { reaction: 'clap' })).not.toBeNull() // others are unaffected
+    env.advance(REACTION_WINDOW_MS)
+    expect(table.react('c0', { reaction: 'clap' })).not.toBeNull()
   })
 })
 

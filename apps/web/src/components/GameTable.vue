@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { kindIndex, type Action, type PlayerView, type Seat, type Tile, type Wind } from '@mahjong/engine'
+import { REACTIONS, type ReactionId } from '@mahjong/protocol'
 import { actionForKey, shortcutFor } from '../game/keyboard'
+import { REACTION_EMOJI } from '../game/reactions'
 import { useDragScroll } from '../game/useDragScroll'
 import { useTileMotion } from '../game/useTileMotion'
 import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
+import MenuIcon from './MenuIcon.vue'
 import PlayerBadge from './PlayerBadge.vue'
 import TileFace from './TileFace.vue'
 
@@ -24,9 +27,13 @@ const props = defineProps<{
   claimRemaining?: number | null
   /** Online: opponents' badges open their player card (to add them as a friend). */
   openable?: boolean
+  /** Online: your badge opens a menu of emoji reactions, with your profile one more tap away. */
+  canReact?: boolean
+  /** Online: emoji reactions floating up from the seat that sent them. */
+  reactions?: { id: number; seat: number; reaction: ReactionId; drift: number }[]
 }>()
 
-const emit = defineEmits<{ act: [action: Action]; editProfile: []; openPlayer: [seat: Seat] }>()
+const emit = defineEmits<{ act: [action: Action]; editProfile: []; openPlayer: [seat: Seat]; react: [reaction: ReactionId] }>()
 
 const { t } = useI18n()
 
@@ -41,6 +48,10 @@ let lastKey = ''
 let repeat = 0
 
 function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && reactMenu.value) {
+    reactMenu.value = null
+    return
+  }
   if (e.ctrlKey || e.metaKey || e.altKey) return
   const target = e.target as HTMLElement | null
   if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
@@ -67,6 +78,78 @@ function onKeydown(e: KeyboardEvent) {
 
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+
+// ---- Reactions (online) ----
+// The menu and the floating emoji sit over the page, not the felt, which would clip them.
+
+/** Where a seat's face is on screen. */
+const faceRect = (seat: number) => root.value?.querySelector(`[data-seat="${seat}"] .badge__photo`)?.getBoundingClientRect() ?? null
+
+/** The open reaction menu, placed around your face: emoji above, profile pen below. */
+const reactMenu = ref<{ x: number; rowX: number; top: number; bottom: number } | null>(null)
+/** Half the emoji row's width, to keep it on screen. */
+const ROW_HALF = 135
+
+function onMyBadge() {
+  if (!props.canReact) return emit('editProfile')
+  if (reactMenu.value) return (reactMenu.value = null)
+  const r = faceRect(props.view.seat)
+  const badge = root.value?.querySelector('.me__badge')?.getBoundingClientRect()
+  if (!r || !badge) return emit('editProfile')
+  const x = r.left + r.width / 2
+  const rowX = Math.min(Math.max(x, ROW_HALF + 8), window.innerWidth - ROW_HALF - 8)
+  reactMenu.value = { x, rowX, top: r.top, bottom: badge.bottom }
+}
+
+function editProfile() {
+  reactMenu.value = null
+  emit('editProfile')
+}
+
+function closeMenuOutside(e: Event) {
+  const target = e.target as HTMLElement | null
+  if (target?.closest?.('.react-menu, .me__badge')) return
+  reactMenu.value = null
+}
+const closeMenu = () => (reactMenu.value = null)
+watch(reactMenu, (open, was) => {
+  if (!!open === !!was) return
+  if (open) {
+    window.addEventListener('pointerdown', closeMenuOutside, true)
+    window.addEventListener('resize', closeMenu)
+    window.addEventListener('scroll', closeMenu, true)
+  } else {
+    window.removeEventListener('pointerdown', closeMenuOutside, true)
+    window.removeEventListener('resize', closeMenu)
+    window.removeEventListener('scroll', closeMenu, true)
+  }
+})
+onBeforeUnmount(closeMenu)
+
+/** Where each floating emoji started: its sender's face when it arrived. */
+const floatStart = ref(new Map<number, { x: number; y: number }>())
+watch(
+  () => props.reactions ?? [],
+  (list) => {
+    const next = new Map<number, { x: number; y: number }>()
+    for (const r of list) {
+      const known = floatStart.value.get(r.id)
+      if (known) next.set(r.id, known)
+      else {
+        const rect = r.seat < 0 ? null : faceRect(r.seat)
+        if (rect) next.set(r.id, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 3 })
+      }
+    }
+    floatStart.value = next
+  },
+  { immediate: true, flush: 'post' },
+)
+const floating = computed(() =>
+  (props.reactions ?? []).flatMap((r) => {
+    const at = floatStart.value.get(r.id)
+    return at ? [{ ...r, ...at, emoji: REACTION_EMOJI[r.reaction] }] : []
+  }),
+)
 const windName = (w: string) => t(`wind.${w}` as 'wind.E')
 const WIND_GLYPH: Record<Wind, string> = { E: '東', S: '南', W: '西', N: '北' }
 
@@ -206,6 +289,7 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer-label="t('score.dealer')"
           :active="seatActive(o.seat)"
           :open-label="openable ? t('friends.viewPlayer', { name: names[o.seat]! }) : undefined"
+          :data-seat="o.seat"
           @open="emit('openPlayer', o.seat)"
         />
         <div class="seat__hand" :data-origin="`hand-${o.seat}`">
@@ -276,8 +360,10 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer="view.seat === view.dealer"
           :dealer-label="t('score.dealer')"
           :active="seatActive(view.seat)"
-          :edit-label="t('profile.edit')"
-          @edit="emit('editProfile')"
+          :edit-label="canReact ? t('reaction.menu') : t('profile.edit')"
+          :data-seat="view.seat"
+          :aria-expanded="canReact ? !!reactMenu : undefined"
+          @edit="onMyBadge"
         />
 
         <div class="me__main">
@@ -329,5 +415,37 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
         </div>
       </section>
     </div>
+
+    <Teleport to="body">
+      <div v-if="reactMenu" class="react-menu" role="group" :aria-label="t('reaction.menu')">
+        <div class="react-menu__row" :style="{ left: `${reactMenu.rowX}px`, top: `${reactMenu.top - 10}px` }">
+          <button
+            v-for="r in REACTIONS"
+            :key="r"
+            type="button"
+            class="react-menu__emoji"
+            :aria-label="t(`reaction.${r}`)"
+            :title="t(`reaction.${r}`)"
+            @click="emit('react', r)"
+          >{{ REACTION_EMOJI[r] }}</button>
+        </div>
+        <button
+          type="button"
+          class="react-menu__edit"
+          :style="{ left: `${reactMenu.x}px`, top: `${reactMenu.bottom + 6}px` }"
+          :aria-label="t('profile.edit')"
+          :title="t('profile.edit')"
+          @click="editProfile"
+        ><MenuIcon name="edit" /></button>
+      </div>
+      <div v-if="floating.length" class="reactions" aria-hidden="true">
+        <span
+          v-for="r in floating"
+          :key="r.id"
+          class="reaction-float"
+          :style="{ left: `${r.x}px`, top: `${r.y}px`, '--drift': r.drift }"
+        >{{ r.emoji }}</span>
+      </div>
+    </Teleport>
   </div>
 </template>

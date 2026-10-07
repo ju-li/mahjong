@@ -441,6 +441,127 @@ body {
   color: #ffc1b8;
 }
 
+/* ---- Reactions (online): emoji menu around your face, and emoji floating up from a sender ---- */
+
+.react-menu__row,
+.react-menu__edit {
+  position: fixed;
+  z-index: 9;
+  animation: react-menu-in 0.16s ease-out;
+}
+
+.react-menu__row {
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 999px;
+  background: rgb(20 28 26 / 0.88);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
+  transform: translate(-50%, -100%);
+}
+
+.react-menu__emoji {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.react-menu__emoji:hover {
+  background: rgb(255 255 255 / 0.12);
+  transform: translateY(-3px) scale(1.15);
+}
+
+.react-menu__emoji:active {
+  transform: scale(0.9);
+}
+
+.react-menu__edit {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(20 28 26 / 0.88);
+  color: #fff;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+
+.react-menu__edit:hover {
+  background: rgb(40 54 50 / 0.95);
+}
+
+.react-menu__emoji:focus-visible,
+.react-menu__edit:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@keyframes react-menu-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Above the end-of-hand dialog too, so a reaction to a big win still shows. */
+.reactions {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.reaction-float {
+  position: absolute;
+  font-size: 32px;
+  line-height: 1;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.35));
+  animation: reaction-rise 2.4s cubic-bezier(0.25, 0.6, 0.35, 1) forwards;
+}
+
+/* Pops in, sways side to side on the way up, then fades out (livestream style). */
+@keyframes reaction-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, calc(-50% - 18px)) scale(1.25);
+  }
+  20% {
+    transform: translate(calc(-50% + var(--drift) * 10px), calc(-50% - 36px)) scale(1);
+  }
+  45% {
+    transform: translate(calc(-50% - var(--drift) * 12px), calc(-50% - 80px)) scale(1);
+  }
+  60% {
+    opacity: 1;
+  }
+  75% {
+    transform: translate(calc(-50% + var(--drift) * 16px), calc(-50% - 130px)) scale(0.95);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--drift) * 24px), calc(-50% - 170px)) scale(0.9);
+  }
+}
+
 /* ---- Middle: wall, ponds, compass ---- */
 
 .middle {
@@ -1908,6 +2029,12 @@ body {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+
+  /* No rising: the emoji just shows above its sender's face until it times out. */
+  .reaction-float {
+    opacity: 1;
+    transform: translate(-50%, -150%);
   }
 }
 

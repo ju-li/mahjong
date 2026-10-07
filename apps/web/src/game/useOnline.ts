@@ -1,10 +1,11 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { Client, type Room } from '@colyseus/sdk'
 import type { Action } from '@mahjong/engine'
-import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Snapshot, type TableSettings } from '@mahjong/protocol'
+import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Reaction, type ReactionId, type Snapshot, type TableSettings } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
 import { track } from './analytics'
 import { useProfile } from './profile'
+import { reactionThrottle, useReactionFeed } from './reactions'
 import { useAccount } from './useAccount'
 import { SERVER_URL } from './serverUrl'
 import type { MatchSource, Readiness } from './source'
@@ -64,6 +65,9 @@ export function useOnline() {
   watch(() => snapshot.value?.match?.final ?? false, (final) => final || (rating.value = null))
   const { name, avatar } = useProfile()
   const account = useAccount()
+  /** Emoji reactions floating up at the table, yours and everyone else's. */
+  const reactions = useReactionFeed()
+  const mayReact = reactionThrottle()
 
   function attach(r: Room): void {
     room = r
@@ -75,6 +79,9 @@ export function useOnline() {
     })
     r.onMessage('rated', (change: RatingChange) => {
       if (room === r) rating.value = change
+    })
+    r.onMessage('reaction', (m: Reaction) => {
+      if (room === r) reactions.push(m.from, m.reaction)
     })
     // The SDK retries a dropped socket by itself for a while; the table stays on screen meanwhile.
     r.onDrop(() => {
@@ -169,6 +176,7 @@ export function useOnline() {
     generation++
     link.value = 'up'
     snapshot.value = null
+    reactions.clear()
     error.value = null
     write(() => sessionStorage, CURRENT_KEY, null)
     await r?.leave().catch(() => {})
@@ -256,9 +264,17 @@ export function useOnline() {
       return { ready, button }
     }),
     pausedBy: computed(() => (paused.value === null ? null : (playerNames.value[paused.value] ?? null))),
+    reactions: reactions.floating,
     act(action: Action) {
       const m = match.value
       if (m) send('act', { step: m.step, action })
+    },
+    react(reaction: ReactionId) {
+      const s = snapshot.value
+      if (!s || !room || !mayReact()) return
+      send('react', { reaction })
+      // The server passes it on to everyone else; you see yours straight away.
+      reactions.push(s.you, reaction)
     },
     continueToNextHand() {
       send('ready', {})

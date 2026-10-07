@@ -7,6 +7,14 @@ export const ROOM_NAME = 'table'
 /** Longest display name the server keeps. */
 export const MAX_NAME_LENGTH = 16
 
+/** Emoji reactions a player can send to the rest of the table. */
+export const REACTIONS = ['fire', 'clap', 'heart', 'laugh', 'party'] as const
+export type ReactionId = (typeof REACTIONS)[number]
+/** A player may send at most this many reactions... */
+export const REACTION_BURST = 6
+/** ...in any window this long; the server drops the rest. */
+export const REACTION_WINDOW_MS = 2000
+
 /** Claim timer choices for online tables. Unlike solo play there is no "off": one idle player would stall everyone. */
 export const ONLINE_CLAIM_SECONDS = [20, 40, 60, 120] as const
 export type OnlineClaimSeconds = (typeof ONLINE_CLAIM_SECONDS)[number]
@@ -81,6 +89,9 @@ export type Snapshot = {
   match: MatchInfo | null
 }
 
+/** Server → client, message type `reaction`: another player's emoji reaction, to float up from their seat. */
+export type Reaction = { from: Player; reaction: ReactionId }
+
 /** Client → server messages. */
 export type ClientMessages = {
   act: { step: number; action: Action }
@@ -102,6 +113,8 @@ export type ClientMessages = {
   pause: Record<string, never>
   /** Anyone at the table: carry on. */
   resume: Record<string, never>
+  /** Anyone seated: a quick emoji for everyone else. */
+  react: { reaction: ReactionId }
   /** Signed in or out while seated: the new access token, or null for guest. */
   identify: { accessToken: string | null }
   /** Host: remove the player in this seat from the table; they can't come back to it. */
