@@ -409,6 +409,26 @@ body {
   clip-path: polygon(50% 0, 61% 17%, 80% 8%, 80% 29%, 100% 32%, 88% 50%, 100% 68%, 80% 71%, 80% 92%, 61% 83%, 50% 100%, 39% 83%, 20% 92%, 20% 71%, 0 68%, 12% 50%, 0 32%, 20% 29%, 20% 8%, 39% 17%);
 }
 
+/* Their voice memo is playing: a green ring and a speaker tag. */
+.badge--speaking .badge__photo {
+  box-shadow: 0 0 0 3px #3ddc84, 0 0 16px 4px rgb(61 220 132 / 0.6);
+}
+
+.badge__talk {
+  position: absolute;
+  right: -8px;
+  bottom: -6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #3ddc84;
+  border: 2px solid #fff;
+  color: #10301f;
+  animation: pulse 0.9s ease-in-out infinite;
+}
+
 .badge__text {
   display: flex;
   flex-direction: column;
@@ -507,6 +527,118 @@ body {
 .react-menu__edit:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* Voice memo: to the right of your badge. Tap the mic to record, tap the red square to send. */
+.react-menu__voice {
+  position: fixed;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transform: translate(-50%, -22px);
+  animation: react-menu-in 0.16s ease-out;
+}
+
+.voice-memo__button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(20 28 26 / 0.88);
+  color: #fff;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.voice-memo__button:hover {
+  background: rgb(40 54 50 / 0.95);
+}
+
+.voice-memo__button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.voice-memo__button--recording {
+  animation: voice-ring 1.1s ease-out infinite;
+}
+
+/* The stop square, with the voice's equalizer drawn over it. */
+.voice-memo__stop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--red);
+}
+
+.voice-memo__bar {
+  width: 2px;
+  height: calc(3px + var(--level, 0) * 14px);
+  border-radius: 1px;
+  background: #fff;
+  transition: height 0.08s linear;
+}
+
+.voice-memo__timer {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgb(20 28 26 / 0.88);
+  color: #fff;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.voice-memo__hint {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: -8px;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 32px));
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgb(20 32 29 / 0.92);
+  color: #fff;
+  font-size: var(--fs-sm);
+}
+
+@keyframes voice-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(192 57 43 / 0.6), 0 6px 18px rgb(0 0 0 / 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgb(192 57 43 / 0), 0 6px 18px rgb(0 0 0 / 0.4);
+  }
+}
+
+/* Whose voice memo is playing. */
+.talk-toast {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(280px, calc(100vw - 32px));
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #1f6f45;
+  color: #fff;
+  font-size: var(--fs-sm);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+  pointer-events: none;
 }
 
 @keyframes react-menu-in {
@@ -1176,6 +1308,14 @@ body {
   width: min(420px, 100%);
 }
 
+.settings__group {
+  margin: 4px 0 -4px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .settings__list {
   display: flex;
   flex-direction: column;
@@ -1262,6 +1402,15 @@ body {
 
 .toggle__input:checked::before {
   transform: translateX(18px);
+}
+
+.toggle__input:disabled,
+.toggle:has(.toggle__input:disabled) {
+  cursor: default;
+}
+
+.toggle__input:disabled {
+  opacity: 0.6;
 }
 
 .toggle__input:focus-visible {

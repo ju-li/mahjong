@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { boot, type ColyseusTestServer } from '@colyseus/testing'
 import type { Room } from '@colyseus/sdk'
-import { FEEDBACK_PATH, KICKED_CODE, LEADERBOARD_PATH, ROOM_NAME, SOCIAL_ROOM, type HistoryPage, type MatchDetailReply, type PlayerStats, type FriendsSnapshot, type InviteResult, type Reaction, type Snapshot, type TableInvite, type TableInviteResult } from '@mahjong/protocol'
+import { FEEDBACK_PATH, KICKED_CODE, LEADERBOARD_PATH, ROOM_NAME, SOCIAL_ROOM, type HistoryPage, type MatchDetailReply, type PlayerStats, type FriendsSnapshot, type InviteResult, type Reaction, type Snapshot, type TableInvite, type TableInviteResult, type VoiceMemo } from '@mahjong/protocol'
 import { tokenVerifier } from './auth'
 import type { FeedbackMail } from './feedback'
 import { feedbackEnv, server } from './main'
@@ -86,6 +86,30 @@ describe('TableRoom', () => {
     host.send('react', { reaction: 'heart' })
     expect(await seen).toEqual({ from: 0, reaction: 'heart' })
     // A snapshot round trip later, the sender still has seen nothing back.
+    const renamed = next(host, (s) => s.players[0]?.name === 'Annie')
+    host.send('profile', { name: 'Annie' })
+    await renamed
+    expect(echoed).toEqual([])
+    await friend.leave()
+    await host.leave()
+  })
+
+  it('passes a voice memo on to everyone else at the table', async () => {
+    const host = await colyseus.sdk.create(ROOM_NAME, { name: 'Ann' })
+    await next(host)
+    const friend = await colyseus.sdk.joinById(host.roomId, { name: 'Bo' })
+    await next(friend)
+    const echoed: VoiceMemo[] = []
+    host.onMessage('voice', (m: VoiceMemo) => echoed.push(m))
+    const heard = new Promise<VoiceMemo>((resolve) => friend.onMessage('voice', resolve))
+    // Well past the transport's default 4 KB message cap.
+    const data = Uint8Array.from({ length: 50_000 }, (_, i) => i % 251)
+    host.send('voice', { mime: 'audio/webm;codecs=opus', ms: 3000, data })
+    const memo = await heard
+    expect(memo.from).toBe(0)
+    expect(memo.mime).toBe('audio/webm;codecs=opus')
+    expect(new Uint8Array(memo.data)).toEqual(data)
+    // A snapshot round trip later, the sender still has heard nothing back.
     const renamed = next(host, (s) => s.players[0]?.name === 'Annie')
     host.send('profile', { name: 'Annie' })
     await renamed

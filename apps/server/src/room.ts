@@ -91,6 +91,10 @@ export class TableRoom extends Room {
       const reaction = this.table.react(client.sessionId, message)
       if (reaction) this.broadcast('reaction', reaction, { except: client })
     })
+    this.onMessage('voice', (client, message) => {
+      const memo = this.table.voice(client.sessionId, message)
+      if (memo) this.broadcast('voice', memo, { except: client })
+    })
     this.watchEmpty()
   }
 
