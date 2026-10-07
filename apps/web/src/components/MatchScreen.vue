@@ -35,11 +35,6 @@ const seatReady = computed(() => {
   return r ? seatPlayers.value.map((p) => r.ready[p]!) : undefined
 })
 const handIndex = computed(() => props.source.handIndex.value)
-/** Seat whose player is talking (a voice memo is playing), if any. */
-const speakingSeat = computed(() => {
-  const p = props.source.speaking?.value ?? null
-  return p === null ? null : seatPlayers.value.indexOf(p)
-})
 const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value + 1, HANDS_PER_MATCH), total: HANDS_PER_MATCH }))
 </script>
 
@@ -54,7 +49,6 @@ const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value +
     :avatars="seatAvatars"
     :hand-label="handLabel"
     :claim-remaining="source.claimRemaining.value"
-    :speaking-seat="speakingSeat"
     :openable="openable"
     @act="source.act"
     @edit-profile="emit('editProfile')"

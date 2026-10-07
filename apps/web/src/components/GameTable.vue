@@ -22,8 +22,6 @@ const props = defineProps<{
   handLabel: string
   /** Seconds left to claim, or null when no timer is running. */
   claimRemaining?: number | null
-  /** Seat whose player's voice memo is playing. */
-  speakingSeat?: number | null
   /** Online: opponents' badges open their player card (to add them as a friend). */
   openable?: boolean
 }>()
@@ -207,7 +205,6 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer="o.seat === view.dealer"
           :dealer-label="t('score.dealer')"
           :active="seatActive(o.seat)"
-          :speaking="speakingSeat === o.seat"
           :open-label="openable ? t('friends.viewPlayer', { name: names[o.seat]! }) : undefined"
           @open="emit('openPlayer', o.seat)"
         />
@@ -279,7 +276,6 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer="view.seat === view.dealer"
           :dealer-label="t('score.dealer')"
           :active="seatActive(view.seat)"
-          :speaking="speakingSeat === view.seat"
           :edit-label="t('profile.edit')"
           @edit="emit('editProfile')"
         />

@@ -1,7 +1,7 @@
 import { createEndpoint, createRouter, defineRoom, defineServer } from '@colyseus/core'
 import { WebSocketTransport } from '@colyseus/ws-transport'
 import { isRuleSet } from '@mahjong/engine'
-import { FEEDBACK_PATH, LEADERBOARD_PATH, MAX_VOICE_BYTES, ROOM_NAME, SOCIAL_ROOM } from '@mahjong/protocol'
+import { FEEDBACK_PATH, LEADERBOARD_PATH, ROOM_NAME, SOCIAL_ROOM } from '@mahjong/protocol'
 import { leaderboard } from './db/matches'
 import { createFeedbackHandler, smtpSender, type FeedbackEnv } from './feedback'
 import { TableRoom, tableDiagnostics } from './room'
@@ -19,8 +19,8 @@ function senderOf(headers: Headers): string {
 
 export const server = defineServer({
   greet: false,
-  // The transport's default 4 KB message cap would drop every voice memo.
-  transport: new WebSocketTransport({ maxPayload: MAX_VOICE_BYTES + 16 * 1024 }),
+  // Above the transport's default 4 KB message cap, so a long access token on join or identify still fits.
+  transport: new WebSocketTransport({ maxPayload: 64 * 1024 }),
   rooms: { [ROOM_NAME]: defineRoom(TableRoom), [SOCIAL_ROOM]: defineRoom(SocialRoom) },
   routes: createRouter({
     health: createEndpoint('/health', { method: 'GET' }, async () => ({ ok: true })),
