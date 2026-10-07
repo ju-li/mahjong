@@ -87,6 +87,10 @@ export class TableRoom extends Room {
       this.tokens.delete(target.sessionId)
       target.leave(KICKED_CODE)
     })
+    this.onMessage('react', (client, message) => {
+      const reaction = this.table.react(client.sessionId, message)
+      if (reaction) this.broadcast('reaction', reaction, { except: client })
+    })
     this.watchEmpty()
   }
 

@@ -24,8 +24,13 @@ import {
   handSummaries,
   MAX_NAME_LENGTH,
   ONLINE_CLAIM_SECONDS,
+  REACTION_BURST,
+  REACTION_WINDOW_MS,
+  REACTIONS,
   type MatchInfo,
   type PlayerSlot,
+  type Reaction,
+  type ReactionId,
   type Snapshot,
   type TableSettings,
 } from '@mahjong/protocol'
@@ -118,6 +123,8 @@ export class Table {
   private pausedBy: Player | null = null
   /** Claim time left when play was paused; the countdown resumes from here. */
   private claimLeft: number | null = null
+  /** When each player's recent reactions were sent, for rate limiting. */
+  private reactionLog: number[][] = PLAYERS.map(() => [])
   /** Seat tokens and accounts the host removed; they can't take a seat here again. */
   private banned = { tokens: new Set<string>(), userIds: new Set<string>() }
   /** Every action applied in the hand in play, in order: with the hand's seed, a replay of it (for bug reports). */
@@ -647,6 +654,26 @@ export class Table {
     this.ready.clear()
     this.claimKey = this.claimDeadline = null
     this.changed()
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reactions
+
+  /**
+   * A player's emoji reaction, checked and stamped with who sent it, for the room to pass on to
+   * everyone else; null if it should be dropped (not seated, unknown emoji, or too frequent).
+   */
+  react(client: string, message: unknown): Reaction | null {
+    const from = this.playerOf(client)
+    if (from === null || !message || typeof message !== 'object') return null
+    const { reaction } = message as { reaction?: unknown }
+    if (!REACTIONS.includes(reaction as ReactionId)) return null
+    const now = this.env.now()
+    const recent = this.reactionLog[from]!.filter((t) => t > now - REACTION_WINDOW_MS)
+    if (recent.length >= REACTION_BURST) return null
+    recent.push(now)
+    this.reactionLog[from] = recent
+    return { from, reaction: reaction as ReactionId }
   }
 
   // ---------------------------------------------------------------------------
