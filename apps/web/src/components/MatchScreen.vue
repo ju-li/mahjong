@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { HANDS_PER_MATCH, type Player } from '@mahjong/engine'
+import type { ReactionId, VoiceClip } from '@mahjong/protocol'
 import GameTable from './GameTable.vue'
 import HandResult from './HandResult.vue'
 import { avatarSeeds, avatarSvg } from '../game/avatar'
@@ -40,6 +41,13 @@ const speakingSeat = computed(() => {
   const p = props.source.speaking?.value ?? null
   return p === null ? null : seatPlayers.value.indexOf(p)
 })
+/** Online: what the host allows at this table. */
+const canReact = computed(() => !!props.source.react && props.source.chat?.value.reactions !== false)
+const canVoice = computed(() => !!props.source.sendVoice && props.source.chat?.value.voiceChat !== false)
+/** Online: emoji reactions floating up, by the seat of whoever sent them. */
+const seatReactions = computed(() =>
+  (props.source.reactions?.value ?? []).map((r) => ({ id: r.id, seat: seatPlayers.value.indexOf(r.player), reaction: r.reaction, drift: r.drift })),
+)
 const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value + 1, HANDS_PER_MATCH), total: HANDS_PER_MATCH }))
 </script>
 
@@ -54,9 +62,14 @@ const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value +
     :avatars="seatAvatars"
     :hand-label="handLabel"
     :claim-remaining="source.claimRemaining.value"
-    :speaking-seat="speakingSeat"
     :openable="openable"
+    :reactions="seatReactions"
+    :can-react="canReact"
+    :can-voice="canVoice"
+    :speaking-seat="speakingSeat"
     @act="source.act"
+    @react="(r: ReactionId) => source.react?.(r)"
+    @voice="(clip: VoiceClip) => source.sendVoice?.(clip)"
     @edit-profile="emit('editProfile')"
     @open-player="(seat: number) => emit('openPlayer', seatPlayers[seat]!)"
   />

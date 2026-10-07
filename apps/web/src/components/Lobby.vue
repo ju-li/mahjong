@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { DIFFICULTIES, type Difficulty } from '@mahjong/bots'
 import { isRuleSet } from '@mahjong/engine'
 import { ONLINE_CLAIM_SECONDS, type Snapshot, type TableSettings } from '@mahjong/protocol'
+import ChatSwitches from './ChatSwitches.vue'
 import MenuIcon from './MenuIcon.vue'
 import { avatarSvg } from '../game/avatar'
 import { shareInvite } from '../game/invite'
@@ -106,6 +107,7 @@ function onRules(e: Event) {
           <option v-for="s in ONLINE_CLAIM_SECONDS" :key="s" :value="s">{{ t('timer.seconds', { n: s }) }}</option>
         </select>
       </label>
+      <ChatSwitches :settings="snapshot.settings" :disabled="!isHost" @configure="(s) => emit('configure', s)" />
     </div>
 
     <button v-if="isHost" class="action action--primary lobby__start" @click="emit('start')">{{ t('lobby.start') }}</button>

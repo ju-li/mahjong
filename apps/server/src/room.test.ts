@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { boot, type ColyseusTestServer } from '@colyseus/testing'
 import type { Room } from '@colyseus/sdk'
-import { FEEDBACK_PATH, KICKED_CODE, LEADERBOARD_PATH, ROOM_NAME, SOCIAL_ROOM, type HistoryPage, type MatchDetailReply, type PlayerStats, type FriendsSnapshot, type InviteResult, type Snapshot, type TableInvite, type TableInviteResult, type VoiceMemo } from '@mahjong/protocol'
+import { FEEDBACK_PATH, KICKED_CODE, LEADERBOARD_PATH, ROOM_NAME, SOCIAL_ROOM, type HistoryPage, type MatchDetailReply, type PlayerStats, type FriendsSnapshot, type InviteResult, type Reaction, type Snapshot, type TableInvite, type TableInviteResult, type VoiceMemo } from '@mahjong/protocol'
 import { tokenVerifier } from './auth'
 import type { FeedbackMail } from './feedback'
 import { feedbackEnv, server } from './main'
@@ -73,6 +73,25 @@ describe('TableRoom', () => {
     const others = [await colyseus.sdk.joinById(host.roomId, {}), await colyseus.sdk.joinById(host.roomId, {}), await colyseus.sdk.joinById(host.roomId, {})]
     await expect(colyseus.sdk.joinById(host.roomId, {})).rejects.toThrow()
     for (const r of [host, ...others]) await r.leave()
+  })
+
+  it('passes a reaction on to everyone else at the table', async () => {
+    const host = await colyseus.sdk.create(ROOM_NAME, { name: 'Ann' })
+    await next(host)
+    const friend = await colyseus.sdk.joinById(host.roomId, { name: 'Bo' })
+    await next(friend)
+    const echoed: Reaction[] = []
+    host.onMessage('reaction', (m: Reaction) => echoed.push(m))
+    const seen = new Promise<Reaction>((resolve) => friend.onMessage('reaction', resolve))
+    host.send('react', { reaction: 'heart' })
+    expect(await seen).toEqual({ from: 0, reaction: 'heart' })
+    // A snapshot round trip later, the sender still has seen nothing back.
+    const renamed = next(host, (s) => s.players[0]?.name === 'Annie')
+    host.send('profile', { name: 'Annie' })
+    await renamed
+    expect(echoed).toEqual([])
+    await friend.leave()
+    await host.leave()
   })
 
   it('passes a voice memo on to everyone else at the table', async () => {

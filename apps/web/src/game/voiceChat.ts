@@ -1,11 +1,11 @@
-import { onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount, ref, shallowRef } from 'vue'
 import type { Player } from '@mahjong/engine'
 import { MAX_VOICE_BYTES, MAX_VOICE_MS, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { audio } from './sound'
 
 /** Recordings shorter than this are taps on the button, not messages. */
 export const MIN_VOICE_MS = 300
-/** Speech-quality Opus: 15 s comes to about 60 KB. */
+/** Speech-quality Opus: 10 s comes to about 40 KB. */
 const BITS_PER_SECOND = 32_000
 /** Memos waiting to play beyond this are dropped rather than piling up. */
 const MAX_QUEUE = 6
@@ -24,22 +24,77 @@ export function canRecord(): boolean {
 
 export type RecorderState = 'idle' | 'starting' | 'recording' | 'denied' | 'unsupported'
 
+/** Bars in the recording equalizer. */
+export const EQ_BARS = 5
+
+/** Analyser size: at 48 kHz each frequency bin is about 190 Hz wide. */
+const FFT_SIZE = 256
+
 /**
- * Push-to-talk: `start` on press, `stop` on release; the clip goes to `send` once it is long enough.
- * The microphone is only held while recording, so the browser's mic indicator goes away between memos.
+ * How loud each band of the voice range is, 0 to 1, from an analyser's frequency bytes: the
+ * bottom sixth of the spectrum (up to about 4 kHz, where speech is), less the hum in the first
+ * bin, split into `bars` bands, each averaged.
+ */
+export function barLevels(bytes: ArrayLike<number>, bars = EQ_BARS): number[] {
+  const span = Math.max(1, Math.floor(bytes.length / 6 / bars))
+  return Array.from({ length: bars }, (_, b) => {
+    let sum = 0
+    for (let i = 1 + b * span; i < 1 + (b + 1) * span; i++) sum += bytes[i] ?? 0
+    return Math.min(1, sum / span / 255)
+  })
+}
+
+/** Time recorded as `0:04`. */
+export const clockOf = (ms: number) => `0:${String(Math.min(Math.floor(ms / 1000), 59)).padStart(2, '0')}`
+
+/**
+ * Tap to record a voice memo, tap again to send; it sends by itself at `MAX_VOICE_MS`. The clip
+ * goes to `send` once it is long enough. The microphone is only held while recording, so the
+ * browser's mic indicator goes away between memos. `levels` follows the voice for an equalizer.
  */
 export function useVoiceRecorder(send: (clip: VoiceClip) => void) {
   const state = ref<RecorderState>(canRecord() ? 'idle' : 'unsupported')
-  /** Whole seconds recorded so far. */
+  /** Milliseconds recorded so far. */
   const elapsed = ref(0)
+  /** Loudness of each equalizer bar, 0 to 1, while recording. */
+  const levels = shallowRef<number[]>(Array(EQ_BARS).fill(0))
   let stream: MediaStream | null = null
   let recorder: MediaRecorder | null = null
   let released = false
   let startedAt = 0
   let ticker: ReturnType<typeof setInterval> | undefined
   let limit: ReturnType<typeof setTimeout> | undefined
+  let meter: { source: MediaStreamAudioSourceNode; frame: number } | null = null
+
+  /** Follow the microphone's loudness for the equalizer; skipped if the audio context isn't there. */
+  function listen(input: MediaStream) {
+    const ac = audio()
+    if (!ac) return
+    try {
+      const source = ac.createMediaStreamSource(input)
+      const analyser = ac.createAnalyser()
+      analyser.fftSize = FFT_SIZE
+      analyser.smoothingTimeConstant = 0.6
+      source.connect(analyser)
+      const bytes = new Uint8Array(analyser.frequencyBinCount)
+      const tick = () => {
+        analyser.getByteFrequencyData(bytes)
+        levels.value = barLevels(bytes)
+        if (meter) meter.frame = requestAnimationFrame(tick)
+      }
+      meter = { source, frame: requestAnimationFrame(tick) }
+    } catch {
+      // No equalizer; recording still works.
+    }
+  }
 
   function releaseMic() {
+    if (meter) {
+      cancelAnimationFrame(meter.frame)
+      meter.source.disconnect()
+      meter = null
+    }
+    levels.value = Array(EQ_BARS).fill(0)
     for (const track of stream?.getTracks() ?? []) track.stop()
     stream = null
   }
@@ -87,11 +142,12 @@ export function useVoiceRecorder(send: (clip: VoiceClip) => void) {
     startedAt = performance.now()
     elapsed.value = 0
     state.value = 'recording'
-    ticker = setInterval(() => (elapsed.value = Math.floor((performance.now() - startedAt) / 1000)), 250)
+    listen(stream)
+    ticker = setInterval(() => (elapsed.value = Math.min(Math.round(performance.now() - startedAt), MAX_VOICE_MS)), 100)
     limit = setTimeout(stop, MAX_VOICE_MS)
   }
 
-  /** Release: send what was recorded (or drop it if it was only a tap). */
+  /** Stop recording and send what was recorded (or drop it if it was only a tap). */
   function stop(): void {
     released = true
     clearInterval(ticker)
@@ -101,9 +157,15 @@ export function useVoiceRecorder(send: (clip: VoiceClip) => void) {
     if (state.value === 'recording') state.value = 'idle'
   }
 
+  /** One tap: start recording, or stop and send. */
+  function toggle(): void {
+    if (state.value === 'recording' || state.value === 'starting') stop()
+    else void start()
+  }
+
   onBeforeUnmount(stop)
 
-  return { state, elapsed, start, stop }
+  return { state, elapsed, levels, start, stop, toggle }
 }
 
 /** Plays one memo to the end, or until `signal` aborts. */

@@ -1,5 +1,7 @@
 import type { Ref } from 'vue'
 import type { Action, Player, PlayerView, RuleSet } from '@mahjong/engine'
+import type { ReactionId, TableSettings, VoiceClip } from '@mahjong/protocol'
+import type { FloatingReaction } from './reactions'
 
 /**
  * What the table screen needs from a match, whoever runs it: `useMatch` (this device, vs bots)
@@ -32,7 +34,15 @@ export type MatchSource = {
   pausedBy?: Readonly<Ref<string | null>>
   /** Player whose voice memo is playing right now (online only). */
   speaking?: Readonly<Ref<Player | null>>
+  /** Which of voice memos and reactions the host allows at this table (online only). */
+  chat?: Readonly<Ref<Pick<TableSettings, 'voiceChat' | 'reactions'>>>
+  /** Emoji reactions floating up from whoever sent them, yours included (online only). */
+  reactions?: Readonly<Ref<FloatingReaction[]>>
   act(action: Action): void
+  /** Send an emoji reaction to everyone at the table (online only). */
+  react?(reaction: ReactionId): void
+  /** Send a voice memo to everyone at the table (online only). */
+  sendVoice?(clip: VoiceClip): void
   /** Offline: deal the next hand. Online: say you are ready for it. */
   continueToNextHand(): void
   /** Take back your ready (online only). */

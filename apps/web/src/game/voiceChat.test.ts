@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { VoiceMemo } from '@mahjong/protocol'
-import { pickMimeType, useVoicePlayer, type ClipPlayer } from './voiceChat'
+import { barLevels, clockOf, pickMimeType, useVoicePlayer, type ClipPlayer } from './voiceChat'
 
 const memo = (from: 0 | 1 | 2 | 3): VoiceMemo => ({ from, mime: 'audio/webm', ms: 1000, data: new Uint8Array([from]) })
 
@@ -18,6 +18,24 @@ describe('pickMimeType', () => {
     expect(pickMimeType(() => true)).toBe('audio/webm;codecs=opus')
     expect(pickMimeType((t) => t === 'audio/mp4')).toBe('audio/mp4')
     expect(pickMimeType(() => false)).toBe('')
+  })
+})
+
+describe('barLevels', () => {
+  it('averages the voice range of the spectrum into bars from 0 to 1, skipping the hum bin', () => {
+    // 60 bins: the bottom sixth, less bin 0, is bins 1–10, two per bar.
+    const bytes = new Uint8Array(60).fill(255)
+    bytes.set([255, 255, 255, 0, 0, 51, 51, 0, 0, 0, 0], 0)
+    expect(barLevels(bytes, 5)).toEqual([1, 0, 0.2, 0, 0])
+    expect(barLevels(new Uint8Array(128), 5)).toEqual([0, 0, 0, 0, 0])
+  })
+})
+
+describe('clockOf', () => {
+  it('shows whole seconds recorded', () => {
+    expect(clockOf(0)).toBe('0:00')
+    expect(clockOf(4_900)).toBe('0:04')
+    expect(clockOf(10_000)).toBe('0:10')
   })
 })
 

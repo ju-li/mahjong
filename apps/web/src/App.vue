@@ -13,7 +13,7 @@ import PlayerCard from './components/PlayerCard.vue'
 import ProfilePage from './components/ProfilePage.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import ToastStack from './components/ToastStack.vue'
-import VoiceButton from './components/VoiceButton.vue'
+import ChatSwitches from './components/ChatSwitches.vue'
 import { track } from './game/analytics'
 import { loadLatestVersion } from './game/appUpdate'
 import { friendsCount, parseFriendCode, seatChanges } from './game/friends'
@@ -545,8 +545,14 @@ async function loadLatest() {
       </div>
     </div>
 
-    <!-- Push-to-talk, at online tables only; it stays usable during a break. -->
-    <VoiceButton v-if="atTable" :speaking-name="speakingName" @send="online.sendVoice" />
+    <!-- Whose voice memo is playing, at online tables. -->
+    <p v-if="atTable && speakingName" class="talk-toast" role="status">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M4 9h3l4-3v12l-4-3H4z" fill="currentColor" />
+        <path d="M15 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />
+      </svg>
+      {{ t('talk.speaking', { name: speakingName }) }}
+    </p>
 
     <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :rules="shownRules" @close="rulesDialog = null" />
 
@@ -613,14 +619,19 @@ async function loadLatest() {
           <label v-if="atTable" class="select toggle">
             <span class="toggle__label">
               <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="3" width="6" height="11" rx="3" :fill="voiceChat ? 'currentColor' : 'none'" />
-                <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-                <path v-if="!voiceChat" d="M4 4l16 16" />
+                <path d="M4 9h3l4-3v12l-4-3H4z" :fill="voiceChat ? 'currentColor' : 'none'" />
+                <path v-if="voiceChat" d="M15 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />
+                <path v-else d="M16 9l5 6M21 9l-5 6" />
               </svg>
               {{ t('app.voiceChat') }}
             </span>
             <input v-model="voiceChat" class="toggle__input" type="checkbox" role="switch" />
           </label>
+          <!-- The host can switch chat for the whole table mid-match; in the lobby it is with the other table settings. -->
+          <template v-if="isHost && snapshot?.phase === 'playing'">
+            <p class="settings__group">{{ t('table.forEveryone') }}</p>
+            <ChatSwitches :settings="snapshot.settings" @configure="online.configure" />
+          </template>
           <div class="settings__more">
             <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle"><MenuIcon name="language" />{{ t('app.switchLanguage') }}</button>
             <button class="action action--quiet-light" :disabled="updating" @click="loadLatest"><MenuIcon name="loadLatest" />{{ updating ? t('app.loadingLatest') : t('app.loadLatest') }}</button>

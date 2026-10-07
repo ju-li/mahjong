@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { kindIndex, type Action, type PlayerView, type Seat, type Tile, type Wind } from '@mahjong/engine'
+import { REACTIONS, type ReactionId, type VoiceClip } from '@mahjong/protocol'
 import { actionForKey, shortcutFor } from '../game/keyboard'
+import { REACTION_EMOJI } from '../game/reactions'
 import { useDragScroll } from '../game/useDragScroll'
 import { useTileMotion } from '../game/useTileMotion'
 import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
+import MenuIcon from './MenuIcon.vue'
 import PlayerBadge from './PlayerBadge.vue'
 import TileFace from './TileFace.vue'
+import VoiceMemoButton from './VoiceMemoButton.vue'
 
 const props = defineProps<{
   view: PlayerView
@@ -22,13 +26,19 @@ const props = defineProps<{
   handLabel: string
   /** Seconds left to claim, or null when no timer is running. */
   claimRemaining?: number | null
-  /** Seat whose player's voice memo is playing. */
-  speakingSeat?: number | null
   /** Online: opponents' badges open their player card (to add them as a friend). */
   openable?: boolean
+  /** Online: your badge opens a menu of emoji reactions, with your profile one more tap away. */
+  canReact?: boolean
+  /** Online: that menu also has a voice memo button. */
+  canVoice?: boolean
+  /** Seat whose player's voice memo is playing. */
+  speakingSeat?: number | null
+  /** Online: emoji reactions floating up from the seat that sent them. */
+  reactions?: { id: number; seat: number; reaction: ReactionId; drift: number }[]
 }>()
 
-const emit = defineEmits<{ act: [action: Action]; editProfile: []; openPlayer: [seat: Seat] }>()
+const emit = defineEmits<{ act: [action: Action]; editProfile: []; openPlayer: [seat: Seat]; react: [reaction: ReactionId]; voice: [clip: VoiceClip] }>()
 
 const { t } = useI18n()
 
@@ -43,6 +53,10 @@ let lastKey = ''
 let repeat = 0
 
 function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && reactMenu.value) {
+    closeMenu()
+    return
+  }
   if (e.ctrlKey || e.metaKey || e.altKey) return
   const target = e.target as HTMLElement | null
   if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
@@ -69,6 +83,90 @@ function onKeydown(e: KeyboardEvent) {
 
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+
+// ---- Reactions (online) ----
+// The menu and the floating emoji sit over the page, not the felt, which would clip them.
+
+/** Where a seat's face is on screen. */
+const faceRect = (seat: number) => root.value?.querySelector(`[data-seat="${seat}"] .badge__photo`)?.getBoundingClientRect() ?? null
+
+/** The open badge menu, placed around your face: emoji above, profile pen below, voice memo to the right. */
+const reactMenu = ref<{ x: number; rowX: number; top: number; bottom: number; micX: number; micY: number } | null>(null)
+/** Half the emoji row's width, to keep it on screen. */
+const ROW_HALF = 135
+/** Half the voice memo button's width, to keep it on screen. */
+const MIC_HALF = 22
+/** A voice memo is being recorded: the menu stays open until it is sent. */
+const recording = ref(false)
+
+function onMyBadge() {
+  if (!props.canReact && !props.canVoice) return emit('editProfile')
+  if (reactMenu.value) return closeMenu()
+  const r = faceRect(props.view.seat)
+  const badge = root.value?.querySelector('.me__badge')?.getBoundingClientRect()
+  if (!r || !badge) return emit('editProfile')
+  const x = r.left + r.width / 2
+  const rowX = Math.min(Math.max(x, ROW_HALF + 8), window.innerWidth - ROW_HALF - 8)
+  const micX = Math.min(badge.right + 10 + MIC_HALF, window.innerWidth - MIC_HALF - 8)
+  reactMenu.value = { x, rowX, top: r.top, bottom: badge.bottom, micX, micY: r.top + r.height / 2 }
+}
+
+function editProfile() {
+  closeMenu()
+  emit('editProfile')
+}
+
+function closeMenuOutside(e: Event) {
+  const target = e.target as HTMLElement | null
+  if (target?.closest?.('.react-menu, .me__badge')) return
+  closeMenu()
+}
+function closeMenu() {
+  if (!recording.value) reactMenu.value = null
+}
+// Nothing left in the menu (the host switched both off): close it, even mid-recording.
+watch(
+  () => !!props.canReact || !!props.canVoice,
+  (any) => any || (reactMenu.value = null),
+)
+watch(reactMenu, (open, was) => {
+  if (!!open === !!was) return
+  if (open) {
+    window.addEventListener('pointerdown', closeMenuOutside, true)
+    window.addEventListener('resize', closeMenu)
+    window.addEventListener('scroll', closeMenu, true)
+  } else {
+    window.removeEventListener('pointerdown', closeMenuOutside, true)
+    window.removeEventListener('resize', closeMenu)
+    window.removeEventListener('scroll', closeMenu, true)
+  }
+})
+onBeforeUnmount(() => (reactMenu.value = null))
+
+/** Where each floating emoji started: its sender's face when it arrived. */
+const floatStart = ref(new Map<number, { x: number; y: number }>())
+watch(
+  () => props.reactions ?? [],
+  (list) => {
+    const next = new Map<number, { x: number; y: number }>()
+    for (const r of list) {
+      const known = floatStart.value.get(r.id)
+      if (known) next.set(r.id, known)
+      else {
+        const rect = r.seat < 0 ? null : faceRect(r.seat)
+        if (rect) next.set(r.id, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 3 })
+      }
+    }
+    floatStart.value = next
+  },
+  { immediate: true, flush: 'post' },
+)
+const floating = computed(() =>
+  (props.reactions ?? []).flatMap((r) => {
+    const at = floatStart.value.get(r.id)
+    return at ? [{ ...r, ...at, emoji: REACTION_EMOJI[r.reaction] }] : []
+  }),
+)
 const windName = (w: string) => t(`wind.${w}` as 'wind.E')
 const WIND_GLYPH: Record<Wind, string> = { E: '東', S: '南', W: '西', N: '北' }
 
@@ -209,6 +307,7 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :active="seatActive(o.seat)"
           :speaking="speakingSeat === o.seat"
           :open-label="openable ? t('friends.viewPlayer', { name: names[o.seat]! }) : undefined"
+          :data-seat="o.seat"
           @open="emit('openPlayer', o.seat)"
         />
         <div class="seat__hand" :data-origin="`hand-${o.seat}`">
@@ -280,8 +379,10 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer-label="t('score.dealer')"
           :active="seatActive(view.seat)"
           :speaking="speakingSeat === view.seat"
-          :edit-label="t('profile.edit')"
-          @edit="emit('editProfile')"
+          :edit-label="canReact ? t('reaction.menu') : canVoice ? t('talk.record') : t('profile.edit')"
+          :data-seat="view.seat"
+          :aria-expanded="canReact || canVoice ? !!reactMenu : undefined"
+          @edit="onMyBadge"
         />
 
         <div class="me__main">
@@ -333,5 +434,44 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
         </div>
       </section>
     </div>
+
+    <Teleport to="body">
+      <div v-if="reactMenu" class="react-menu" role="group" :aria-label="canReact ? t('reaction.menu') : t('talk.record')">
+        <div v-if="canReact" class="react-menu__row" :style="{ left: `${reactMenu.rowX}px`, top: `${reactMenu.top - 10}px` }">
+          <button
+            v-for="r in REACTIONS"
+            :key="r"
+            type="button"
+            class="react-menu__emoji"
+            :aria-label="t(`reaction.${r}`)"
+            :title="t(`reaction.${r}`)"
+            @click="emit('react', r)"
+          >{{ REACTION_EMOJI[r] }}</button>
+        </div>
+        <button
+          type="button"
+          class="react-menu__edit"
+          :style="{ left: `${reactMenu.x}px`, top: `${reactMenu.bottom + 6}px` }"
+          :aria-label="t('profile.edit')"
+          :title="t('profile.edit')"
+          @click="editProfile"
+        ><MenuIcon name="edit" /></button>
+        <VoiceMemoButton
+          v-if="canVoice"
+          class="react-menu__voice"
+          :style="{ left: `${reactMenu.micX}px`, top: `${reactMenu.micY}px` }"
+          @send="(clip: VoiceClip) => emit('voice', clip)"
+          @recording="(on: boolean) => (recording = on)"
+        />
+      </div>
+      <div v-if="floating.length" class="reactions" aria-hidden="true">
+        <span
+          v-for="r in floating"
+          :key="r.id"
+          class="reaction-float"
+          :style="{ left: `${r.x}px`, top: `${r.y}px`, '--drift': r.drift }"
+        >{{ r.emoji }}</span>
+      </div>
+    </Teleport>
   </div>
 </template>
