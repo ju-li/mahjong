@@ -1,16 +1,14 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { Client, type Room } from '@colyseus/sdk'
 import type { Action } from '@mahjong/engine'
-import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
+import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Snapshot, type TableSettings } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
 import { track } from './analytics'
 import { useProfile } from './profile'
 import { useAccount } from './useAccount'
 import { SERVER_URL } from './serverUrl'
-import { useSettings } from './settings'
 import type { MatchSource, Readiness } from './source'
 import { useTableAudio } from './tableAudio'
-import { useVoicePlayer } from './voiceChat'
 
 
 const TOKEN_KEY = (code: string) => `mahjong.seat.${code}`
@@ -66,9 +64,6 @@ export function useOnline() {
   watch(() => snapshot.value?.match?.final ?? false, (final) => final || (rating.value = null))
   const { name, avatar } = useProfile()
   const account = useAccount()
-  const { voiceChat } = useSettings()
-  const voicePlayer = useVoicePlayer()
-  watch(voiceChat, (on) => on || voicePlayer.clear())
 
   function attach(r: Room): void {
     room = r
@@ -80,9 +75,6 @@ export function useOnline() {
     })
     r.onMessage('rated', (change: RatingChange) => {
       if (room === r) rating.value = change
-    })
-    r.onMessage('voice', (memo: VoiceMemo) => {
-      if (room === r && voiceChat.value) voicePlayer.enqueue(memo)
     })
     // The SDK retries a dropped socket by itself for a while; the table stays on screen meanwhile.
     r.onDrop(() => {
@@ -177,7 +169,6 @@ export function useOnline() {
     generation++
     link.value = 'up'
     snapshot.value = null
-    voicePlayer.clear()
     error.value = null
     write(() => sessionStorage, CURRENT_KEY, null)
     await r?.leave().catch(() => {})
@@ -265,7 +256,6 @@ export function useOnline() {
       return { ready, button }
     }),
     pausedBy: computed(() => (paused.value === null ? null : (playerNames.value[paused.value] ?? null))),
-    speaking: voicePlayer.speaking,
     act(action: Action) {
       const m = match.value
       if (m) send('act', { step: m.step, action })
@@ -306,9 +296,6 @@ export function useOnline() {
     resume: () => send('resume', {}),
     /** Tell the table about your current name and avatar. */
     sendProfile: () => send('profile', { name: name.value, avatar: avatar.value }),
-    sendVoice: (clip: VoiceClip) => send('voice', clip),
-    /** Player whose voice memo is playing, if any. */
-    speaking: voicePlayer.speaking,
     playerNames,
   }
 }

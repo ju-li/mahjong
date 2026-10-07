@@ -87,10 +87,6 @@ export class TableRoom extends Room {
       this.tokens.delete(target.sessionId)
       target.leave(KICKED_CODE)
     })
-    this.onMessage('voice', (client, message) => {
-      const memo = this.table.voice(client.sessionId, message)
-      if (memo) this.broadcast('voice', memo, { except: client })
-    })
     this.watchEmpty()
   }
 

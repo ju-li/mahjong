@@ -23,15 +23,11 @@ import {
 import {
   handSummaries,
   MAX_NAME_LENGTH,
-  MAX_VOICE_BYTES,
-  MAX_VOICE_MS,
   ONLINE_CLAIM_SECONDS,
   type MatchInfo,
   type PlayerSlot,
   type Snapshot,
   type TableSettings,
-  type VoiceClip,
-  type VoiceMemo,
 } from '@mahjong/protocol'
 import type { OnlineMatchRecord } from './db/matches'
 
@@ -47,11 +43,6 @@ export const CALL_PAUSE_MS = 700
 export const TURN_MS = 60_000
 /** A dropped player's seat is kept for them this long; after that anyone joining may take it over. */
 export const RESERVE_MS = 2 * 60_000
-
-/** A player's voice memos must be at least this far apart... */
-export const VOICE_GAP_MS = 1000
-/** ...and no more than this many in any minute. */
-export const VOICE_PER_MINUTE = 20
 
 /** Actions a player calls out loud. */
 const CALLS = new Set<Action['type']>(['chow', 'pung', 'kong', 'win'])
@@ -127,8 +118,6 @@ export class Table {
   private pausedBy: Player | null = null
   /** Claim time left when play was paused; the countdown resumes from here. */
   private claimLeft: number | null = null
-  /** When each player's recent voice memos were sent, for rate limiting. */
-  private voiceLog: number[][] = PLAYERS.map(() => [])
   /** Seat tokens and accounts the host removed; they can't take a seat here again. */
   private banned = { tokens: new Set<string>(), userIds: new Set<string>() }
   /** Every action applied in the hand in play, in order: with the hand's seed, a replay of it (for bug reports). */
@@ -658,28 +647,6 @@ export class Table {
     this.ready.clear()
     this.claimKey = this.claimDeadline = null
     this.changed()
-  }
-
-  // ---------------------------------------------------------------------------
-  // Voice
-
-  /**
-   * A player's push-to-talk memo, checked and stamped with who sent it, for the room to pass on to
-   * everyone else; null if it should be dropped (not seated, malformed, too big, or too frequent).
-   */
-  voice(client: string, message: unknown): VoiceMemo | null {
-    const from = this.playerOf(client)
-    if (from === null || !message || typeof message !== 'object') return null
-    const { mime, ms, data } = message as Partial<Record<keyof VoiceClip, unknown>>
-    if (!(data instanceof Uint8Array) || data.byteLength === 0 || data.byteLength > MAX_VOICE_BYTES) return null
-    if (typeof mime !== 'string' || mime.length > 64 || !/^audio\/[\w.+-]+(;[\w=.,+\- ]*)?$/.test(mime)) return null
-    if (typeof ms !== 'number' || !Number.isFinite(ms) || ms <= 0) return null
-    const now = this.env.now()
-    const recent = this.voiceLog[from]!.filter((t) => t > now - 60_000)
-    if (recent.length >= VOICE_PER_MINUTE || (recent.length > 0 && now - recent[recent.length - 1]! < VOICE_GAP_MS)) return null
-    recent.push(now)
-    this.voiceLog[from] = recent
-    return { from, mime, ms: Math.min(ms, MAX_VOICE_MS), data: new Uint8Array(data) }
   }
 
   // ---------------------------------------------------------------------------
