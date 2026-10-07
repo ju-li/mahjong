@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { kindIndex, type Action, type PlayerView, type Seat, type Tile, type Wind } from '@mahjong/engine'
-import { REACTIONS, type ReactionId } from '@mahjong/protocol'
+import { REACTIONS, type ReactionId, type VoiceClip } from '@mahjong/protocol'
 import { actionForKey, shortcutFor } from '../game/keyboard'
 import { REACTION_EMOJI } from '../game/reactions'
 import { useDragScroll } from '../game/useDragScroll'
@@ -11,6 +11,7 @@ import MeldGroup from './MeldGroup.vue'
 import MenuIcon from './MenuIcon.vue'
 import PlayerBadge from './PlayerBadge.vue'
 import TileFace from './TileFace.vue'
+import VoiceMemoButton from './VoiceMemoButton.vue'
 
 const props = defineProps<{
   view: PlayerView
@@ -29,11 +30,15 @@ const props = defineProps<{
   openable?: boolean
   /** Online: your badge opens a menu of emoji reactions, with your profile one more tap away. */
   canReact?: boolean
+  /** Online: that menu also has a voice memo button. */
+  canVoice?: boolean
+  /** Seat whose player's voice memo is playing. */
+  speakingSeat?: number | null
   /** Online: emoji reactions floating up from the seat that sent them. */
   reactions?: { id: number; seat: number; reaction: ReactionId; drift: number }[]
 }>()
 
-const emit = defineEmits<{ act: [action: Action]; editProfile: []; openPlayer: [seat: Seat]; react: [reaction: ReactionId] }>()
+const emit = defineEmits<{ act: [action: Action]; editProfile: []; openPlayer: [seat: Seat]; react: [reaction: ReactionId]; voice: [clip: VoiceClip] }>()
 
 const { t } = useI18n()
 
@@ -49,7 +54,7 @@ let repeat = 0
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && reactMenu.value) {
-    reactMenu.value = null
+    closeMenu()
     return
   }
   if (e.ctrlKey || e.metaKey || e.altKey) return
@@ -85,33 +90,45 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 /** Where a seat's face is on screen. */
 const faceRect = (seat: number) => root.value?.querySelector(`[data-seat="${seat}"] .badge__photo`)?.getBoundingClientRect() ?? null
 
-/** The open reaction menu, placed around your face: emoji above, profile pen below. */
-const reactMenu = ref<{ x: number; rowX: number; top: number; bottom: number } | null>(null)
+/** The open badge menu, placed around your face: emoji above, profile pen below, voice memo to the right. */
+const reactMenu = ref<{ x: number; rowX: number; top: number; bottom: number; micX: number; micY: number } | null>(null)
 /** Half the emoji row's width, to keep it on screen. */
 const ROW_HALF = 135
+/** Half the voice memo button's width, to keep it on screen. */
+const MIC_HALF = 22
+/** A voice memo is being recorded: the menu stays open until it is sent. */
+const recording = ref(false)
 
 function onMyBadge() {
-  if (!props.canReact) return emit('editProfile')
-  if (reactMenu.value) return (reactMenu.value = null)
+  if (!props.canReact && !props.canVoice) return emit('editProfile')
+  if (reactMenu.value) return closeMenu()
   const r = faceRect(props.view.seat)
   const badge = root.value?.querySelector('.me__badge')?.getBoundingClientRect()
   if (!r || !badge) return emit('editProfile')
   const x = r.left + r.width / 2
   const rowX = Math.min(Math.max(x, ROW_HALF + 8), window.innerWidth - ROW_HALF - 8)
-  reactMenu.value = { x, rowX, top: r.top, bottom: badge.bottom }
+  const micX = Math.min(badge.right + 10 + MIC_HALF, window.innerWidth - MIC_HALF - 8)
+  reactMenu.value = { x, rowX, top: r.top, bottom: badge.bottom, micX, micY: r.top + r.height / 2 }
 }
 
 function editProfile() {
-  reactMenu.value = null
+  closeMenu()
   emit('editProfile')
 }
 
 function closeMenuOutside(e: Event) {
   const target = e.target as HTMLElement | null
   if (target?.closest?.('.react-menu, .me__badge')) return
-  reactMenu.value = null
+  closeMenu()
 }
-const closeMenu = () => (reactMenu.value = null)
+function closeMenu() {
+  if (!recording.value) reactMenu.value = null
+}
+// Nothing left in the menu (the host switched both off): close it, even mid-recording.
+watch(
+  () => !!props.canReact || !!props.canVoice,
+  (any) => any || (reactMenu.value = null),
+)
 watch(reactMenu, (open, was) => {
   if (!!open === !!was) return
   if (open) {
@@ -124,7 +141,7 @@ watch(reactMenu, (open, was) => {
     window.removeEventListener('scroll', closeMenu, true)
   }
 })
-onBeforeUnmount(closeMenu)
+onBeforeUnmount(() => (reactMenu.value = null))
 
 /** Where each floating emoji started: its sender's face when it arrived. */
 const floatStart = ref(new Map<number, { x: number; y: number }>())
@@ -288,6 +305,7 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer="o.seat === view.dealer"
           :dealer-label="t('score.dealer')"
           :active="seatActive(o.seat)"
+          :speaking="speakingSeat === o.seat"
           :open-label="openable ? t('friends.viewPlayer', { name: names[o.seat]! }) : undefined"
           :data-seat="o.seat"
           @open="emit('openPlayer', o.seat)"
@@ -360,9 +378,10 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :dealer="view.seat === view.dealer"
           :dealer-label="t('score.dealer')"
           :active="seatActive(view.seat)"
-          :edit-label="canReact ? t('reaction.menu') : t('profile.edit')"
+          :speaking="speakingSeat === view.seat"
+          :edit-label="canReact ? t('reaction.menu') : canVoice ? t('talk.record') : t('profile.edit')"
           :data-seat="view.seat"
-          :aria-expanded="canReact ? !!reactMenu : undefined"
+          :aria-expanded="canReact || canVoice ? !!reactMenu : undefined"
           @edit="onMyBadge"
         />
 
@@ -417,8 +436,8 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
     </div>
 
     <Teleport to="body">
-      <div v-if="reactMenu" class="react-menu" role="group" :aria-label="t('reaction.menu')">
-        <div class="react-menu__row" :style="{ left: `${reactMenu.rowX}px`, top: `${reactMenu.top - 10}px` }">
+      <div v-if="reactMenu" class="react-menu" role="group" :aria-label="canReact ? t('reaction.menu') : t('talk.record')">
+        <div v-if="canReact" class="react-menu__row" :style="{ left: `${reactMenu.rowX}px`, top: `${reactMenu.top - 10}px` }">
           <button
             v-for="r in REACTIONS"
             :key="r"
@@ -437,6 +456,13 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           :title="t('profile.edit')"
           @click="editProfile"
         ><MenuIcon name="edit" /></button>
+        <VoiceMemoButton
+          v-if="canVoice"
+          class="react-menu__voice"
+          :style="{ left: `${reactMenu.micX}px`, top: `${reactMenu.micY}px` }"
+          @send="(clip: VoiceClip) => emit('voice', clip)"
+          @recording="(on: boolean) => (recording = on)"
+        />
       </div>
       <div v-if="floating.length" class="reactions" aria-hidden="true">
         <span

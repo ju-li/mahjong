@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { chooseAction } from '@mahjong/bots'
 import { seatOf, settledScores, type GameState, type Match, type Player } from '@mahjong/engine'
-import { REACTION_BURST, REACTION_WINDOW_MS, type Snapshot } from '@mahjong/protocol'
-import { cleanAvatar, cleanName, RESERVE_MS, Table, TURN_MS, type TableEnv } from './table'
+import { MAX_VOICE_BYTES, MAX_VOICE_MS, REACTION_BURST, REACTION_WINDOW_MS, type Snapshot } from '@mahjong/protocol'
+import { cleanAvatar, cleanName, RESERVE_MS, Table, TURN_MS, VOICE_GAP_MS, VOICE_PER_MINUTE, type TableEnv } from './table'
 
 /** Timers that only fire when the test moves the clock. */
 class FakeEnv implements TableEnv {
@@ -151,9 +151,22 @@ describe('lobby', () => {
     table.configure('c0', { difficulty: 'beginner' })
     expect(snap('c1').settings.difficulty).toBe('beginner')
     table.configure('c0', { difficulty: 'hard' })
-    expect(snap('c1').settings).toEqual({ rules: 'hk', difficulty: 'hard', claimSeconds: 60 })
+    expect(snap('c1').settings).toEqual({ rules: 'hk', difficulty: 'hard', claimSeconds: 60, voiceChat: true, reactions: true })
     table.start('c0')
     expect(snap('c1').phase).toBe('playing')
+  })
+
+  it('lets the host switch voice memos and reactions mid-match, but nothing else', () => {
+    const { table, snap } = setup(['Ann', 'Bo'])
+    table.configure('c0', { voiceChat: false })
+    expect(snap('c1').settings).toMatchObject({ voiceChat: false, reactions: true })
+    table.start('c0')
+    table.configure('c1', { reactions: false }) // not the host
+    expect(snap('c1').settings.reactions).toBe(true)
+    table.configure('c0', { reactions: false, voiceChat: true, rules: 'hk', claimSeconds: 120 })
+    expect(snap('c1').settings).toEqual({ rules: 'mcr', difficulty: 'medium', claimSeconds: 40, voiceChat: true, reactions: false })
+    table.configure('c0', { voiceChat: 'no' }) // not a switch: ignored
+    expect(snap('c1').settings.voiceChat).toBe(true)
   })
 })
 
@@ -551,6 +564,61 @@ describe('reactions', () => {
     expect(table.react('c1', { reaction: 'clap' })).not.toBeNull() // others are unaffected
     env.advance(REACTION_WINDOW_MS)
     expect(table.react('c0', { reaction: 'clap' })).not.toBeNull()
+  })
+
+  it('drops every reaction while the host has them switched off', () => {
+    const { table } = setup(['Ann', 'Bo'])
+    table.configure('c0', { reactions: false })
+    expect(table.react('c1', { reaction: 'fire' })).toBeNull()
+    table.configure('c0', { reactions: true })
+    expect(table.react('c1', { reaction: 'fire' })).not.toBeNull()
+  })
+})
+
+describe('voice memos', () => {
+  const clip = (bytes = 100, mime = 'audio/webm;codecs=opus') => ({ mime, ms: 2000, data: new Uint8Array(bytes).fill(7) })
+
+  it('stamps a seated player’s memo with who sent it', () => {
+    const { table } = setup(['Ann', 'Bo'])
+    const memo = table.voice('c1', clip())
+    expect(memo).toEqual({ from: 1, mime: 'audio/webm;codecs=opus', ms: 2000, data: new Uint8Array(100).fill(7) })
+    expect(table.voice('c0', { ...clip(), mime: 'audio/mp4', ms: 60_000 })).toMatchObject({ from: 0, mime: 'audio/mp4', ms: MAX_VOICE_MS })
+  })
+
+  it('drops memos from strangers and anything malformed or too big', () => {
+    const { table } = setup(['Ann'])
+    expect(table.voice('nobody', clip())).toBeNull()
+    expect(table.voice('c0', null)).toBeNull()
+    expect(table.voice('c0', clip(0))).toBeNull()
+    expect(table.voice('c0', clip(MAX_VOICE_BYTES + 1))).toBeNull()
+    expect(table.voice('c0', clip(10, 'text/html'))).toBeNull()
+    expect(table.voice('c0', clip(10, 'audio/<script>'))).toBeNull()
+    expect(table.voice('c0', { ...clip(), data: [1, 2, 3] })).toBeNull()
+    expect(table.voice('c0', { ...clip(), ms: Number.NaN })).toBeNull()
+    expect(table.voice('c0', clip(MAX_VOICE_BYTES))).not.toBeNull()
+  })
+
+  it('limits how often each player may talk', () => {
+    const { env, table } = setup(['Ann', 'Bo'])
+    expect(table.voice('c0', clip())).not.toBeNull()
+    expect(table.voice('c0', clip())).toBeNull() // too soon
+    expect(table.voice('c1', clip())).not.toBeNull() // others are unaffected
+    let sent = 1
+    for (let i = 0; i < 40; i++) {
+      env.advance(VOICE_GAP_MS)
+      if (table.voice('c0', clip())) sent++
+    }
+    expect(sent).toBe(VOICE_PER_MINUTE)
+    env.advance(60_000)
+    expect(table.voice('c0', clip())).not.toBeNull()
+  })
+
+  it('drops every memo while the host has voice switched off', () => {
+    const { table } = setup(['Ann', 'Bo'])
+    table.configure('c0', { voiceChat: false })
+    expect(table.voice('c1', clip())).toBeNull()
+    table.configure('c0', { voiceChat: true })
+    expect(table.voice('c1', clip())).not.toBeNull()
   })
 })
 

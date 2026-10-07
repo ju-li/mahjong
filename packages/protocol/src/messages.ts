@@ -15,6 +15,11 @@ export const REACTION_BURST = 6
 /** ...in any window this long; the server drops the rest. */
 export const REACTION_WINDOW_MS = 2000
 
+/** Longest voice memo a player may send; recording stops and sends by itself at this length. */
+export const MAX_VOICE_MS = 10_000
+/** Biggest voice memo the server relays; 10 s of 32 kbps Opus is about 40 KB. */
+export const MAX_VOICE_BYTES = 256 * 1024
+
 /** Claim timer choices for online tables. Unlike solo play there is no "off": one idle player would stall everyone. */
 export const ONLINE_CLAIM_SECONDS = [20, 40, 60, 120] as const
 export type OnlineClaimSeconds = (typeof ONLINE_CLAIM_SECONDS)[number]
@@ -34,6 +39,10 @@ export type TableSettings = {
   rules: RuleSet
   difficulty: Difficulty
   claimSeconds: OnlineClaimSeconds
+  /** Players may send voice memos. The host can switch it during a match too. */
+  voiceChat: boolean
+  /** Players may send emoji reactions. The host can switch it during a match too. */
+  reactions: boolean
 }
 
 /** One of the four players. `name` null = a bot sits there. */
@@ -92,6 +101,18 @@ export type Snapshot = {
 /** Server → client, message type `reaction`: another player's emoji reaction, to float up from their seat. */
 export type Reaction = { from: Player; reaction: ReactionId }
 
+/** A recorded voice clip: what a player sends, minus who they are. */
+export type VoiceClip = {
+  /** Container type from the recorder, e.g. `audio/webm;codecs=opus`. */
+  mime: string
+  /** Length of the clip in milliseconds. */
+  ms: number
+  data: Uint8Array
+}
+
+/** Server → client, message type `voice`: another player's voice memo, to play straight away. */
+export type VoiceMemo = VoiceClip & { from: Player }
+
 /** Client → server messages. */
 export type ClientMessages = {
   act: { step: number; action: Action }
@@ -103,6 +124,7 @@ export type ClientMessages = {
   deal: Record<string, never>
   /** Change your name and/or avatar. */
   profile: { name?: string; avatar?: number }
+  /** Host: change table settings. `voiceChat` and `reactions` apply any time; the rest only in the lobby. */
   configure: Partial<TableSettings>
   start: Record<string, never>
   /** Host, after the last hand: back to the lobby with the same people. */
@@ -115,6 +137,8 @@ export type ClientMessages = {
   resume: Record<string, never>
   /** Anyone seated: a quick emoji for everyone else. */
   react: { reaction: ReactionId }
+  /** Anyone seated: a voice memo for everyone else. */
+  voice: VoiceClip
   /** Signed in or out while seated: the new access token, or null for guest. */
   identify: { accessToken: string | null }
   /** Host: remove the player in this seat from the table; they can't come back to it. */

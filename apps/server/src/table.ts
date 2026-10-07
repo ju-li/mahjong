@@ -23,6 +23,8 @@ import {
 import {
   handSummaries,
   MAX_NAME_LENGTH,
+  MAX_VOICE_BYTES,
+  MAX_VOICE_MS,
   ONLINE_CLAIM_SECONDS,
   REACTION_BURST,
   REACTION_WINDOW_MS,
@@ -33,6 +35,8 @@ import {
   type ReactionId,
   type Snapshot,
   type TableSettings,
+  type VoiceClip,
+  type VoiceMemo,
 } from '@mahjong/protocol'
 import type { OnlineMatchRecord } from './db/matches'
 
@@ -48,6 +52,11 @@ export const CALL_PAUSE_MS = 700
 export const TURN_MS = 60_000
 /** A dropped player's seat is kept for them this long; after that anyone joining may take it over. */
 export const RESERVE_MS = 2 * 60_000
+
+/** A player's voice memos must be at least this far apart... */
+export const VOICE_GAP_MS = 1000
+/** ...and no more than this many in any minute. */
+export const VOICE_PER_MINUTE = 20
 
 /** Actions a player calls out loud. */
 const CALLS = new Set<Action['type']>(['chow', 'pung', 'kong', 'win'])
@@ -104,7 +113,7 @@ export function cleanAvatar(raw: unknown, fallback: number | null): number | nul
 export class Table {
   readonly code: string
   phase: 'lobby' | 'playing' = 'lobby'
-  settings: TableSettings = { rules: 'mcr', difficulty: 'medium', claimSeconds: 40 }
+  settings: TableSettings = { rules: 'mcr', difficulty: 'medium', claimSeconds: 40, voiceChat: true, reactions: true }
   private slots: Slot[] = PLAYERS.map(() => emptySlot())
   private host: Player = 0
   private match: Match | null = null
@@ -125,6 +134,8 @@ export class Table {
   private claimLeft: number | null = null
   /** When each player's recent reactions were sent, for rate limiting. */
   private reactionLog: number[][] = PLAYERS.map(() => [])
+  /** When each player's recent voice memos were sent, for rate limiting. */
+  private voiceLog: number[][] = PLAYERS.map(() => [])
   /** Seat tokens and accounts the host removed; they can't take a seat here again. */
   private banned = { tokens: new Set<string>(), userIds: new Set<string>() }
   /** Every action applied in the hand in play, in order: with the hand's seed, a replay of it (for bug reports). */
@@ -318,12 +329,17 @@ export class Table {
   // ---------------------------------------------------------------------------
   // Lobby
 
+  /** Host: change the table's settings. Voice memos and reactions can be switched mid-match; the rest only in the lobby. */
   configure(client: string, update: unknown): void {
-    if (this.phase !== 'lobby' || this.playerOf(client) !== this.host || typeof update !== 'object' || !update) return
+    if (this.playerOf(client) !== this.host || typeof update !== 'object' || !update) return
     const u = update as Partial<Record<keyof TableSettings, unknown>>
-    if (isRuleSet(u.rules)) this.settings.rules = u.rules
-    if (DIFFICULTIES.includes(u.difficulty as never)) this.settings.difficulty = u.difficulty as TableSettings['difficulty']
-    if (ONLINE_CLAIM_SECONDS.includes(u.claimSeconds as never)) this.settings.claimSeconds = u.claimSeconds as TableSettings['claimSeconds']
+    if (typeof u.voiceChat === 'boolean') this.settings.voiceChat = u.voiceChat
+    if (typeof u.reactions === 'boolean') this.settings.reactions = u.reactions
+    if (this.phase === 'lobby') {
+      if (isRuleSet(u.rules)) this.settings.rules = u.rules
+      if (DIFFICULTIES.includes(u.difficulty as never)) this.settings.difficulty = u.difficulty as TableSettings['difficulty']
+      if (ONLINE_CLAIM_SECONDS.includes(u.claimSeconds as never)) this.settings.claimSeconds = u.claimSeconds as TableSettings['claimSeconds']
+    }
     this.changed()
   }
 
@@ -661,11 +677,11 @@ export class Table {
 
   /**
    * A player's emoji reaction, checked and stamped with who sent it, for the room to pass on to
-   * everyone else; null if it should be dropped (not seated, unknown emoji, or too frequent).
+   * everyone else; null if it should be dropped (not seated, reactions off, unknown emoji, or too frequent).
    */
   react(client: string, message: unknown): Reaction | null {
     const from = this.playerOf(client)
-    if (from === null || !message || typeof message !== 'object') return null
+    if (from === null || !this.settings.reactions || !message || typeof message !== 'object') return null
     const { reaction } = message as { reaction?: unknown }
     if (!REACTIONS.includes(reaction as ReactionId)) return null
     const now = this.env.now()
@@ -674,6 +690,28 @@ export class Table {
     recent.push(now)
     this.reactionLog[from] = recent
     return { from, reaction: reaction as ReactionId }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Voice
+
+  /**
+   * A player's voice memo, checked and stamped with who sent it, for the room to pass on to
+   * everyone else; null if it should be dropped (not seated, voice off, malformed, too big, or too frequent).
+   */
+  voice(client: string, message: unknown): VoiceMemo | null {
+    const from = this.playerOf(client)
+    if (from === null || !this.settings.voiceChat || !message || typeof message !== 'object') return null
+    const { mime, ms, data } = message as Partial<Record<keyof VoiceClip, unknown>>
+    if (!(data instanceof Uint8Array) || data.byteLength === 0 || data.byteLength > MAX_VOICE_BYTES) return null
+    if (typeof mime !== 'string' || mime.length > 64 || !/^audio\/[\w.+-]+(;[\w=.,+\- ]*)?$/.test(mime)) return null
+    if (typeof ms !== 'number' || !Number.isFinite(ms) || ms <= 0) return null
+    const now = this.env.now()
+    const recent = this.voiceLog[from]!.filter((t) => t > now - 60_000)
+    if (recent.length >= VOICE_PER_MINUTE || (recent.length > 0 && now - recent[recent.length - 1]! < VOICE_GAP_MS)) return null
+    recent.push(now)
+    this.voiceLog[from] = recent
+    return { from, mime, ms: Math.min(ms, MAX_VOICE_MS), data: new Uint8Array(data) }
   }
 
   // ---------------------------------------------------------------------------

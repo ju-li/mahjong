@@ -1,15 +1,17 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { Client, type Room } from '@colyseus/sdk'
 import type { Action } from '@mahjong/engine'
-import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Reaction, type ReactionId, type Snapshot, type TableSettings } from '@mahjong/protocol'
+import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Reaction, type ReactionId, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
 import { track } from './analytics'
 import { useProfile } from './profile'
 import { reactionThrottle, useReactionFeed } from './reactions'
 import { useAccount } from './useAccount'
 import { SERVER_URL } from './serverUrl'
+import { useSettings } from './settings'
 import type { MatchSource, Readiness } from './source'
 import { useTableAudio } from './tableAudio'
+import { useVoicePlayer } from './voiceChat'
 
 
 const TOKEN_KEY = (code: string) => `mahjong.seat.${code}`
@@ -68,6 +70,13 @@ export function useOnline() {
   /** Emoji reactions floating up at the table, yours and everyone else's. */
   const reactions = useReactionFeed()
   const mayReact = reactionThrottle()
+  /** What the host allows at this table; both on until the first snapshot says otherwise. */
+  const chat = computed(() => ({ voiceChat: snapshot.value?.settings.voiceChat ?? true, reactions: snapshot.value?.settings.reactions ?? true }))
+  const { voiceChat } = useSettings()
+  const voicePlayer = useVoicePlayer()
+  // Muted here, or switched off by the host: stop what is playing and drop what is waiting.
+  watch([voiceChat, () => chat.value.voiceChat], ([mine, table]) => (mine && table) || voicePlayer.clear())
+  watch(() => chat.value.reactions, (on) => on || reactions.clear())
 
   function attach(r: Room): void {
     room = r
@@ -82,6 +91,9 @@ export function useOnline() {
     })
     r.onMessage('reaction', (m: Reaction) => {
       if (room === r) reactions.push(m.from, m.reaction)
+    })
+    r.onMessage('voice', (memo: VoiceMemo) => {
+      if (room === r && voiceChat.value && chat.value.voiceChat) voicePlayer.enqueue(memo)
     })
     // The SDK retries a dropped socket by itself for a while; the table stays on screen meanwhile.
     r.onDrop(() => {
@@ -177,6 +189,7 @@ export function useOnline() {
     link.value = 'up'
     snapshot.value = null
     reactions.clear()
+    voicePlayer.clear()
     error.value = null
     write(() => sessionStorage, CURRENT_KEY, null)
     await r?.leave().catch(() => {})
@@ -265,16 +278,21 @@ export function useOnline() {
     }),
     pausedBy: computed(() => (paused.value === null ? null : (playerNames.value[paused.value] ?? null))),
     reactions: reactions.floating,
+    speaking: voicePlayer.speaking,
+    chat,
     act(action: Action) {
       const m = match.value
       if (m) send('act', { step: m.step, action })
     },
     react(reaction: ReactionId) {
       const s = snapshot.value
-      if (!s || !room || !mayReact()) return
+      if (!s || !room || !chat.value.reactions || !mayReact()) return
       send('react', { reaction })
       // The server passes it on to everyone else; you see yours straight away.
       reactions.push(s.you, reaction)
+    },
+    sendVoice(clip: VoiceClip) {
+      if (chat.value.voiceChat) send('voice', clip)
     },
     continueToNextHand() {
       send('ready', {})
@@ -312,6 +330,8 @@ export function useOnline() {
     resume: () => send('resume', {}),
     /** Tell the table about your current name and avatar. */
     sendProfile: () => send('profile', { name: name.value, avatar: avatar.value }),
+    /** Player whose voice memo is playing, if any. */
+    speaking: voicePlayer.speaking,
     playerNames,
   }
 }
