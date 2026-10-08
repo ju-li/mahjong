@@ -1217,22 +1217,61 @@ body {
     border-radius: 16px;
   }
 
+  /* The hand/round box takes the top-left corner and the top player moves right of it.
+     It spans the left player's column and a second one, so it never widens that column. */
   .board__felt {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
     grid-template-areas:
-      'top top top'
-      'left middle right'
-      'me me me';
+      'info info top top'
+      'left middle middle right'
+      'me me me me';
     min-height: 0;
     gap: 8px 6px;
     padding: 8px 6px;
   }
 
   .board__info {
-    display: none;
+    gap: 0;
+    padding: 4px 7px;
+    border-radius: 8px;
+    font-size: var(--fs-xs);
+    line-height: 1.25;
+    white-space: normal;
+    width: min-content;
   }
 
+  .board__info > span:first-child {
+    white-space: nowrap;
+  }
+
+  /* Slightly smaller backs up top, so the top player fits beside the hand/round box;
+     smaller still at the larger text sizes, where that box grows. */
+  .seat--top {
+    --tile-sm-w: clamp(10px, calc(3.1vw + 12px - 0.75rem), 18px);
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas:
+      'hand badge'
+      'melds badge';
+    justify-content: center;
+    align-items: start;
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+
+  .seat--top > .badge {
+    grid-area: badge;
+  }
+
+  .seat--top .seat__hand {
+    grid-area: hand;
+  }
+
+  /* Melds and flowers sit under the hand, beside the badge. */
   .seat--top .seat__melds {
-    max-width: 50%;
+    grid-area: melds;
+    align-self: start;
+    max-width: none;
   }
 
   .middle__grid {
