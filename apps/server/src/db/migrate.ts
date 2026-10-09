@@ -1,6 +1,7 @@
 /**
- * Pre-deploy step: `node migrate.mjs` brings the database named by `DATABASE_URL` up to date
- * before the new server starts. Exits non-zero on failure so Railway keeps the old deploy.
+ * Pre-deploy step: `node migrate.mjs` moves any game table left in `public` into the `mahjong`
+ * schema, then brings the database named by `DATABASE_URL` up to date before the new server
+ * starts. Exits non-zero on failure so Railway keeps the old deploy.
  */
 import { createDb } from './db'
 import { migrateToLatest } from './migrations'
@@ -11,7 +12,8 @@ if (!url) {
 } else {
   const db = createDb(url)
   try {
-    const applied = await migrateToLatest(db)
+    const { moved, applied } = await migrateToLatest(db)
+    if (moved.length) console.log(`moved from public to mahjong: ${moved.join(', ')}`)
     console.log(applied.length ? `applied: ${applied.join(', ')}` : 'database already up to date')
   } catch (error) {
     console.error('migration failed', error)

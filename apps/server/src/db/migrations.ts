@@ -1,10 +1,12 @@
 import { sql, type Kysely } from 'kysely'
 import { Migrator, type Migration, type MigrationProvider } from 'kysely/migration'
+import { SCHEMA } from './db'
 
 /**
  * Every schema change, in order. Listed in code rather than read from a folder so the whole
  * server, migrations included, bundles into one file. Never edit a migration that has shipped;
- * add a new one.
+ * add a new one. Name tables unqualified: `createDb` puts `mahjong` first on the search path, so
+ * they are created there.
  */
 export const migrations: Record<string, Migration> = {
   '0001_accounts_friends': {
@@ -129,10 +131,55 @@ export const migrations: Record<string, Migration> = {
 
 const provider: MigrationProvider = { getMigrations: async () => migrations }
 
-/** Bring the database up to the latest schema. Throws if any migration fails. */
+/**
+ * Every table the migrations above created in `public` before the game tables got their own
+ * schema, plus the migrator's bookkeeping. Tables added since are created in `mahjong` directly,
+ * so this list never grows.
+ */
+export const LEGACY_PUBLIC_TABLES = [
+  'kysely_migration',
+  'kysely_migration_lock',
+  'profiles',
+  'friendships',
+  'matches',
+  'match_players',
+  'match_hands',
+  'ratings',
+  'rating_history',
+] as const
+
+/**
+ * Create the `mahjong` schema and move any game table still in `public` into it, in one
+ * transaction. Indexes, constraints and data move with each table. Must run before the migrator,
+ * which would otherwise find no bookkeeping in `mahjong` and create every table again, empty.
+ * Returns the tables moved; none once done.
+ */
+export async function moveToGameSchema(db: Kysely<any>): Promise<string[]> {
+  return db.transaction().execute(async (trx) => {
+    // Two deploys at once wait for each other; a long query on the old server fails the deploy instead of stalling it.
+    await sql`select pg_advisory_xact_lock(hashtext('mahjong.move_to_game_schema'))`.execute(trx)
+    await sql`set local lock_timeout = '10s'`.execute(trx)
+    await sql`create schema if not exists ${sql.id(SCHEMA)}`.execute(trx)
+    const { rows } = await sql<{ schema: string; table: string }>`
+      select n.nspname as schema, c.relname as table
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where c.relkind in ('r', 'p') and n.nspname in ('public', ${SCHEMA}) and c.relname in (${sql.join([...LEGACY_PUBLIC_TABLES])})`.execute(trx)
+    const inSchema = (schema: string) => new Set(rows.filter((r) => r.schema === schema).map((r) => r.table))
+    const inPublic = inSchema('public')
+    const inGame = inSchema(SCHEMA)
+    const both = LEGACY_PUBLIC_TABLES.filter((t) => inPublic.has(t) && inGame.has(t))
+    if (both.length) throw new Error(`in both public and ${SCHEMA}, resolve by hand: ${both.join(', ')}`)
+    const moved = LEGACY_PUBLIC_TABLES.filter((t) => inPublic.has(t))
+    for (const table of moved) await sql`alter table ${sql.id('public', table)} set schema ${sql.id(SCHEMA)}`.execute(trx)
+    return moved
+  })
+}
+
+/** Move the game tables out of `public`, then bring the database up to the latest schema. Throws if either fails. */
 // The migrator works on any schema.
-export async function migrateToLatest(db: Kysely<any>): Promise<string[]> {
-  const { error, results } = await new Migrator({ db, provider }).migrateToLatest()
+export async function migrateToLatest(db: Kysely<any>): Promise<{ moved: string[]; applied: string[] }> {
+  const moved = await moveToGameSchema(db)
+  const { error, results } = await new Migrator({ db, provider, migrationTableSchema: SCHEMA }).migrateToLatest()
   if (error) throw error
-  return (results ?? []).filter((r) => r.status === 'Success').map((r) => r.migrationName)
+  return { moved, applied: (results ?? []).filter((r) => r.status === 'Success').map((r) => r.migrationName) }
 }
