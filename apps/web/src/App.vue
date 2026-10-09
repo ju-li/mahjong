@@ -371,7 +371,7 @@ function confirmNewMatch() {
 function onboardingDone(choice: OnboardingChoice) {
   const next = ruleConfig.value
   finishOnboarding()
-  track('onboarding_finished')
+  track('onboarding_finished', choice)
   if (!sameConfig(next, solo.config.value) && (!resumed || !inProgress() || window.confirm(t('app.confirmRules')))) startNewMatch(next)
   if (pendingFriend.value) friendsOpen.value = true
   pendingFriend.value = false

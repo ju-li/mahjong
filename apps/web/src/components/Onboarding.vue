@@ -9,6 +9,7 @@ import TileFace from './TileFace.vue'
 import HouseQuestion from './house/HouseQuestion.vue'
 import HouseSummary from './house/HouseSummary.vue'
 import PayoutPreview from './house/PayoutPreview.vue'
+import { track } from '../game/analytics'
 import { avatarSvg } from '../game/avatar'
 import { isMobile } from '../game/device'
 import { restoredFromAccount } from '../game/preferenceSync'
@@ -69,6 +70,18 @@ const question = computed(() => (step.value.startsWith('q:') ? step.value.slice(
 const questionNumber = computed(() => (question.value ? questions.value.indexOf(question.value) + 1 : 0))
 const body = ref<HTMLElement | null>(null)
 const nextButton = ref<HTMLButtonElement | null>(null)
+
+// Each step counted the first time it is reached, so going back and forward again doesn't recount.
+const reached = new Set<Step>()
+watch(
+  step,
+  (s) => {
+    if (reached.has(s)) return
+    reached.add(s)
+    track('onboarding_step', s, index.value + 1)
+  },
+  { immediate: true },
+)
 
 const goTo = (s: Step) => {
   const i = steps.value.indexOf(s)
