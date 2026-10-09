@@ -34,6 +34,8 @@ import { useI18n } from './i18n/useI18n'
 
 /** Address hash while the profile page is open, so the browser's Back button closes it. */
 const PROFILE_HASH = '#profile'
+/** The staging site carries a Beta badge on the logo so it is never mistaken for production. */
+const isStaging = location.hostname === 'staging.mommymahjong.com'
 
 const { t, toggle, locale, isZh } = useI18n()
 
@@ -371,7 +373,7 @@ function confirmNewMatch() {
 function onboardingDone(choice: OnboardingChoice) {
   const next = ruleConfig.value
   finishOnboarding()
-  track('onboarding_finished')
+  track('onboarding_finished', choice)
   if (!sameConfig(next, solo.config.value) && (!resumed || !inProgress() || window.confirm(t('app.confirmRules')))) startNewMatch(next)
   if (pendingFriend.value) friendsOpen.value = true
   pendingFriend.value = false
@@ -466,11 +468,17 @@ async function loadLatest() {
           aria-controls="topbar-controls"
           @click="navOpen = !navOpen"
         >
-          <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
+          <span class="topbar__mark">
+            <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
+            <span v-if="isStaging" class="topbar__beta">{{ t('app.beta') }}</span>
+          </span>
           {{ t('app.title') }} <small>{{ rulesLabel }}</small>
         </button>
         <template v-else>
-          <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
+          <span class="topbar__mark">
+            <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
+            <span v-if="isStaging" class="topbar__beta">{{ t('app.beta') }}</span>
+          </span>
           {{ t('app.title') }} <small>{{ rulesLabel }}</small>
         </template>
         <button

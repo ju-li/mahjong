@@ -26,6 +26,7 @@ export type AnalyticsEvent =
   | 'online_match_finished'
   | 'solo_match_started'
   | 'solo_match_finished'
+  | 'onboarding_step'
   | 'onboarding_finished'
   | 'feedback_sent'
   | 'app_installed'
@@ -43,6 +44,7 @@ const CATEGORY: Record<AnalyticsEvent, string> = {
   online_match_finished: 'match',
   solo_match_started: 'match',
   solo_match_finished: 'match',
+  onboarding_step: 'app',
   onboarding_finished: 'app',
   feedback_sent: 'app',
   app_installed: 'app',
@@ -68,9 +70,10 @@ export function startPageviews(): void {
   document.head.appendChild(script)
 }
 
-/** Fire and forget: analytics never gets in the way of playing. */
-export function track(name: AnalyticsEvent): void {
-  push('trackEvent', CATEGORY[name], name)
+/** Fire and forget: analytics never gets in the way of playing. `label` and `value` are Matomo's event name and value. */
+export function track(name: AnalyticsEvent, label?: string, value?: number): void {
+  const extra = value === undefined ? (label === undefined ? [] : [label]) : [label, value]
+  push('trackEvent', CATEGORY[name], name, ...extra)
 }
 
 /** Tag later hits with the signed-in player's account id, or stop tagging them. */
