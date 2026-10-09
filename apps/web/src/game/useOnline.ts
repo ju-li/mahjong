@@ -3,7 +3,6 @@ import { Client, type Room } from '@colyseus/sdk'
 import { houseOf, type Action } from '@mahjong/engine'
 import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Reaction, type ReactionId, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
-import { track } from './analytics'
 import { useProfile } from './profile'
 import { reactionThrottle, useReactionFeed } from './reactions'
 import { useAccount } from './useAccount'
@@ -81,7 +80,6 @@ export function useOnline() {
   function attach(r: Room): void {
     room = r
     r.onMessage('snapshot', (s: Snapshot) => {
-      countMilestones(snapshot.value, s)
       snapshot.value = s
       write(() => localStorage, TOKEN_KEY(s.code), s.token)
       write(() => sessionStorage, CURRENT_KEY, s.code)
@@ -123,14 +121,6 @@ export function useOnline() {
     })
   }
 
-  /** A match starting or ending at the table you are at; not ones already under way when you (re)joined. */
-  function countMilestones(before: Snapshot | null, now: Snapshot): void {
-    if (before?.code !== now.code) return
-    // From the lobby, or "keep going" after the last hand.
-    if ((before.phase === 'lobby' && now.phase === 'playing') || (before.match?.final && now.match && !now.match.final)) track('online_match_started')
-    if (before.match && now.match && !before.match.final && now.match.final) track('online_match_finished')
-  }
-
   /** Bumped on every leave, so a join still in flight when the player goes solo is dropped. */
   let generation = 0
 
@@ -166,14 +156,11 @@ export function useOnline() {
   /** Host a new table; resolves with its code (the room id) once seated, before its first snapshot arrives. */
   async function host(): Promise<string | null> {
     if (!(await connect(async () => client.create(ROOM_NAME, await options())))) return null
-    track('table_hosted')
     return room?.roomId ?? null
   }
-  /** Sit at a table by its code: from an invite, the join dialog, or to rejoin (only the first two are counted). */
-  async function join(code: string, count = false): Promise<boolean> {
-    const ok = await connect(async () => client.joinById(code, await options(code)))
-    if (ok && count) track('table_joined')
-    return ok
+  /** Sit at a table by its code: from an invite, the join dialog, or to rejoin. */
+  async function join(code: string): Promise<boolean> {
+    return connect(async () => client.joinById(code, await options(code)))
   }
 
   // Signing in or out while seated updates the seat.

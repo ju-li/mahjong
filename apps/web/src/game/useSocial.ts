@@ -16,7 +16,6 @@ import {
   type TableInvite,
   type TableInviteResult,
 } from '@mahjong/protocol'
-import { track } from './analytics'
 import { connectPreferences, disconnectPreferences, receivePreferences } from './preferenceSync'
 import { useAccount } from './useAccount'
 import { accountNameFor, useProfile } from './profile'
@@ -160,7 +159,6 @@ export function useSocial() {
         if (s.me.avatar !== null) profile.avatar.value = s.me.avatar
       })
       r.onMessage('inviteResult', (result: InviteResult) => {
-        if (result.ok) track('friend_added_by_link')
         inviteResult.value = result
       })
       r.onMessage('friendError', (error: FriendError) => (lastError.value = error))
@@ -237,22 +235,18 @@ export function useSocial() {
     start,
     openInvite,
     request(userId: string): void {
-      track('friend_request_sent')
       send('friendRequest', { userId })
     },
     respond(userId: string, accept: boolean): void {
-      if (accept) track('friend_request_accepted')
       send('friendRespond', { userId, accept })
     },
     remove: (userId: string) => send('friendRemove', { userId }),
     /** Ask an online friend to the table you are at. */
     inviteToTable(userId: string, code: string): void {
-      track('friend_invited_to_table')
       send('tableInvite', { userId, code })
     },
     /** Invite a friend to a table you have just sat down at, once the server has you there. */
     inviteWhenSeated(userId: string, code: string): void {
-      track('friend_invited_to_table')
       if (friends.value?.me.table === code) return send('tableInvite', { userId, code })
       clearTimeout(pendingInvites.get(userId)?.timer)
       const timer = setTimeout(() => {

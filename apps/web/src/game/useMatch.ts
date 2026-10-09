@@ -25,7 +25,6 @@ import {
   type Seat,
 } from '@mahjong/engine'
 import { handSummaries } from '@mahjong/protocol'
-import { track } from './analytics'
 import { BotClient } from './botClient'
 import { timeoutAction } from './keyboard'
 import { useProfile } from './profile'
@@ -149,7 +148,6 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   const finished = computed(() => matchOver.value || (match.value.handIndex === HANDS_PER_MATCH - 1 && handOver.value))
   watch(finished, (done) => {
     if (!done) return
-    track('solo_match_finished')
     // Kept until the player's account has it: straight away if signed in, else once they sign in.
     const complete = completedMatch(match.value)
     if (complete)
@@ -171,8 +169,6 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   function commit(action: Action): void {
     const current = match.value.current!
     handLog?.push(action)
-    // The match's first move: counts matches actually played, not ones dealt and switched away from.
-    if (match.value.handIndex === 0 && handLog?.length === 1) track('solo_match_started')
     match.value = { ...match.value, current: applyAction(current, action) }
     step++
   }

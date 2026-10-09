@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { MAX_FEEDBACK_MESSAGE, MAX_NAME_LENGTH } from '@mahjong/protocol'
-import { track } from '../game/analytics'
 import { deviceDiagnostics, sendFeedback, type FeedbackError } from '../game/feedback'
 import { useProfile } from '../game/profile'
 import { useI18n } from '../i18n/useI18n'
@@ -42,7 +41,6 @@ async function submit() {
   })
   sending.value = false
   sent.value = error.value === null
-  if (sent.value) track('feedback_sent')
 }
 
 const messageInput = ref<HTMLTextAreaElement | null>(null)
