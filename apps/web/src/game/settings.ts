@@ -1,6 +1,7 @@
 import { ref, watch } from 'vue'
 import { isRuleSet, type RuleSet } from '@mahjong/engine'
 import type { Difficulty } from '@mahjong/bots'
+import { DEFAULT_TERMS, normalizeTerms, type Terms } from '../i18n/terms'
 
 const STORAGE_KEY = 'mahjong.settings.v1'
 /** Older builds kept difficulty and rules only inside the saved match. */
@@ -21,8 +22,8 @@ const DIFFICULTIES: readonly Difficulty[] = ['beginner', 'easy', 'medium', 'hard
 export const TEXT_SIZE_OPTIONS = ['normal', 'large', 'larger'] as const
 export type TextSize = (typeof TEXT_SIZE_OPTIONS)[number]
 
-type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean; voiceChat: boolean; difficulty: Difficulty; rules: RuleSet; textSize: TextSize }
-const DEFAULTS: Settings = { claimSeconds: 40, sound: true, voice: true, voiceChat: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' }
+type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean; voiceChat: boolean; difficulty: Difficulty; rules: RuleSet; textSize: TextSize; terms: Terms }
+const DEFAULTS: Settings = { claimSeconds: 40, sound: true, voice: true, voiceChat: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal', terms: DEFAULT_TERMS }
 
 function read(key: string): Record<string, unknown> | null {
   try {
@@ -47,6 +48,7 @@ export function load(): Settings {
     difficulty: DIFFICULTIES.includes(difficulty as Difficulty) ? (difficulty as Difficulty) : DEFAULTS.difficulty,
     rules: isRuleSet(rules) ? rules : DEFAULTS.rules,
     textSize: TEXT_SIZE_OPTIONS.includes(raw?.textSize as TextSize) ? (raw!.textSize as TextSize) : DEFAULTS.textSize,
+    terms: normalizeTerms(raw?.terms),
   }
 }
 
@@ -64,9 +66,11 @@ const difficulty = ref<Difficulty>(initial.difficulty)
 /** Rule set for new matches; a match in progress keeps the rules it started with. */
 const rules = ref<RuleSet>(initial.rules)
 const textSize = ref<TextSize>(initial.textSize)
+/** Chinese words the player prefers (和 or 胡, 点和 or 点炮…); display only. */
+const terms = ref<Terms>(initial.terms)
 
 watch(
-  [claimSeconds, sound, voice, voiceChat, difficulty, rules, textSize, needsOnboarding],
+  [claimSeconds, sound, voice, voiceChat, difficulty, rules, textSize, terms, needsOnboarding],
   () => {
     if (needsOnboarding.value) return
     const settings: Settings = {
@@ -77,6 +81,7 @@ watch(
       difficulty: difficulty.value,
       rules: rules.value,
       textSize: textSize.value,
+      terms: terms.value,
     }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
@@ -99,5 +104,5 @@ export function useSettings() {
   const finishOnboarding = () => {
     needsOnboarding.value = false
   }
-  return { claimSeconds, sound, voice, voiceChat, difficulty, rules, textSize, needsOnboarding, finishOnboarding }
+  return { claimSeconds, sound, voice, voiceChat, difficulty, rules, textSize, terms, needsOnboarding, finishOnboarding }
 }

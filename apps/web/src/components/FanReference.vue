@@ -5,14 +5,14 @@ import { useI18n } from '../i18n/useI18n'
 
 const props = defineProps<{ focus?: string | null; config: RuleConfig }>()
 
-const { t, fanName, fanDescription, isZh } = useI18n()
+const { t, term, fanName, fanDescription, isZh } = useI18n()
 const query = ref('')
 
 const groups = computed(() => {
   const q = query.value.trim().toLowerCase()
   const match = (f: RuleFanDef) =>
     !q ||
-    [f.name, f.chinese, f.description.en, f.description.zh].some((text) => text.toLowerCase().includes(q)) ||
+    [f.name, term(f.chinese), f.description.en, term(f.description.zh)].some((text) => text.toLowerCase().includes(q)) ||
     String(f.points) === q
   const byPoints = new Map<number, RuleFanDef[]>()
   for (const f of fansFor(props.config).filter(match)) byPoints.set(f.points, [...(byPoints.get(f.points) ?? []), f])
@@ -21,7 +21,7 @@ const groups = computed(() => {
 
 const otherName = (id: string) => {
   const f = fanDef(id)!
-  return isZh.value ? f.name : f.chinese
+  return isZh.value ? f.name : term(f.chinese)
 }
 
 onMounted(async () => {

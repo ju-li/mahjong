@@ -9,8 +9,11 @@ const WINDS = { E: '东风', S: '南风', W: '西风', N: '北风' } as const
 const DRAGONS = { red: '红中', green: '发财', white: '白板' } as const
 const FLOWERS = ['梅', '兰', '菊', '竹', '春', '夏', '秋', '冬']
 
+/** Suit words the player prefers (饼 or 筒, 条 or 索). */
+export type SuitWords = { dots: string; bamboo: string }
+
 /** Spoken Mandarin name of a tile, e.g. 五万, 北风, 红中. */
-export function tileCall(kind: TileKind): string {
+export function tileCall(kind: TileKind, words: SuitWords = SUITS): string {
   switch (kind.suit) {
     case 'winds':
       return WINDS[kind.wind]
@@ -19,7 +22,7 @@ export function tileCall(kind: TileKind): string {
     case 'flowers':
       return FLOWERS[kind.flower - 1]!
     default:
-      return NUMERALS[kind.rank - 1]! + SUITS[kind.suit]
+      return NUMERALS[kind.rank - 1]! + (kind.suit === 'characters' ? SUITS.characters : words[kind.suit])
   }
 }
 
@@ -32,10 +35,10 @@ function newMeld(prev: readonly { type: MeldType }[], next: readonly { type: Mel
 
 /**
  * What a player would call out for a state transition: 吃 / 碰 / 杠 on a claim or kong,
- * 胡 / 自摸 on a win, and the tile's name on a discard. Takes full states or one seat's views.
+ * 胡 / 自摸 on a win (always 胡: speech reads a bare 和 as hé), and the tile's name on a discard. Takes full states or one seat's views.
  * Pure, so it can be tested without audio.
  */
-export function calloutFor(prev: GameState | PlayerView | null, next: GameState | PlayerView | null): Callout | null {
+export function calloutFor(prev: GameState | PlayerView | null, next: GameState | PlayerView | null, words: SuitWords = SUITS): Callout | null {
   if (!prev || !next || prev === next) return null
   const phase = next.phase
   if (phase.kind === 'ended' && prev.phase.kind !== 'ended' && phase.result.type === 'win') {
@@ -50,7 +53,7 @@ export function calloutFor(prev: GameState | PlayerView | null, next: GameState 
   // A claim takes the tile back out of the pond, so a growing pond is always a fresh discard.
   for (const seat of [0, 1, 2, 3] as Seat[]) {
     const pond = next.discards[seat]!
-    if (pond.length > prev.discards[seat]!.length) return { seat, text: tileCall(pond[pond.length - 1]!.kind) }
+    if (pond.length > prev.discards[seat]!.length) return { seat, text: tileCall(pond[pond.length - 1]!.kind, words) }
   }
   return null
 }
