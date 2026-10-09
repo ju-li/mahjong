@@ -4,6 +4,7 @@
  */
 export const en = {
   'app.title': 'Mommy Mahjong',
+  'app.beta': 'Beta',
   'app.rules': 'Rules',
   'app.confirmRules': 'Switch rules? This abandons the current match and starts a new one.',
   'rules.mcr': 'Chinese Official (MCR)',
@@ -578,6 +579,7 @@ export type MessageKey = keyof typeof en
 
 export const zhHans: Record<MessageKey, string> = {
   'app.title': '麻将',
+  'app.beta': '测试版',
   'app.rules': '规则',
   'app.confirmRules': '切换规则？将放弃当前比赛并开始新比赛。',
   'rules.mcr': '国标麻将',

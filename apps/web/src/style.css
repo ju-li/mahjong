@@ -184,6 +184,28 @@ body {
   vertical-align: -0.35em;
 }
 
+.topbar__mark {
+  position: relative;
+  display: inline-block;
+}
+
+/* Staging only: a small pill tucked under the logo's bottom-right corner. */
+.topbar__beta {
+  position: absolute;
+  right: -0.3em;
+  bottom: -0.45em;
+  padding: 0.1em 0.35em;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 0.4em;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
 
 /* ---- Board: wooden rim around a felt table ---- */
 
