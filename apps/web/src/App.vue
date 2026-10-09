@@ -17,6 +17,7 @@ import ProfilePage from './components/ProfilePage.vue'
 import RulesDialog, { type RulesTab } from './components/RulesDialog.vue'
 import ToastStack from './components/ToastStack.vue'
 import ChatSwitches from './components/ChatSwitches.vue'
+import { track } from './game/analytics'
 import { loadLatestVersion } from './game/appUpdate'
 import { friendsCount, parseFriendCode, seatChanges } from './game/friends'
 import { signed } from './game/stats'
@@ -150,7 +151,7 @@ const houseFromNextHand = computed(() => {
 const pendingRoom = ref<string | null>(null)
 const pendingFriend = ref(false)
 async function joinTable(code: string) {
-  if (await online.join(code)) onlineOpen.value = false
+  if (await online.join(code, true)) onlineOpen.value = false
 }
 
 /** Sign-in players can invite friends to the table they are at. */
@@ -163,7 +164,7 @@ async function joinFriendTable(code: string) {
   if (current !== null && !window.confirm(t('tableInvite.confirmSwitch', { code }))) return
   friendsOpen.value = false
   if (current !== null) await online.leave()
-  if (!(await online.join(code))) {
+  if (!(await online.join(code, true))) {
     const error = online.error.value
     showNotice(error ? `${t('tableInvite.joinFailed', { code })} ${t(`online.error.${error}`)}` : t('tableInvite.joinFailed', { code }))
   }
@@ -370,6 +371,7 @@ function confirmNewMatch() {
 function onboardingDone(choice: OnboardingChoice) {
   const next = ruleConfig.value
   finishOnboarding()
+  track('onboarding_finished')
   if (!sameConfig(next, solo.config.value) && (!resumed || !inProgress() || window.confirm(t('app.confirmRules')))) startNewMatch(next)
   if (pendingFriend.value) friendsOpen.value = true
   pendingFriend.value = false
