@@ -1337,16 +1337,18 @@ body {
   margin-bottom: 0;
 }
 
-/* ---- Ponds and your melds open big in the middle on a tap ---- */
+/* ---- Ponds and everyone's melds open big in the middle on a tap ---- */
 
 .pond,
-.me__melds {
+.me__melds,
+.seat__melds:not(:empty) {
   cursor: zoom-in;
   border-radius: 6px;
 }
 
 .pond:focus-visible,
-.me__melds:focus-visible {
+.me__melds:focus-visible,
+.seat__melds:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
