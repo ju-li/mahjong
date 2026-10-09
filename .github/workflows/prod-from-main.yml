@@ -1,0 +1,32 @@
+# prod is what Railway deploys; it only takes pull requests from main, so main never falls behind it.
+# Make `source-is-main` a required status check in the prod ruleset.
+#
+# pull_request_target runs this file as it is on prod, so a pull request can't change the check to
+# pass. It is safe here because nothing from the pull request is checked out or run.
+name: prod-from-main
+
+on:
+  pull_request_target:
+    branches: [prod]
+    # edited: a pull request retargeted to prod from another base.
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+jobs:
+  source-is-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only main may merge into prod
+        env:
+          # Branch names are chosen by whoever opens the pull request: pass them as data, never as script.
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REF" = main ] && [ "$HEAD_REPO" = "$REPO" ]; then
+            echo "From $REPO main: ok."
+          else
+            echo "::error::Pull requests into prod must come from main, not $HEAD_REPO:$HEAD_REF. Merge into main first, then open a main -> prod pull request."
+            exit 1
+          fi
