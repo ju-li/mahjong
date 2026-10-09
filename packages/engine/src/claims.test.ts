@@ -79,7 +79,8 @@ describe('claims', () => {
     })
     const promote = legalActions(p, 0).find((a) => a.type === 'kong' && a.tileIds?.length === 1)!
     p = applyAction(p, promote)
-    expect(p.melds[0]![0]!.type).toBe('kong')
+    // A promoted kong (加杠) stays exposed, so house rules score it as a melded kong.
+    expect(p.melds[0]![0]).toMatchObject({ type: 'kong', exposed: true })
     expect(p.melds[0]![0]!.tiles).toHaveLength(4)
     expect(effectiveSize(p, 0)).toBe(14)
     expectConservation(p)
