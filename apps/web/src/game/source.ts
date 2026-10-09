@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import type { Action, Player, PlayerView, RuleSet } from '@mahjong/engine'
+import type { Action, HouseRules, Player, PlayerView, RuleSet } from '@mahjong/engine'
 import type { ReactionId, TableSettings, VoiceClip } from '@mahjong/protocol'
 import type { FloatingReaction } from './reactions'
 
@@ -25,6 +25,8 @@ export type MatchSource = {
   /** 0-based hand number within the match. */
   handIndex: Readonly<Ref<number>>
   rules: Readonly<Ref<RuleSet>>
+  /** House rules the table plays now (the hand in play, or the next one between matches). */
+  house: Readonly<Ref<HouseRules>>
   /** Seconds left to claim, or null when no timer is running. */
   claimRemaining: Readonly<Ref<number | null>>
   matchOver: Readonly<Ref<boolean>>

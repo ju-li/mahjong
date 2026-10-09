@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { isRuleSet } from '@mahjong/engine'
+import { isRuleSet, type RuleConfig } from '@mahjong/engine'
 import type { Difficulty } from '@mahjong/bots'
 import FeedbackDialog from './components/FeedbackDialog.vue'
 import FriendsDialog from './components/FriendsDialog.vue'
@@ -53,6 +53,7 @@ const { difficulty, rules, resumed, inProgress, startNewMatch, keepGoing } = sol
 const source = computed(() => (atTable.value ? online.source : solo))
 const view = computed(() => source.value.view.value)
 const shownRules = computed(() => source.value.rules.value)
+const shownConfig = computed<RuleConfig>(() => ({ rules: shownRules.value, house: source.value.house.value }))
 
 function openProfile() {
   if (profileOpen.value) return
@@ -554,7 +555,7 @@ async function loadLatest() {
       {{ t('talk.speaking', { name: speakingName }) }}
     </p>
 
-    <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :rules="shownRules" @close="rulesDialog = null" />
+    <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :config="shownConfig" @close="rulesDialog = null" />
 
     <Onboarding v-if="needsOnboarding" @done="onboardingDone" />
 

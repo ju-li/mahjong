@@ -485,9 +485,10 @@ export function scoreHand(ctx: WinContext): ScoreResult | null {
   return { fans, total: bestPoints + ctx.flowers, flowerPoints: ctx.flowers }
 }
 
-/** The 8-point minimum: flowers never count towards it. */
+/** The official 8-point minimum, also the base of every payment. Flowers never count towards it. */
 export const MIN_FAN = 8
 
-export function meetsMinimum(score: HandScore): boolean {
-  return score.total - score.flowerPoints >= MIN_FAN
+/** `minFan` is a casual house rule; the official minimum is 8. */
+export function meetsMinimum(score: HandScore, minFan: number = MIN_FAN): boolean {
+  return score.total - score.flowerPoints >= minFan
 }

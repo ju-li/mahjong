@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { Client, type Room } from '@colyseus/sdk'
-import type { Action } from '@mahjong/engine'
+import { houseOf, type Action } from '@mahjong/engine'
 import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Reaction, type ReactionId, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
 import { track } from './analytics'
@@ -266,6 +266,7 @@ export function useOnline() {
     avatarChoices: computed(() => snapshot.value?.players.map((slot) => slot.avatar) ?? []),
     handIndex: computed(() => match.value?.handIndex ?? 0),
     rules: computed(() => snapshot.value?.settings.rules ?? 'mcr'),
+    house: computed(() => view.value?.house ?? houseOf({ rules: snapshot.value?.settings.rules ?? 'mcr' })),
     claimRemaining,
     matchOver: computed(() => match.value?.over ?? false),
     readiness: computed((): Readiness | null => {

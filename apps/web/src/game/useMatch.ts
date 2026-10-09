@@ -14,7 +14,10 @@ import {
   settledScores,
   viewFor,
   isRuleSet,
+  houseOf,
+  normalizeHouseRules,
   type Action,
+  type HouseRules,
   type Match,
   type RuleSet,
   type Player,
@@ -59,6 +62,9 @@ function load(): Saved | null {
     // Matches saved before rule sets existed are MCR.
     if (!isRuleSet(m.rules)) m.rules = 'mcr'
     if (m.current && !isRuleSet(m.current.rules)) m.current.rules = m.rules
+    // Matches saved before house rules existed play the standard table.
+    m.house = normalizeHouseRules(m.rules, m.house)
+    if (m.current) m.current.house = normalizeHouseRules(m.current.rules, m.current.house)
     return saved
   } catch {
     return null
@@ -235,6 +241,7 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   }
 
   const rules = computed<RuleSet>(() => match.value.rules)
+  const house = computed<HouseRules>(() => match.value.current?.house ?? houseOf(match.value))
 
   /** Start a fresh match; keeps the current rule set unless another is given. */
   function startNewMatch(next: RuleSet = match.value.rules): void {
@@ -289,6 +296,7 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     avatarChoices,
     handIndex,
     rules,
+    house,
     claimRemaining,
     matchOver,
     act,

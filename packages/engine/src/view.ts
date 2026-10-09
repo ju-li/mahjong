@@ -2,6 +2,7 @@ import { newHand, type NewHandOptions } from './deal'
 import { applyAction } from './rules'
 import type { Action, GameState, HandResult, MeldType, Seat } from './state'
 import { seatWind } from './state'
+import type { HouseRules } from './house'
 import type { RuleSet } from './ruleset'
 import type { Tile, Wind } from './tiles'
 
@@ -26,6 +27,7 @@ export type ViewPhase =
 /** Everything `seat` may know. Contains no other seat's concealed tiles (until the hand ends), no wall order and no seed. */
 export type PlayerView = {
   rules: RuleSet
+  house: HouseRules
   seat: Seat
   dealer: Seat
   prevailingWind: Wind
@@ -72,6 +74,7 @@ export function viewFor(state: GameState, seat: Seat): PlayerView {
 
   return copy({
     rules: state.rules,
+    house: state.house,
     seat,
     dealer: state.dealer,
     prevailingWind: state.prevailingWind,

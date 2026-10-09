@@ -1,3 +1,4 @@
+import type { HouseRules } from './house'
 import type { RuleSet } from './ruleset'
 import type { Tile, Wind } from './tiles'
 
@@ -66,6 +67,8 @@ export type Phase =
 export type GameState = {
   /** Which rules score and settle this hand. */
   rules: RuleSet
+  /** House rules for `rules`; fixed for the whole hand. */
+  house: HouseRules
   seed: number
   dealer: Seat
   prevailingWind: Wind
