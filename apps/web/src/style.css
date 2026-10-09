@@ -1351,9 +1351,13 @@ body {
   outline-offset: 3px;
 }
 
-/* In the middle of the table just now; shown again once it has flown back. */
+/* In the middle of the table just now; fades in once it has flown back. */
+.pond .tile {
+  transition: opacity 0.25s ease;
+}
+
 .tile.is-spotlit {
-  visibility: hidden;
+  opacity: 0;
 }
 
 /* ---- Spotlight: tiles big in the middle of the table, over everything ---- */
@@ -1378,13 +1382,30 @@ body {
 }
 
 .spot__queue {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
   align-items: flex-start;
   gap: 12px;
   width: max-content;
-  max-width: calc(100vw - 24px);
+}
+
+/* The row slides, rather than jumps, when it has to shift to stay on screen. */
+.spotlight__content--first {
+  transition: transform 0.3s cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+/* A phone has no room beside the first card: later ones stack below it. */
+@media (max-width: 640px) {
+  .spot__queue {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+/* Cards glide over into the room a card flying back has left. */
+.spot-move {
+  transition: transform 0.3s cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
 .spot__item,
@@ -1411,6 +1432,24 @@ body {
   --tw: min(max(calc(var(--tile-sm-w) * 2), var(--hand-w)), calc((100vw - 96px) / 6));
 }
 
+/* Every card in the queue is the same width (long names are cut short), so the row never has
+   to shift when the card in front changes. */
+.spot__item {
+  position: relative;
+  width: max(calc(min(max(calc(var(--tile-sm-w) * 2), var(--hand-w)), calc((100vw - 96px) / 6)) + 32px), 8.5em);
+}
+
+.spot__item .spot__who {
+  max-width: 100%;
+}
+
+.spot__item .spot__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .spot__who {
   display: inline-flex;
   align-items: center;
@@ -1435,8 +1474,14 @@ body {
   height: 100%;
 }
 
+/* Claim buttons hang below the card without widening it. */
 .spot__item .actions {
-  margin-top: 4px;
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  transform: translateX(-50%);
   cursor: default;
 }
 

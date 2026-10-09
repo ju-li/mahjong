@@ -52,6 +52,8 @@ export function useTileMotion(root: Ref<HTMLElement | null>): void {
   onUpdated(() => {
     if (reduced()) return
     for (const el of tiles()) {
+      // Hidden while shown big in the middle of the table; it fades in where it is afterwards.
+      if (el.classList.contains('is-spotlit')) continue
       const to = el.getBoundingClientRect()
       const prev = before.get(el.dataset.tileId!)
       if (prev) fly(el, prev, to)
