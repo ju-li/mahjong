@@ -1,10 +1,14 @@
-import { ref, watch } from 'vue'
-import { isRuleSet, type RuleSet } from '@mahjong/engine'
+import { computed, ref, watch } from 'vue'
+import { isRuleSet, normalizeHouseRules, type HouseRulesFor, type RuleConfig, type RuleSet } from '@mahjong/engine'
 import type { Difficulty } from '@mahjong/bots'
+import { DEFAULT_TERMS, normalizeTerms, type Terms } from '../i18n/terms'
 
-const STORAGE_KEY = 'mahjong.settings.v1'
-/** Older builds kept difficulty and rules only inside the saved match. */
-const LEGACY_MATCH_KEY = 'mahjong.match.v2'
+/**
+ * v2 came with house rules and terminology. Settings from v1 are not carried over on purpose:
+ * every player goes through the new onboarding once (their name, face and language are kept).
+ */
+const STORAGE_KEY = 'mahjong.settings.v2'
+const OLD_KEYS = ['mahjong.settings.v1']
 
 export const CLAIM_TIMER_OPTIONS = [0, 20, 40, 60, 120] as const
 export type ClaimSeconds = (typeof CLAIM_TIMER_OPTIONS)[number]
@@ -20,9 +24,50 @@ const DIFFICULTIES: readonly Difficulty[] = ['beginner', 'easy', 'medium', 'hard
 /** Scales every text size in the app (see the type scale in style.css). */
 export const TEXT_SIZE_OPTIONS = ['normal', 'large', 'larger'] as const
 export type TextSize = (typeof TEXT_SIZE_OPTIONS)[number]
+/** Your hand's tiles, as a percentage of their original size (every other tile keeps its size). */
+export const TILE_SIZE_OPTIONS = [125, 150, 200] as const
+export type TileSize = (typeof TILE_SIZE_OPTIONS)[number]
 
-type Settings = { claimSeconds: ClaimSeconds; sound: boolean; voice: boolean; voiceChat: boolean; difficulty: Difficulty; rules: RuleSet; textSize: TextSize }
-const DEFAULTS: Settings = { claimSeconds: 40, sound: true, voice: true, voiceChat: true, difficulty: 'medium', rules: 'mcr', textSize: 'normal' }
+/** House rules the player plays by default, kept per rule set so switching rule sets loses nothing. */
+export type HouseByRules = HouseRulesFor
+
+export type Settings = {
+  claimSeconds: ClaimSeconds
+  sound: boolean
+  voice: boolean
+  voiceChat: boolean
+  difficulty: Difficulty
+  rules: RuleSet
+  house: HouseByRules
+  textSize: TextSize
+  tileSize: TileSize
+  oneTapDiscard: boolean
+  terms: Terms
+}
+
+export function standardHouseByRules(): HouseByRules {
+  return { mcr: normalizeHouseRules('mcr', undefined), hk: normalizeHouseRules('hk', undefined) }
+}
+
+/** New players start gently: easy bots, no claim timer, sound on, a hand half again as big, discards confirmed. */
+export const DEFAULTS: Settings = {
+  claimSeconds: 0,
+  sound: true,
+  voice: true,
+  voiceChat: true,
+  difficulty: 'easy',
+  rules: 'mcr',
+  house: standardHouseByRules(),
+  textSize: 'normal',
+  tileSize: 150,
+  oneTapDiscard: false,
+  terms: DEFAULT_TERMS,
+}
+
+function normalizeHouseByRules(input: unknown): HouseByRules {
+  const raw = input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : {}
+  return { mcr: normalizeHouseRules('mcr', raw.mcr), hk: normalizeHouseRules('hk', raw.hk) }
+}
 
 function read(key: string): Record<string, unknown> | null {
   try {
@@ -33,12 +78,10 @@ function read(key: string): Record<string, unknown> | null {
   }
 }
 
-export function load(): Settings {
-  const raw = read(STORAGE_KEY)
-  const legacy = read(LEGACY_MATCH_KEY)
-  const legacyRules = (legacy?.match as { rules?: unknown } | undefined)?.rules
-  const difficulty = raw?.difficulty ?? legacy?.difficulty
-  const rules = raw?.rules ?? legacyRules
+/** Valid settings from anything stored or synced; each bad or missing field falls back to its default. */
+export function normalizeSettings(raw: Record<string, unknown> | null): Settings {
+  const difficulty = raw?.difficulty
+  const rules = raw?.rules
   return {
     claimSeconds: CLAIM_TIMER_OPTIONS.includes(raw?.claimSeconds as ClaimSeconds) ? (raw!.claimSeconds as ClaimSeconds) : DEFAULTS.claimSeconds,
     sound: typeof raw?.sound === 'boolean' ? raw.sound : DEFAULTS.sound,
@@ -46,8 +89,16 @@ export function load(): Settings {
     voiceChat: typeof raw?.voiceChat === 'boolean' ? raw.voiceChat : DEFAULTS.voiceChat,
     difficulty: DIFFICULTIES.includes(difficulty as Difficulty) ? (difficulty as Difficulty) : DEFAULTS.difficulty,
     rules: isRuleSet(rules) ? rules : DEFAULTS.rules,
+    house: normalizeHouseByRules(raw?.house),
     textSize: TEXT_SIZE_OPTIONS.includes(raw?.textSize as TextSize) ? (raw!.textSize as TextSize) : DEFAULTS.textSize,
+    tileSize: TILE_SIZE_OPTIONS.includes(raw?.tileSize as TileSize) ? (raw!.tileSize as TileSize) : DEFAULTS.tileSize,
+    oneTapDiscard: typeof raw?.oneTapDiscard === 'boolean' ? raw.oneTapDiscard : DEFAULTS.oneTapDiscard,
+    terms: normalizeTerms(raw?.terms),
   }
+}
+
+export function load(): Settings {
+  return normalizeSettings(read(STORAGE_KEY))
 }
 
 const initial = load()
@@ -63,28 +114,46 @@ const voiceChat = ref(initial.voiceChat)
 const difficulty = ref<Difficulty>(initial.difficulty)
 /** Rule set for new matches; a match in progress keeps the rules it started with. */
 const rules = ref<RuleSet>(initial.rules)
+/** House rules for new matches and the tables this player hosts, per rule set. */
+const house = ref<HouseByRules>(initial.house)
+/** The preferred rule set with its house rules. */
+const ruleConfig = computed<RuleConfig>(() => ({ rules: rules.value, house: house.value[rules.value] }))
 const textSize = ref<TextSize>(initial.textSize)
+const tileSize = ref<TileSize>(initial.tileSize)
+/** A tap on a tile discards it at once; otherwise the first tap lifts it and a second confirms. */
+const oneTapDiscard = ref(initial.oneTapDiscard)
+/** Chinese words the player prefers (和 or 胡, 点和 or 点炮…); display only. */
+const terms = ref<Terms>(initial.terms)
+
+/** Every setting as one plain object. */
+function current(): Settings {
+  return {
+    claimSeconds: claimSeconds.value,
+    sound: sound.value,
+    voice: voice.value,
+    voiceChat: voiceChat.value,
+    difficulty: difficulty.value,
+    rules: rules.value,
+    house: house.value,
+    textSize: textSize.value,
+    tileSize: tileSize.value,
+    oneTapDiscard: oneTapDiscard.value,
+    terms: terms.value,
+  }
+}
 
 watch(
-  [claimSeconds, sound, voice, voiceChat, difficulty, rules, textSize, needsOnboarding],
+  [claimSeconds, sound, voice, voiceChat, difficulty, rules, house, textSize, tileSize, oneTapDiscard, terms, needsOnboarding],
   () => {
     if (needsOnboarding.value) return
-    const settings: Settings = {
-      claimSeconds: claimSeconds.value,
-      sound: sound.value,
-      voice: voice.value,
-      voiceChat: voiceChat.value,
-      difficulty: difficulty.value,
-      rules: rules.value,
-      textSize: textSize.value,
-    }
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(current()))
+      for (const key of OLD_KEYS) localStorage.removeItem(key)
     } catch {
       // Not persisted; settings still apply for this visit.
     }
   },
-  { immediate: true },
+  { immediate: true, deep: true },
 )
 
 watch(
@@ -95,9 +164,31 @@ watch(
   { immediate: true },
 )
 
+watch(
+  tileSize,
+  (size) => {
+    if (typeof document !== 'undefined') document.documentElement.dataset.tileSize = String(size)
+  },
+  { immediate: true },
+)
+
 export function useSettings() {
   const finishOnboarding = () => {
     needsOnboarding.value = false
   }
-  return { claimSeconds, sound, voice, voiceChat, difficulty, rules, textSize, needsOnboarding, finishOnboarding }
+  /** Apply a whole settings object at once (synced from the account). */
+  const apply = (next: Settings) => {
+    claimSeconds.value = next.claimSeconds
+    sound.value = next.sound
+    voice.value = next.voice
+    voiceChat.value = next.voiceChat
+    difficulty.value = next.difficulty
+    rules.value = next.rules
+    house.value = next.house
+    textSize.value = next.textSize
+    tileSize.value = next.tileSize
+    oneTapDiscard.value = next.oneTapDiscard
+    terms.value = next.terms
+  }
+  return { claimSeconds, sound, voice, voiceChat, difficulty, rules, house, ruleConfig, textSize, tileSize, oneTapDiscard, terms, needsOnboarding, finishOnboarding, apply, current }
 }

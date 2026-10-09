@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { DIFFICULTIES, type Difficulty } from '@mahjong/bots'
-import { isRuleSet } from '@mahjong/engine'
+import { houseDiff, isRuleSet } from '@mahjong/engine'
 import { ONLINE_CLAIM_SECONDS, type Snapshot, type TableSettings } from '@mahjong/protocol'
 import ChatSwitches from './ChatSwitches.vue'
+import HouseSummary from './house/HouseSummary.vue'
 import MenuIcon from './MenuIcon.vue'
 import { avatarSvg } from '../game/avatar'
 import { shareInvite } from '../game/invite'
@@ -14,6 +15,7 @@ import { useI18n } from '../i18n/useI18n'
 const props = defineProps<{ snapshot: Snapshot; isHost: boolean; canInviteFriends: boolean }>()
 const emit = defineEmits<{
   configure: [settings: Partial<TableSettings>]
+  houseRules: []
   start: []
   editProfile: []
   openPlayer: [player: number]
@@ -25,6 +27,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const hostName = computed(() => props.snapshot.players[props.snapshot.host]?.name ?? '')
+const config = computed(() => ({ rules: props.snapshot.settings.rules, house: props.snapshot.settings.house }))
+const houseChanges = computed(() => houseDiff(config.value).length)
 const copied = ref(false)
 
 async function share() {
@@ -85,6 +89,13 @@ function onRules(e: Event) {
           </option>
         </select>
       </label>
+      <div class="select">
+        <span>{{ t('house.title') }}</span>
+        <button type="button" class="action" @click="emit('houseRules')">
+          {{ houseChanges === 0 ? t('house.standard') : t('house.changes', { n: houseChanges }) }} · {{ isHost ? t('house.change') : t('house.review') }}
+        </button>
+      </div>
+      <HouseSummary v-if="houseChanges > 0" :config="config" only-changes />
       <label class="select">
         <span>{{ t('app.bots') }}</span>
         <select

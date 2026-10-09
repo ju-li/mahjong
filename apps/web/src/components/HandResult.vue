@@ -199,7 +199,7 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
     <ScoreExplain
       v-if="explaining && result.type === 'win'"
       :result="result"
-      :rules="view.rules"
+      :config="view"
       :names="names"
       :seat="view.seat"
       @close="explaining = false"

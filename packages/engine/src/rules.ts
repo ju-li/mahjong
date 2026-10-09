@@ -71,8 +71,8 @@ export function winContext(state: GameState, seat: Seat, tile: Tile, source: Win
 
 /** Score if `seat` may win on `tile` (complete shape reaching the rule set's minimum), else null. */
 function evaluateWin(state: GameState, seat: Seat, tile: Tile, source: WinSource): HandScore | null {
-  const score = scoreFor(state.rules, winContext(state, seat, tile, source))
-  return score && meetsMinimumFor(state.rules, score) ? score : null
+  const score = scoreFor(state, winContext(state, seat, tile, source))
+  return score && meetsMinimumFor(state, score) ? score : null
 }
 
 // ---------------------------------------------------------------------------
@@ -255,7 +255,7 @@ function winOnTile(s: GameState, seat: Seat, tile: Tile, from: Seat): void {
   else takeDiscard(s, from, tile)
   s.hands[seat]!.push(tile)
   s.turn = seat
-  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from, tileId: tile.id, score, deltas: settleFor(s.rules, { winner: seat, from }, score) } }
+  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from, tileId: tile.id, score, deltas: settleFor(s, { winner: seat, from }, score) } }
 }
 
 function applyClaim(s: GameState, claim: Action, claimWindow: ClaimWindow): void {
@@ -313,7 +313,7 @@ function selfDrawWin(s: GameState, seat: Seat): void {
   const tile = s.hands[seat]!.find((t) => t.id === phase.drawnTileId)!
   const score = evaluateWin(s, seat, tile, 'selfDraw')
   if (!score) throw new Error('win accepted without a valid score')
-  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from: null, tileId: tile.id, score, deltas: settleFor(s.rules, { winner: seat, from: null }, score) } }
+  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from: null, tileId: tile.id, score, deltas: settleFor(s, { winner: seat, from: null }, score) } }
 }
 
 function doDraw(s: GameState, seat: Seat): void {

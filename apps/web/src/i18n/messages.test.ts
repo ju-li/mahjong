@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { FANS } from '@mahjong/engine'
 import { en, MESSAGES, zhHans } from './messages'
 import { translate } from './useI18n'
+import { houseMessageKeys } from './houseText'
 
 /** Source files that render text; any quoted English sentence in their templates would bypass i18n. */
 const components = import.meta.glob('../**/*.vue', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
@@ -40,5 +41,14 @@ describe('i18n (V29)', () => {
       for (const m of template.matchAll(/>([^<{}]*[A-Za-z]{3,}[^<{}]*)</g)) offenders.push(`${path}: ${m[1]!.trim()}`)
     }
     expect(offenders).toEqual([])
+  })
+})
+
+describe('house rules text', () => {
+  it('every house-rule question and option has text in both languages', () => {
+    for (const key of houseMessageKeys()) {
+      expect(en[key], key).toBeTruthy()
+      expect(zhHans[key], key).toBeTruthy()
+    }
   })
 })

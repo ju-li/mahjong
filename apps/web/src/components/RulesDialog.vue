@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { RuleSet } from '@mahjong/engine'
+import type { RuleConfig } from '@mahjong/engine'
 import { useI18n } from '../i18n/useI18n'
 import DifficultyReference from './DifficultyReference.vue'
 import FanReference from './FanReference.vue'
@@ -8,7 +8,7 @@ import RulesReference from './RulesReference.vue'
 
 export type RulesTab = 'rules' | 'fans' | 'difficulty'
 
-const props = defineProps<{ tab: RulesTab; focus?: string | null; rules: RuleSet }>()
+const props = defineProps<{ tab: RulesTab; focus?: string | null; config: RuleConfig }>()
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useI18n()
@@ -22,9 +22,9 @@ const TABS: { id: RulesTab; label: 'app.howToPlay' | 'app.fanReference' | 'app.d
 ]
 
 const title = computed(() => {
-  if (active.value === 'rules') return t('guide.title', { rules: t(`rules.${props.rules}`) })
+  if (active.value === 'rules') return t('guide.title', { rules: t(`rules.${props.config.rules}`) })
   if (active.value === 'difficulty') return t('app.botDifficulty')
-  return props.rules === 'hk' ? t('fans.titleHk') : t('fans.title')
+  return props.config.rules === 'hk' ? t('fans.titleHk') : t('fans.title')
 })
 
 function select(tab: RulesTab) {
@@ -78,9 +78,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </button>
       </div>
       <div :id="`rules-panel-${active}`" class="tabs__panel" role="tabpanel" :aria-labelledby="`rules-tab-${active}`">
-        <RulesReference v-if="active === 'rules'" :rules="rules" @fans="select('fans')" />
-        <FanReference v-else-if="active === 'fans'" :focus="focus" :rules="rules" />
-        <DifficultyReference v-else :rules="rules" />
+        <RulesReference v-if="active === 'rules'" :config="config" @fans="select('fans')" />
+        <FanReference v-else-if="active === 'fans'" :focus="focus" :config="config" />
+        <DifficultyReference v-else :config="config" />
       </div>
     </div>
   </div>

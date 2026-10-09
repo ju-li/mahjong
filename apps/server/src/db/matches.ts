@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { sql, type Transaction } from 'kysely'
 import { DIFFICULTIES, type Difficulty } from '@mahjong/bots'
-import { handSeed, HANDS_PER_MATCH, isRuleSet, placements, type Action, type Player, type RuleSet } from '@mahjong/engine'
+import { handSeed, HANDS_PER_MATCH, isRuleSet, normalizeHouseRules, placements, type Action, type HouseRules, type Player, type RuleSet } from '@mahjong/engine'
 import {
   LEADERBOARD_MIN_MATCHES,
   type HandSummary,
@@ -25,6 +25,8 @@ const RULE_SETS: RuleSet[] = ['mcr', 'hk']
 export type OnlineMatchRecord = {
   id: string
   rules: RuleSet
+  /** House rules the match started with; each hand records its own. */
+  house: HouseRules
   seed: number
   startedAt: Date
   endedAt: Date
@@ -45,7 +47,8 @@ export function ratedPlayers(players: OnlineMatchRecord['players']): number[] {
   return seats.length >= 2 ? seats : []
 }
 
-async function insertHands(trx: Tx, matchId: string, seed: number, hands: HandSummary[], actions: Action[][] | null) {
+/** House rules of uploaded hands are untrusted: each is normalized for the match's rule set. */
+async function insertHands(trx: Tx, matchId: string, rules: RuleSet, seed: number, hands: HandSummary[], actions: Action[][] | null) {
   if (hands.length === 0) return
   await trx
     .insertInto('match_hands')
@@ -59,6 +62,7 @@ async function insertHands(trx: Tx, matchId: string, seed: number, hands: HandSu
         result: JSON.stringify(h.outcome),
         player_deltas: h.deltas,
         actions: actions ? JSON.stringify(actions[h.handIndex] ?? []) : null,
+        house_rules: h.house ? JSON.stringify(normalizeHouseRules(rules, h.house)) : null,
       })),
     )
     .execute()
@@ -74,7 +78,17 @@ export async function recordOnlineMatch(db: Db, rec: OnlineMatchRecord): Promise
     const rated = ratedPlayers(rec.players)
     const inserted = await trx
       .insertInto('matches')
-      .values({ id: rec.id, kind: 'online', rule_set: rec.rules, difficulty: null, rated: rated.length > 0, client_key: null, started_at: rec.startedAt, ended_at: rec.endedAt })
+      .values({
+        id: rec.id,
+        kind: 'online',
+        rule_set: rec.rules,
+        house_rules: JSON.stringify(normalizeHouseRules(rec.rules, rec.house)),
+        difficulty: null,
+        rated: rated.length > 0,
+        client_key: null,
+        started_at: rec.startedAt,
+        ended_at: rec.endedAt,
+      })
       .onConflict((oc) => oc.column('id').doNothing())
       .returning('id')
       .executeTakeFirst()
@@ -102,7 +116,7 @@ export async function recordOnlineMatch(db: Db, rec: OnlineMatchRecord): Promise
         })),
       )
       .execute()
-    await insertHands(trx, rec.id, rec.seed, rec.hands, rec.actions)
+    await insertHands(trx, rec.id, rec.rules, rec.seed, rec.hands, rec.actions)
 
     const ratedIds = rated.map((p) => rec.players[p]!.userId!).filter((id) => known.has(id))
     if (ratedIds.length < 2) return new Map()
@@ -185,7 +199,17 @@ export async function recordSoloMatch(db: Db, userId: string, r: unknown): Promi
     const id = randomUUID()
     const inserted = await trx
       .insertInto('matches')
-      .values({ id, kind: 'solo', rule_set: r.rules, difficulty: r.difficulty, rated: false, client_key: `${userId}:${r.seed}`, started_at: new Date(r.startedAt), ended_at: new Date(r.endedAt) })
+      .values({
+        id,
+        kind: 'solo',
+        rule_set: r.rules,
+        house_rules: JSON.stringify(normalizeHouseRules(r.rules, r.house)),
+        difficulty: r.difficulty,
+        rated: false,
+        client_key: `${userId}:${r.seed}`,
+        started_at: new Date(r.startedAt),
+        ended_at: new Date(r.endedAt),
+      })
       .onConflict((oc) => oc.column('client_key').doNothing())
       .returning('id')
       .executeTakeFirst()
@@ -207,7 +231,7 @@ export async function recordSoloMatch(db: Db, userId: string, r: unknown): Promi
         })),
       )
       .execute()
-    await insertHands(trx, id, r.seed, r.hands, null)
+    await insertHands(trx, id, r.rules, r.seed, r.hands, null)
   })
   return true
 }
@@ -215,7 +239,7 @@ export async function recordSoloMatch(db: Db, userId: string, r: unknown): Promi
 // ---------------------------------------------------------------------------
 // Reading history, stats and rankings
 
-type MatchRow = { id: string; kind: 'online' | 'solo'; rule_set: RuleSet; difficulty: string | null; rated: boolean; ended_at: Date; player: number }
+type MatchRow = { id: string; kind: 'online' | 'solo'; rule_set: RuleSet; house_rules: unknown; difficulty: string | null; rated: boolean; ended_at: Date; player: number }
 
 async function summaries(db: Db, userId: string, rows: MatchRow[]): Promise<MatchSummary[]> {
   if (rows.length === 0) return []
@@ -228,6 +252,7 @@ async function summaries(db: Db, userId: string, rows: MatchRow[]): Promise<Matc
       id: m.id,
       kind: m.kind,
       rules: m.rule_set,
+      house: normalizeHouseRules(m.rule_set, m.house_rules),
       difficulty: (m.difficulty as Difficulty | null) ?? null,
       rated: m.rated,
       endedAt: m.ended_at.getTime(),
@@ -246,7 +271,7 @@ function yourMatches(db: Db, userId: string) {
   return db
     .selectFrom('matches as m')
     .innerJoin('match_players as mp', 'mp.match_id', 'm.id')
-    .select(['m.id', 'm.kind', 'm.rule_set', 'm.difficulty', 'm.rated', 'm.ended_at', 'mp.player'])
+    .select(['m.id', 'm.kind', 'm.rule_set', 'm.house_rules', 'm.difficulty', 'm.rated', 'm.ended_at', 'mp.player'])
     .where('mp.user_id', '=', userId)
 }
 
@@ -270,6 +295,7 @@ export async function matchDetail(db: Db, userId: string, matchId: string): Prom
     ...summary!,
     hands: hands.map((h) => ({
       handIndex: h.hand_index,
+      house: normalizeHouseRules(row.rule_set, h.house_rules),
       dealer: h.dealer as Player,
       prevailingWind: h.prevailing_wind as HandSummary['prevailingWind'],
       outcome: h.result as HandSummary['outcome'],

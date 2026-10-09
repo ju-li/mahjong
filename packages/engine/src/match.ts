@@ -1,5 +1,6 @@
 import { newHand } from './deal'
 import { mulberry32 } from './rng'
+import { normalizeHouseRules, type HouseRules, type RuleConfig } from './house'
 import { DEFAULT_RULES, type RuleSet } from './ruleset'
 import type { GameState, HandResult, Seat } from './state'
 import { WINDS, type Wind } from './tiles'
@@ -33,6 +34,8 @@ export type HandRecord = {
   prevailingWind: Wind
   /** `seating[seat]` = player for this hand. */
   seating: Player[]
+  /** House rules the hand was played with (older records: standard). */
+  house?: HouseRules
   /** Seat-indexed result, as the engine produced it. */
   result: HandResult
   /** Player-indexed point changes. */
@@ -42,6 +45,8 @@ export type HandRecord = {
 export type Match = {
   /** Rule set for every hand of the match. */
   rules: RuleSet
+  /** House rules for hands dealt from now on (the hand in progress keeps its own). Older saves: standard. */
+  house?: HouseRules
   seed: number
   /** Index of the hand being played, 0..15; equals 16 once the match is over. */
   handIndex: number
@@ -82,13 +87,23 @@ export function prevailingWindFor(handIndex: number): Wind {
   return WINDS[Math.floor(handIndex / 4)]!
 }
 
-function startHand(matchSeed: number, handIndex: number, rules: RuleSet): GameState {
-  return newHand({ seed: handSeed(matchSeed, handIndex), dealer: dealerFor(handIndex), prevailingWind: prevailingWindFor(handIndex), rules })
+function startHand(matchSeed: number, handIndex: number, rules: RuleSet, house: HouseRules | undefined): GameState {
+  return newHand({ seed: handSeed(matchSeed, handIndex), dealer: dealerFor(handIndex), prevailingWind: prevailingWindFor(handIndex), rules, house })
 }
 
-/** `scores` carries totals over from an earlier match; a fresh match starts at zero. */
-export function newMatch(seed: number, rules: RuleSet = DEFAULT_RULES, scores: readonly number[] = [0, 0, 0, 0]): Match {
-  return { rules, seed, handIndex: 0, scores: [...scores], seating: seatingFor(0, rules), history: [], current: startHand(seed, 0, rules) }
+/**
+ * `config` is a rule set, or a rule set with house rules. `scores` carries totals over from an
+ * earlier match; a fresh match starts at zero.
+ */
+export function newMatch(seed: number, config: RuleSet | RuleConfig = DEFAULT_RULES, scores: readonly number[] = [0, 0, 0, 0]): Match {
+  const rules = typeof config === 'string' ? config : config.rules
+  const house = normalizeHouseRules(rules, typeof config === 'string' ? undefined : config.house)
+  return { rules, house, seed, handIndex: 0, scores: [...scores], seating: seatingFor(0, rules), history: [], current: startHand(seed, 0, rules, house) }
+}
+
+/** The match with new house rules for every hand dealt from now on; the hand in progress is unchanged. */
+export function withHouse(match: Match, house: unknown): Match {
+  return { ...match, house: normalizeHouseRules(match.rules, house) }
 }
 
 export function isMatchOver(match: Match): boolean {
@@ -118,6 +133,7 @@ export function nextHand(match: Match, result: HandResult): Match {
   const handIndex = match.handIndex + 1
   return {
     rules: match.rules,
+    house: match.house,
     seed: match.seed,
     handIndex,
     scores: match.scores.map((s, p) => s + playerDeltas[p]!),
@@ -129,11 +145,12 @@ export function nextHand(match: Match, result: HandResult): Match {
         dealer: dealerFor(match.handIndex),
         prevailingWind: prevailingWindFor(match.handIndex),
         seating: [...match.seating],
+        ...(match.current ? { house: match.current.house } : {}),
         result,
         playerDeltas,
       },
     ],
-    current: handIndex < HANDS_PER_MATCH ? startHand(match.seed, handIndex, match.rules) : null,
+    current: handIndex < HANDS_PER_MATCH ? startHand(match.seed, handIndex, match.rules, match.house) : null,
   }
 }
 

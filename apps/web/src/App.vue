@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { isRuleSet } from '@mahjong/engine'
+import { houseDiff, isRuleSet, isStandard, sameConfig, type HouseRules, type RuleConfig } from '@mahjong/engine'
+import type { TableSettings } from '@mahjong/protocol'
 import type { Difficulty } from '@mahjong/bots'
 import FeedbackDialog from './components/FeedbackDialog.vue'
 import FriendsDialog from './components/FriendsDialog.vue'
 import MenuIcon from './components/MenuIcon.vue'
 import Lobby from './components/Lobby.vue'
 import MatchScreen from './components/MatchScreen.vue'
-import Onboarding from './components/Onboarding.vue'
+import Onboarding, { type OnboardingChoice } from './components/Onboarding.vue'
+import HouseRulesDialog from './components/house/HouseRulesDialog.vue'
+import TermsPicker from './components/TermsPicker.vue'
 import OnlineDialog from './components/OnlineDialog.vue'
 import PlayerCard from './components/PlayerCard.vue'
 import ProfilePage from './components/ProfilePage.vue'
@@ -20,7 +23,7 @@ import { friendsCount, parseFriendCode, seatChanges } from './game/friends'
 import { signed } from './game/stats'
 import { useInstall } from './game/install'
 import { shareInvite } from './game/invite'
-import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
+import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, TILE_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useOnline } from './game/useOnline'
 import { useProfile } from './game/profile'
@@ -32,14 +35,14 @@ import { useI18n } from './i18n/useI18n'
 /** Address hash while the profile page is open, so the browser's Back button closes it. */
 const PROFILE_HASH = '#profile'
 
-const { t, toggle, locale } = useI18n()
+const { t, toggle, locale, isZh } = useI18n()
 
 /** Rules dialog (how to play + fan list tabs); `focus` is the fan to show on the fan list. */
 const rulesDialog = ref<{ tab: RulesTab; focus?: string } | null>(null)
 
 const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
-const { claimSeconds, sound, voice, voiceChat, textSize, needsOnboarding, finishOnboarding, rules: preferredRules } = useSettings()
+const { claimSeconds, sound, voice, voiceChat, textSize, tileSize, oneTapDiscard, needsOnboarding, finishOnboarding, rules: preferredRules, house: preferredHouse, ruleConfig, terms } = useSettings()
 const online = useOnline()
 const { snapshot, isHost, link } = online
 /** At an online table (lobby or match); the solo match waits meanwhile. */
@@ -53,6 +56,9 @@ const { difficulty, rules, resumed, inProgress, startNewMatch, keepGoing } = sol
 const source = computed(() => (atTable.value ? online.source : solo))
 const view = computed(() => source.value.view.value)
 const shownRules = computed(() => source.value.rules.value)
+const shownConfig = computed<RuleConfig>(() => ({ rules: shownRules.value, house: source.value.house.value }))
+/** Rule set in the top bar, marked when the table plays house rules. */
+const rulesLabel = computed(() => `${t(`rules.short.${shownRules.value}`)}${isStandard(shownConfig.value) ? '' : ` · ${t('house.custom')}`}`)
 
 function openProfile() {
   if (profileOpen.value) return
@@ -110,9 +116,40 @@ watch(social.lastError, (e) => {
 const onlineOpen = ref(false)
 const inviteCode = ref<string | undefined>()
 
-async function hostTable() {
-  if (await online.host()) onlineOpen.value = false
+/** Host a table under your default rules and house rules. */
+async function hostWithDefaults(): Promise<string | null> {
+  const code = await online.host()
+  if (code) online.configure({ rules: preferredRules.value, house: preferredHouse.value[preferredRules.value] })
+  return code
 }
+async function hostTable() {
+  if (await hostWithDefaults()) onlineOpen.value = false
+}
+
+/** Host's table settings; another rule set brings the host's own house rules for it. */
+function configureTable(update: Partial<TableSettings>) {
+  online.configure(update.rules && !update.house ? { ...update, house: preferredHouse.value[update.rules] } : update)
+}
+
+/** The table's house rules: the host edits them (now, or from the next hand mid-match), everyone else reviews them. */
+const tableHouseOpen = ref(false)
+function saveTableHouse(house: HouseRules, asDefault: boolean) {
+  tableHouseOpen.value = false
+  const rules = snapshot.value?.settings.rules
+  if (!rules) return
+  online.configure({ house })
+  if (asDefault) preferredHouse.value = { ...preferredHouse.value, [rules]: house }
+}
+/** Mid-match, the host's changes wait for the next hand. */
+const houseFromNextHand = computed(() => {
+  const s = snapshot.value
+  const v = online.source.view.value
+  return !!s && s.phase === 'playing' && !!v && !sameConfig({ rules: s.settings.rules, house: s.settings.house }, v)
+})
+
+/** Invite links wait behind onboarding: the table code to offer at its end, and a friend invite to show. */
+const pendingRoom = ref<string | null>(null)
+const pendingFriend = ref(false)
 async function joinTable(code: string) {
   if (await online.join(code, true)) onlineOpen.value = false
 }
@@ -138,7 +175,7 @@ async function playWithFriend(userId: string) {
   friendsOpen.value = false
   if (atTable.value) return
   // Use the code from hosting itself: the table's first snapshot may not have arrived yet.
-  const code = await online.host()
+  const code = await hostWithDefaults()
   if (!code) {
     const error = online.error.value
     if (error) showNotice(t(`online.error.${error}`))
@@ -181,6 +218,21 @@ social.on('friendRequest', (f) => {
     sticky: true,
     actions: [{ label: t('friends.accept'), primary: true, run: () => social.respond(f.userId, true) }],
   })
+})
+
+/** Joining a table with house rules, or its host changing them, gets a notice you can review. */
+let tableHouse: { code: string; house: string } | null = null
+watch(snapshot, (s) => {
+  if (!s) return void (tableHouse = null)
+  const house = JSON.stringify(s.settings.house)
+  const before = tableHouse?.code === s.code ? tableHouse.house : null
+  tableHouse = { code: s.code, house }
+  if (s.you === s.host || before === house) return
+  const n = houseDiff({ rules: s.settings.rules, house: s.settings.house }).length
+  const review = [{ label: t('house.review'), primary: true, run: () => void (tableHouseOpen.value = true) }]
+  if (before === null) {
+    if (n > 0) toasts.push({ key: 'house-rules', text: t('toast.houseRules', { n }), actions: review })
+  } else toasts.push({ key: 'house-rules', text: t(s.phase === 'playing' ? 'toast.houseChangedNextHand' : 'toast.houseChanged', { name: hostName.value }), actions: review })
 })
 
 /** Friends sitting down at or leaving your table get a passing mention. */
@@ -245,15 +297,22 @@ onMounted(async () => {
   if (params.has('friend')) params.delete('friend')
   if (friendCode && account.enabled) {
     social.openInvite(friendCode)
-    if (!account.signedIn.value) friendsOpen.value = true
+    if (!account.signedIn.value) {
+      if (needsOnboarding.value) pendingFriend.value = true
+      else friendsOpen.value = true
+    }
   }
   // Invite link (?room=KJXW): open the join dialog with the code filled in, then tidy the address bar.
+  // A first-time player is offered the table at the end of onboarding instead.
   const room = params.get('room')
   if (room) {
-    inviteCode.value = room.toUpperCase()
-    onlineOpen.value = true
+    if (needsOnboarding.value) pendingRoom.value = room.toUpperCase()
+    else {
+      inviteCode.value = room.toUpperCase()
+      onlineOpen.value = true
+    }
     params.delete('room')
-  } else {
+  } else if (!needsOnboarding.value) {
     void online.rejoin()
   }
   const rest = params.toString()
@@ -305,24 +364,41 @@ function confirmNewMatch() {
 }
 
 /**
- * First visit: deal again under the chosen rules. A match restored from an older
- * version is only abandoned if the player agrees.
+ * Set up: deal the solo match again under the chosen rules (a match restored from before is
+ * only abandoned if the player agrees; their choices stay the default either way), then do what
+ * they picked.
  */
-function onboardingDone() {
-  const next = preferredRules.value
+function onboardingDone(choice: OnboardingChoice) {
+  const next = ruleConfig.value
   finishOnboarding()
   track('onboarding_finished')
-  if (next === rules.value) return
-  if (!resumed || !inProgress() || window.confirm(t('app.confirmRules'))) startNewMatch(next)
-  else preferredRules.value = rules.value
+  if (!sameConfig(next, solo.config.value) && (!resumed || !inProgress() || window.confirm(t('app.confirmRules')))) startNewMatch(next)
+  if (pendingFriend.value) friendsOpen.value = true
+  pendingFriend.value = false
+  if (choice === 'host') void hostTable()
+  else if (choice === 'join') {
+    inviteCode.value = pendingRoom.value ?? undefined
+    onlineOpen.value = true
+  } else if (choice === 'signIn') void account.signIn()
+  pendingRoom.value = null
 }
 
-/** Switching rules starts a new match, after confirming if one is under way. */
+/** Switching rules starts a new match (with that rule set's house rules), after confirming if one is under way. */
 function changeRules(e: Event) {
   const select = e.target as HTMLSelectElement
   const next = select.value
-  if (isRuleSet(next) && next !== rules.value && (!inProgress() || window.confirm(t('app.confirmRules')))) startNewMatch(next)
+  if (isRuleSet(next) && next !== rules.value && (!inProgress() || window.confirm(t('app.confirmRules')))) startNewMatch({ rules: next, house: preferredHouse.value[next] })
   else select.value = rules.value
+}
+
+/** House rules for new solo matches and hosted tables; saving them restarts a solo match that plays other rules. */
+const houseOpen = ref(false)
+const houseChanges = computed(() => houseDiff(ruleConfig.value).length)
+function saveHouse(next: HouseRules) {
+  houseOpen.value = false
+  const config = { rules: preferredRules.value, house: next }
+  preferredHouse.value = { ...preferredHouse.value, [config.rules]: next }
+  if (!atTable.value && !sameConfig(config, solo.config.value) && (!inProgress() || window.confirm(t('app.confirmRules')))) startNewMatch(config)
 }
 
 /** Feedback form; what it attaches is captured when it opens. */
@@ -336,12 +412,16 @@ function captureFeedback() {
     profile: { name: profile.name.value, avatar: profile.avatar.value },
     settings: {
       rules: preferredRules.value,
+      house: preferredHouse.value,
+      terms: terms.value,
       difficulty: difficulty.value,
       claimSeconds: claimSeconds.value,
       sound: sound.value,
       voice: voice.value,
       voiceChat: voiceChat.value,
       textSize: textSize.value,
+      tileSize: tileSize.value,
+      oneTapDiscard: oneTapDiscard.value,
     },
     screen: atTable.value ? `online ${s?.phase}` : 'solo',
     onBreak: onBreak.value,
@@ -387,11 +467,11 @@ async function loadLatest() {
           @click="navOpen = !navOpen"
         >
           <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
-          {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
+          {{ t('app.title') }} <small>{{ rulesLabel }}</small>
         </button>
         <template v-else>
           <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
-          {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
+          {{ t('app.title') }} <small>{{ rulesLabel }}</small>
         </template>
         <button
           v-if="snapshot"
@@ -441,6 +521,7 @@ async function loadLatest() {
         <div class="topbar__group">
           <template v-if="atTable">
             <button class="action" @click="leaveTable"><MenuIcon name="leave" />{{ t('lobby.leave') }}</button>
+            <button class="action action--quiet-light" @click="tableHouseOpen = true"><MenuIcon name="rules" />{{ t('house.title') }}</button>
             <button v-if="canInviteFriends" class="action action--quiet-light" @click="friendsOpen = true"><MenuIcon name="friends" />{{ t('tableInvite.button') }}</button>
           </template>
           <template v-else>
@@ -471,7 +552,8 @@ async function loadLatest() {
       :snapshot="snapshot"
       :is-host="isHost"
       :can-invite-friends="canInviteFriends"
-      @configure="online.configure"
+      @configure="configureTable"
+      @house-rules="tableHouseOpen = true"
       @start="online.start"
       @edit-profile="openProfile()"
       @open-player="(p: number) => (playerCard = p)"
@@ -554,9 +636,31 @@ async function loadLatest() {
       {{ t('talk.speaking', { name: speakingName }) }}
     </p>
 
-    <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :rules="shownRules" @close="rulesDialog = null" />
+    <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :config="shownConfig" @close="rulesDialog = null" />
 
-    <Onboarding v-if="needsOnboarding" @done="onboardingDone" />
+    <Onboarding v-if="needsOnboarding" :invite="pendingRoom" @done="onboardingDone" />
+
+    <HouseRulesDialog
+      v-if="tableHouseOpen && snapshot"
+      :key="`${snapshot.settings.rules}:${JSON.stringify(snapshot.settings.house)}`"
+      :rules="snapshot.settings.rules"
+      :initial="snapshot.settings.house"
+      :read-only="!isHost"
+      :offer-default="isHost"
+      :note="houseFromNextHand || (isHost && snapshot.phase === 'playing') ? t('house.fromNextHand') : undefined"
+      @save="saveTableHouse"
+      @close="tableHouseOpen = false"
+    />
+
+    <HouseRulesDialog
+      v-if="houseOpen"
+      :key="preferredRules"
+      :rules="preferredRules"
+      :initial="preferredHouse[preferredRules]"
+      :note="t('settings.defaults')"
+      @save="saveHouse"
+      @close="houseOpen = false"
+    />
 
     <FeedbackDialog v-if="feedbackOpen" :capture="captureFeedback" @close="feedbackOpen = false" />
 
@@ -574,6 +678,12 @@ async function loadLatest() {
               </option>
             </select>
           </label>
+          <div class="select">
+            <span>{{ t('house.title') }}</span>
+            <button type="button" class="action" @click="houseOpen = true; settingsOpen = false">
+              {{ houseChanges === 0 ? t('house.standard') : t('house.changes', { n: houseChanges }) }} · {{ t('house.change') }}
+            </button>
+          </div>
           <label v-if="!atTable" class="select">
             <span>{{ t('app.bots') }}</span>
             <select v-model="difficulty" :aria-label="t('app.botDifficulty')">
@@ -592,6 +702,21 @@ async function loadLatest() {
             <select v-model="textSize" :aria-label="t('app.textSize')">
               <option v-for="s in TEXT_SIZE_OPTIONS" :key="s" :value="s">{{ t(`textSize.${s}`) }}</option>
             </select>
+          </label>
+          <label class="select">
+            <span>{{ t('app.tileSize') }}</span>
+            <select v-model.number="tileSize" :aria-label="t('app.tileSize')">
+              <option v-for="s in TILE_SIZE_OPTIONS" :key="s" :value="s">{{ t(`tileSize.${s}`) }}</option>
+            </select>
+          </label>
+          <label class="select toggle">
+            <span class="toggle__label">
+              <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 11V5a2 2 0 0 1 4 0v6m0-2a2 2 0 0 1 4 0v4a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15a2 2 0 0 1 3.3-2.2L9 15" />
+              </svg>
+              {{ t('app.oneTapDiscard') }}
+            </span>
+            <input v-model="oneTapDiscard" class="toggle__input" type="checkbox" role="switch" />
           </label>
           <label class="select toggle">
             <span class="toggle__label">
@@ -631,6 +756,10 @@ async function loadLatest() {
           <template v-if="isHost && snapshot?.phase === 'playing'">
             <p class="settings__group">{{ t('table.forEveryone') }}</p>
             <ChatSwitches :settings="snapshot.settings" @configure="online.configure" />
+          </template>
+          <template v-if="isZh">
+            <p class="settings__group">{{ t('terms.title') }}</p>
+            <TermsPicker v-model="terms" />
           </template>
           <div class="settings__more">
             <button class="action action--quiet-light" :aria-label="t('app.language')" @click="toggle"><MenuIcon name="language" />{{ t('app.switchLanguage') }}</button>

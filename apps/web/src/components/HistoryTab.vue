@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { isStandard } from '@mahjong/engine'
 import type { HandSummary, MatchDetail, MatchSummary } from '@mahjong/protocol'
+import HouseSummary from './house/HouseSummary.vue'
 import { avatarSvg } from '../game/avatar'
 import { signed } from '../game/stats'
 import { useAccount } from '../game/useAccount'
@@ -57,6 +59,8 @@ function handLine(h: HandSummary): string {
   const name = detailNames.value[o.winner] ?? ''
   return o.from === null ? t('history.selfDrawn', { name }) : t('history.wonFrom', { name, from: detailNames.value[o.from] ?? '' })
 }
+/** Played with house rules (summaries from older servers carry none). */
+const custom = (m: MatchSummary) => !!m.house && !isStandard({ rules: m.rules, house: m.house })
 </script>
 
 <template>
@@ -69,6 +73,7 @@ function handLine(h: HandSummary): string {
         {{ detail.kind === 'online' ? t('history.online', { rules: t(`rules.${detail.rules}`) }) : t('history.solo', { rules: t(`rules.${detail.rules}`), level: t(`level.${detail.difficulty ?? 'medium'}`) }) }}
         <small>{{ when(detail.endedAt) }}</small>
       </h3>
+      <HouseSummary v-if="custom(detail)" :config="{ rules: detail.rules, house: detail.house }" only-changes />
       <ol class="history__standings">
         <li v-for="(p, i) in detail.players" :key="i" :class="{ 'is-me': i === detail.you }">
           <span class="history__place">{{ place(p.placement) }}</span>
@@ -101,7 +106,7 @@ function handLine(h: HandSummary): string {
             <span class="history__place">{{ place(m.players[m.you]!.placement) }}</span>
             <span class="history__what">
               <span>{{ m.kind === 'online' ? t('history.online', { rules: t(`rules.short.${m.rules}`) }) : t('history.solo', { rules: t(`rules.short.${m.rules}`), level: t(`level.${m.difficulty ?? 'medium'}`) }) }}</span>
-              <small>{{ when(m.endedAt) }}</small>
+              <small>{{ when(m.endedAt) }}<template v-if="custom(m)"> · {{ t('history.houseRules') }}</template></small>
             </span>
             <span class="history__faces">
               <span v-for="(p, i) in m.players" :key="i" class="history__face" :title="names(m)[i]" v-html="avatarSvg(p.avatar ?? i + 1)" />

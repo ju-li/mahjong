@@ -8,7 +8,8 @@
     "build": "vue-tsc -b && vite build",
     "test": "vitest run",
     "typecheck": "vue-tsc -b",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gen:callouts": "node scripts/gen-callouts.ts"
   },
   "dependencies": {
     "@colyseus/sdk": "^0.18.4",

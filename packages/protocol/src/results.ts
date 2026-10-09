@@ -7,6 +7,7 @@ export function handSummaries(match: Pick<Match, 'history'>): HandSummary[] {
     const r = h.result
     return {
       handIndex: h.handIndex,
+      ...(h.house ? { house: h.house } : {}),
       dealer: h.seating[h.dealer]!,
       prevailingWind: h.prevailingWind,
       outcome:

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { TileKind } from '@mahjong/engine'
 import { useI18n } from '../i18n/useI18n'
+import { tileLabel } from './tileLabel'
 import { tileSvg } from './tileArt'
 
 const props = defineProps<{
@@ -13,6 +14,8 @@ const props = defineProps<{
   pose?: 'stand' | 'flat'
   selectable?: boolean
   highlight?: boolean
+  /** Lifted out of the hand: the next tap discards it. */
+  picked?: boolean
   /** Physical tile id; lets the table animate the tile as it moves between hand, pond and melds. */
   tileId?: number
 }>()
@@ -23,27 +26,14 @@ const art = computed(() => (props.kind && !props.back ? tileSvg(props.kind) : nu
 
 const { t } = useI18n()
 
-const label = computed(() => {
-  const k = props.kind
-  if (!k || props.back) return t('tile.faceDown')
-  switch (k.suit) {
-    case 'winds':
-      return t('tile.wind', { wind: t(`wind.${k.wind}`) })
-    case 'dragons':
-      return t(`tile.dragon.${k.dragon}`)
-    case 'flowers':
-      return k.flower <= 4 ? t('tile.flower', { n: k.flower }) : t('tile.season', { n: k.flower - 4 })
-    default:
-      return t('tile.suited', { rank: k.rank, suit: t(`tile.${k.suit}`) })
-  }
-})
+const label = computed(() => (props.kind && !props.back ? tileLabel(props.kind, t) : t('tile.faceDown')))
 </script>
 
 <template>
   <component
     :is="selectable ? 'button' : 'span'"
     class="tile"
-    :class="[`tile--${size ?? 'md'}`, `tile--${pose ?? 'flat'}`, art ? 'tile--face' : 'tile--back', { 'tile--selectable': selectable, 'tile--hl': highlight }]"
+    :class="[`tile--${size ?? 'md'}`, `tile--${pose ?? 'flat'}`, art ? 'tile--face' : 'tile--back', { 'tile--selectable': selectable, 'tile--hl': highlight, 'tile--picked': picked }]"
     :data-tile-id="tileId"
     :aria-label="label"
     :title="label"
