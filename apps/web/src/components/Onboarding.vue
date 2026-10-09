@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { MAX_NAME_LENGTH } from '@mahjong/protocol'
-import { houseKeys, isStandard, standardHouse, STANDARD_HOUSE, type HouseRules } from '@mahjong/engine'
+import { houseKeys, isStandard, standardHouse, STANDARD_HOUSE, type HouseRules, type TileKind } from '@mahjong/engine'
 import type { Difficulty } from '@mahjong/bots'
 import AvatarPicker from './AvatarPicker.vue'
 import TermsPicker from './TermsPicker.vue'
+import TileFace from './TileFace.vue'
 import HouseQuestion from './house/HouseQuestion.vue'
 import HouseSummary from './house/HouseSummary.vue'
 import PayoutPreview from './house/PayoutPreview.vue'
@@ -12,7 +13,7 @@ import { avatarSvg } from '../game/avatar'
 import { isMobile } from '../game/device'
 import { restoredFromAccount } from '../game/preferenceSync'
 import { useProfile } from '../game/profile'
-import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, useSettings } from '../game/settings'
+import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TILE_SIZE_OPTIONS, useSettings } from '../game/settings'
 import { playSound } from '../game/sound'
 import { useAccount } from '../game/useAccount'
 import { houseTitle } from '../i18n/houseText'
@@ -32,7 +33,7 @@ const props = defineProps<{ invite?: string | null }>()
 const emit = defineEmits<{ done: [choice: OnboardingChoice] }>()
 
 const { t, locale, isZh } = useI18n()
-const { claimSeconds, sound, difficulty, rules, house, ruleConfig, terms } = useSettings()
+const { claimSeconds, sound, difficulty, rules, house, ruleConfig, terms, tileSize, oneTapDiscard } = useSettings()
 const profile = useProfile()
 const account = useAccount()
 
@@ -101,9 +102,18 @@ function standardForRest() {
 const PAYOUT_QUESTIONS = new Set(['payment', 'curve', 'maxFaan', 'minFaan', 'minFan'])
 
 // ---- Defaults ----
-type Row = 'bots' | 'timer' | 'sound'
-const openRow = ref<Row | null>(null)
+type Row = 'tiles' | 'discard' | 'bots' | 'timer' | 'sound'
+/** Tile size starts open: seeing the tiles at the chosen size is what tells a player it suits them. */
+const openRow = ref<Row | null>('tiles')
 const toggleRow = (row: Row) => (openRow.value = openRow.value === row ? null : row)
+/** Shown at the size the player's hand will have. */
+const PREVIEW_TILES: TileKind[] = [
+  { suit: 'dots', rank: 1 },
+  { suit: 'bamboo', rank: 5 },
+  { suit: 'characters', rank: 8 },
+  { suit: 'winds', wind: 'E' },
+  { suit: 'dragons', dragon: 'red' },
+]
 /** Sound on: play a chime so the player hears what they chose. */
 function chooseSound(on: boolean) {
   sound.value = on
@@ -207,6 +217,40 @@ const intro = computed(() =>
         <TermsPicker v-else-if="step === 'terms'" v-model="terms" />
 
         <div v-else-if="step === 'defaults'" class="onboard__defaults">
+          <div class="onboard__default">
+            <button type="button" class="onboard__default-row" :aria-expanded="openRow === 'tiles'" @click="toggleRow('tiles')">
+              <span>{{ t('app.tileSize') }}</span><strong>{{ t(`tileSize.${tileSize}`) }}</strong>
+            </button>
+            <template v-if="openRow === 'tiles'">
+              <div class="onboard__row">
+                <label v-for="s in TILE_SIZE_OPTIONS" :key="s" class="onboard__option onboard__option--compact" :class="{ 'is-selected': tileSize === s }">
+                  <input v-model.number="tileSize" type="radio" name="tileSize" :value="s" />
+                  <span class="onboard__option-title">{{ t(`tileSize.${s}`) }}</span>
+                </label>
+              </div>
+              <div class="onboard__tiles" aria-hidden="true">
+                <TileFace v-for="(kind, i) in PREVIEW_TILES" :key="i" :kind="kind" pose="stand" />
+              </div>
+              <p class="onboard__hint">{{ t('onboarding.tiles.hint') }}</p>
+            </template>
+          </div>
+          <div class="onboard__default">
+            <button type="button" class="onboard__default-row" :aria-expanded="openRow === 'discard'" @click="toggleRow('discard')">
+              <span>{{ t('app.discarding') }}</span><strong>{{ oneTapDiscard ? t('onboarding.discard.once') : t('onboarding.discard.twice') }}</strong>
+            </button>
+            <div v-if="openRow === 'discard'" class="onboard__options">
+              <label class="onboard__option" :class="{ 'is-selected': !oneTapDiscard }">
+                <input v-model="oneTapDiscard" type="radio" name="discard" :value="false" />
+                <span class="onboard__option-title">{{ t('onboarding.discard.twice') }}</span>
+                <span class="onboard__option-desc">{{ t('onboarding.discard.twiceDesc') }}</span>
+              </label>
+              <label class="onboard__option" :class="{ 'is-selected': oneTapDiscard }">
+                <input v-model="oneTapDiscard" type="radio" name="discard" :value="true" />
+                <span class="onboard__option-title">{{ t('onboarding.discard.once') }}</span>
+                <span class="onboard__option-desc">{{ t('onboarding.discard.onceDesc') }}</span>
+              </label>
+            </div>
+          </div>
           <div class="onboard__default">
             <button type="button" class="onboard__default-row" :aria-expanded="openRow === 'bots'" @click="toggleRow('bots')">
               <span>{{ t('app.bots') }}</span><strong>{{ t(`level.${difficulty}`) }}</strong>

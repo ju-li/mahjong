@@ -5,6 +5,7 @@ import type { ReactionId, VoiceClip } from '@mahjong/protocol'
 import GameTable from './GameTable.vue'
 import HandResult from './HandResult.vue'
 import { avatarSeeds, avatarSvg } from '../game/avatar'
+import { useSettings } from '../game/settings'
 import type { MatchSource } from '../game/source'
 import { useI18n } from '../i18n/useI18n'
 
@@ -13,6 +14,7 @@ const props = defineProps<{ source: MatchSource; openable?: boolean }>()
 const emit = defineEmits<{ newMatch: []; keepGoing: []; explain: [fanId: string]; editProfile: []; openPlayer: [player: Player] }>()
 
 const { t } = useI18n()
+const { oneTapDiscard } = useSettings()
 
 const view = computed(() => props.source.view.value)
 const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.phase.result : null))
@@ -73,7 +75,7 @@ const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value +
     @edit-profile="emit('editProfile')"
     @open-player="(seat: number) => emit('openPlayer', seatPlayers[seat]!)"
   />
-  <p v-if="view" class="keys-help">{{ t('keys.help') }}</p>
+  <p v-if="view" class="keys-help">{{ t(oneTapDiscard ? 'keys.help' : 'keys.helpConfirm') }}</p>
 
   <HandResult
     v-if="view && result"

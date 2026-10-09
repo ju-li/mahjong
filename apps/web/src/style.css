@@ -35,6 +35,16 @@
   --tile-xs-w: clamp(10px, min(calc(min(100vw, 1240px) * 0.017), calc(var(--fit-h) * 0.72)), 22px);
   --tile-sm-h: calc(var(--tile-sm-w) * 1.36);
 
+  /*
+   * Your own hand is drawn bigger, by the Hand tile size setting; every other tile keeps the
+   * sizes above. The ponds are laid out wide and low to leave it room. On a wide screen the
+   * hand always fits the screen's width, so all of it stays in view.
+   */
+  --tile-scale: var(--tile-scale-chosen, 1);
+  --hand-w: max(var(--tile-w), min(calc(var(--tile-w) * var(--tile-scale)), calc((min(100vw, var(--app-max)) - 240px) / 15)));
+  /* Wide screens let the table spread out to fit the bigger hand. */
+  --app-max: calc(1240px * var(--tile-scale));
+
   /* Type scale. Every text size in the app is one of these; all are in rem, so the
      Text size setting (which changes the root size below) scales them together.
      Nothing goes below --fs-xs: the game is meant to be easy to read. */
@@ -58,6 +68,18 @@
   font-size: 22px;
 }
 
+:root[data-tile-size='125'] {
+  --tile-scale-chosen: 1.25;
+}
+
+:root[data-tile-size='150'] {
+  --tile-scale-chosen: 1.5;
+}
+
+:root[data-tile-size='200'] {
+  --tile-scale-chosen: 2;
+}
+
 @supports (height: 100dvh) {
   :root {
     --fit-h: calc((100dvh - 430px) / 22);
@@ -69,6 +91,8 @@
     --tile-w: clamp(18px, calc((100vw - 48px) / 14.6), 40px);
     --tile-sm-w: clamp(13px, 3.6vw, 20px);
     --tile-xs-w: clamp(10px, 2.7vw, 16px);
+    /* The hand takes the full size and scrolls sideways when it no longer fits. */
+    --hand-w: calc(var(--tile-w) * var(--tile-scale));
   }
 }
 
@@ -128,6 +152,10 @@ body {
   max-width: 1240px;
   margin: 0 auto;
   padding: 12px 16px 24px;
+}
+
+.app:has(.board) {
+  max-width: var(--app-max);
 }
 
 .topbar {
@@ -786,10 +814,18 @@ body {
   place-items: center;
 }
 
+/* Wide and low, so the bigger face-up tiles still leave the hand room below.
+   Across and below: 9 tiles a row, 2 rows. Left and right: 4 tiles a column, 5 columns. */
 .pond {
-  --pond-cols: 6;
-  --pond-rows: 3;
+  --pond-cols: 9;
+  --pond-rows: 2;
   gap: 2px;
+}
+
+.pond--left,
+.pond--right {
+  --pond-cols: 4;
+  --pond-rows: 5;
 }
 
 .pond--top,
@@ -973,7 +1009,14 @@ body {
   text-align: center;
 }
 
+.hand-wrap {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .hand {
+  position: relative;
   display: flex;
   flex-wrap: nowrap;
   align-items: flex-end;
@@ -986,12 +1029,82 @@ body {
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
-  padding: calc(var(--tile-w) * 0.26) 4px calc(var(--tile-w) * 0.3);
-  margin: calc(10px - var(--tile-w) * 0.26) 0 calc(var(--tile-w) * -0.3);
+  padding: calc(var(--hand-w) * 0.34) 4px calc(var(--hand-w) * 0.3);
+  margin: calc(10px - var(--hand-w) * 0.34) 0 calc(var(--hand-w) * -0.3);
 }
 
 .hand::-webkit-scrollbar {
   display: none;
+}
+
+/* Tiles cut off at an end of the hand fade out, under an arrow saying how many there are. */
+.hand-wrap::before,
+.hand-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: calc(var(--hand-w) * 1.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.hand-wrap::before {
+  left: 0;
+  background: linear-gradient(90deg, rgb(23 78 69 / 0.95), rgb(23 78 69 / 0));
+}
+
+.hand-wrap::after {
+  right: 0;
+  background: linear-gradient(270deg, rgb(23 78 69 / 0.95), rgb(23 78 69 / 0));
+}
+
+.hand-wrap.has-left::before,
+.hand-wrap.has-right::after {
+  opacity: 1;
+}
+
+.hand__more {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--felt-edge);
+  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: 800;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.4);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.hand__more span {
+  font-size: 1.4em;
+  line-height: 1;
+}
+
+.hand__more--left {
+  left: 2px;
+}
+
+.hand__more--right {
+  right: 2px;
+}
+
+.hand__more:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .hand.is-dragging {
@@ -1137,6 +1250,11 @@ body {
   --tw: var(--tile-xs-w);
 }
 
+/* Your hand grows with the Hand tile size setting. */
+.hand .tile {
+  --tw: var(--hand-w);
+}
+
 /* Lying face up: the ivory face over a blue back, seen from slightly above. */
 .tile--flat {
   margin-bottom: calc(var(--tw) * 0.12);
@@ -1198,6 +1316,18 @@ body {
   outline-offset: 1px;
 }
 
+/* Lifted out of the hand, waiting for a second tap to be discarded. */
+.tile--picked,
+.tile--picked:hover,
+.tile--picked:focus-visible {
+  transform: translateY(calc(var(--tw) * -0.3));
+}
+
+.hand .tile--picked {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .hand .tile--hl,
 .pond .tile--hl {
   outline: none;
@@ -1205,6 +1335,129 @@ body {
 
 .actions .tile {
   margin-bottom: 0;
+}
+
+/* ---- Ponds and your melds open big in the middle on a tap ---- */
+
+.pond,
+.me__melds {
+  cursor: zoom-in;
+  border-radius: 6px;
+}
+
+.pond:focus-visible,
+.me__melds:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* In the middle of the table just now; shown again once it has flown back. */
+.tile.is-spotlit {
+  visibility: hidden;
+}
+
+/* ---- Spotlight: tiles big in the middle of the table, over everything ---- */
+
+.spotlight {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+}
+
+.spotlight.is-catching {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.spotlight__content {
+  position: absolute;
+  max-width: calc(100vw - 24px);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.spot__queue {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+}
+
+.spot__item,
+.spot__pile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-radius: 16px;
+  background: rgb(16 40 36 / 0.88);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  color: var(--felt-text);
+  cursor: pointer;
+}
+
+.spot__pile {
+  animation: pop-in 0.2s ease-out;
+}
+
+/* Twice the size of a discard, and never smaller than your own hand's tiles. */
+.spotlight .spot__tile,
+.spot__pile .tile {
+  --tw: min(max(calc(var(--tile-sm-w) * 2), var(--hand-w)), calc((100vw - 96px) / 6));
+}
+
+.spot__who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.spot__face {
+  flex: none;
+  width: 2em;
+  height: 2em;
+  padding: 2px;
+  border-radius: 8px;
+  background: linear-gradient(#fff, #dfe6e4);
+}
+
+.spot__face svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.spot__item .actions {
+  margin-top: 4px;
+  cursor: default;
+}
+
+.spot__tiles {
+  display: grid;
+  grid-template-columns: repeat(6, auto);
+  gap: 3px;
+}
+
+.spot__melds {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.spot__hint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--felt-muted);
 }
 
 @media (max-width: 640px) {
@@ -1225,7 +1478,9 @@ body {
       'info info top top'
       'left middle middle right'
       'me me me me';
-    min-height: 0;
+    /* Down to the bottom of the screen: the ponds spread into whatever height is left. */
+    min-height: calc(100vh - 86px);
+    min-height: calc(100dvh - 86px);
     gap: 8px 6px;
     padding: 8px 6px;
   }
@@ -1274,14 +1529,53 @@ body {
     max-width: none;
   }
 
+  /* The middle fills the felt and the ponds spread out over it, each halfway between the
+     compass and the wall, rather than huddling round the compass with bare felt beyond. */
+  .middle {
+    place-items: stretch;
+  }
+
+  .middle__table {
+    display: grid;
+  }
+
+  /* The ponds across and below span the full width, so the side ponds have all the room
+     beside the compass and never spill onto the side players. */
   .middle__grid {
-    padding: 6px 2px;
+    grid-template-areas:
+      'ptop ptop ptop'
+      'pleft compass pright'
+      'pbottom pbottom pbottom';
+    padding: 2px;
     gap: 4px;
   }
 
-  .pond {
+  .pond--top,
+  .pond--bottom {
+    align-self: center;
+  }
+
+  .pond--left,
+  .pond--right {
+    justify-self: center;
+  }
+
+  /* Tall and narrow instead: a phone held upright has height to spare, not width.
+     Across and below: 8 tiles a row, 3 rows. Left and right: 8 tiles a column, 3 columns. */
+  .pond,
+  .pond--left,
+  .pond--right {
+    --pond-cols: 8;
     --pond-rows: 3;
   }
+
+  /* The side players' melds run down their edge of the table, keeping their columns narrow. */
+  .seat--left .meld,
+  .seat--right .meld {
+    flex-direction: column;
+    padding: 2px 2px 0;
+  }
+
 
   .me {
     flex-direction: column;
@@ -2554,6 +2848,21 @@ body {
 .onboard__option--compact {
   justify-content: center;
   padding: 10px;
+}
+
+/* A few tiles at the size the hand will have, on a patch of felt. */
+.onboard__tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 12px 14px;
+  border-radius: 10px;
+  background: var(--felt);
+}
+
+.onboard__tiles .tile {
+  --tw: var(--hand-w);
 }
 
 .onboard__option.is-disabled {
