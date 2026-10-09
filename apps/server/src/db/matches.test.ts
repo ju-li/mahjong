@@ -13,7 +13,10 @@ import {
   nextHand,
   prevailingWindFor,
   replay,
+  STANDARD_HOUSE,
+  withHouse,
   type Action,
+  type RuleConfig,
   type Match,
   type Seat,
 } from '@mahjong/engine'
@@ -38,11 +41,12 @@ beforeEach(async () => {
 })
 
 /** A whole match played with seeded random legal actions, plus every hand's actions. */
-function playMatch(seed: number): { match: Match; actions: Action[][] } {
+function playMatch(seed: number, config: RuleConfig = { rules: 'mcr' }, changeAt?: { hand: number; house: unknown }): { match: Match; actions: Action[][] } {
   const rand = mulberry32(seed)
-  let match = newMatch(seed)
+  let match = newMatch(seed, config)
   const actions: Action[][] = []
   while (!isMatchOver(match)) {
+    if (changeAt && match.handIndex === changeAt.hand) match = withHouse(match, changeAt.house)
     let state = match.current!
     const log: Action[] = []
     while (state.phase.kind !== 'ended') {
@@ -67,6 +71,7 @@ function online(players: OnlineMatchRecord['players'], opts: { id?: string; scor
   return {
     id: opts.id ?? randomUUID(),
     rules: 'mcr',
+    house: STANDARD_HOUSE.mcr,
     seed: played.match.seed,
     startedAt: new Date((opts.ended ?? Date.now()) - 3_600_000),
     endedAt: new Date(opts.ended ?? Date.now()),
@@ -125,6 +130,36 @@ describe('online matches', () => {
     expect(await db.selectFrom('matches').select('rated').executeTakeFirstOrThrow()).toEqual({ rated: true })
   })
 
+  it('with house rules are rated too, and keep each hand\'s rules for replays', async () => {
+    const start = { ...STANDARD_HOUSE.hk, kongFaan: 'each1' as const, payment: 'full' as const }
+    const later = { ...start, maxFaan: 8 as const }
+    const custom = playMatch(11, { rules: 'hk', house: start }, { hand: 5, house: later })
+    const rec: OnlineMatchRecord = {
+      ...online([human('a', 'Ann'), human('b', 'Bo'), bot, bot]),
+      rules: 'hk',
+      house: start,
+      seed: custom.match.seed,
+      hands: handSummaries(custom.match),
+      actions: custom.actions,
+      scores: custom.match.scores,
+    }
+    const changes = await recordOnlineMatch(db, rec)
+    expect(changes.size).toBe(2)
+    const stored = await db.selectFrom('matches').select(['rule_set', 'house_rules', 'rated']).where('id', '=', rec.id).executeTakeFirstOrThrow()
+    expect(stored).toEqual({ rule_set: 'hk', house_rules: start, rated: true })
+    const hands = await db.selectFrom('match_hands').selectAll().where('match_id', '=', rec.id).orderBy('hand_index').execute()
+    for (const h of hands) {
+      expect(h.house_rules).toEqual(h.hand_index <= 5 ? start : later) // changed during hand 5: from hand 6
+      const init = newHand({ seed: handSeed(rec.seed, h.hand_index), dealer: dealerFor(h.hand_index), prevailingWind: prevailingWindFor(h.hand_index), rules: 'hk', house: h.house_rules as never })
+      const end = replay(init, h.actions as Action[])
+      expect(end.phase.kind === 'ended' && end.phase.result).toEqual(custom.match.history[h.hand_index]!.result)
+    }
+    const detail = await matchDetail(db, 'a', rec.id)
+    expect(detail!.house).toEqual(start)
+    expect(detail!.hands[7]!.house).toEqual(later)
+    expect((await history(db, 'a')).matches[0]!.house).toEqual(start)
+  })
+
   it('leave ratings alone with fewer than two rated players', async () => {
     const changes = await recordOnlineMatch(db, online([human('a', 'Ann'), human('b', 'Bo', false), bot, bot]))
     expect(changes.size).toBe(0)
@@ -158,6 +193,17 @@ describe('solo matches', () => {
     // Someone else uploading the same seed is their own match.
     expect(await recordSoloMatch(db, 'b', r)).toBe(true)
     expect((await history(db, 'b')).matches).toHaveLength(1)
+  })
+
+  it('keep their house rules, cleaned of anything unknown', async () => {
+    const r = solo(43, { house: { minFan: 4, flowers: 'maybe', extra: 1 } as never })
+    r.hands[0]!.house = { minFan: 0, junk: true } as never
+    expect(await recordSoloMatch(db, 'a', r)).toBe(true)
+    const [m] = (await history(db, 'a')).matches
+    expect(m!.house).toEqual({ minFan: 4, flowers: true })
+    const detail = await matchDetail(db, 'a', m!.id)
+    expect(detail!.hands[0]!.house).toEqual({ minFan: 0, flowers: true })
+    expect(detail!.hands[1]!.house).toEqual(STANDARD_HOUSE.mcr)
   })
 })
 

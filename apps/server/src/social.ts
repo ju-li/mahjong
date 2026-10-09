@@ -14,6 +14,7 @@ import {
 import type { Db } from './db/db'
 import { acceptInvite, areFriends, ensureProfile, friendIds, getProfile, listFriends, remove, respond, sendRequest, updateProfile } from './db/friends'
 import { history, matchDetail, recordSoloMatch, stats } from './db/matches'
+import { getPreferences, savePreferences } from './db/preferences'
 import { services } from './services'
 import { AT_KEY, ONLINE_KEY, publishRefresh, tableOf, topic, type SocialEvent } from './socialBus'
 import { cleanAvatar, cleanName } from './table'
@@ -83,6 +84,11 @@ export class SocialRoom extends Room {
     this.on('stats', async (db, me, _m: unknown, client) => {
       client.send('stats', await stats(db, me))
     })
+    this.on('preferences', async (db, me, m: unknown) => {
+      const stored = await savePreferences(db, me, m)
+      // Every device signed in to this account takes the newest copy.
+      if (stored) await this.presence.publish(topic(me), { kind: 'preferences', preferences: stored } satisfies SocialEvent)
+    })
   }
 
   /** Ask a friend to the table the sender is seated at, after checking they may. */
@@ -138,6 +144,8 @@ export class SocialRoom extends Room {
         const e = event as Partial<SocialEvent> | null
         if (e?.kind === 'invite' && e.invite) {
           for (const c of this.members.get(me) ?? []) c.send('tableInvite', e.invite)
+        } else if (e?.kind === 'preferences' && e.preferences) {
+          for (const c of this.members.get(me) ?? []) c.send('preferences', e.preferences)
         } else void this.guard(() => this.sendFriends(me))
       }
       this.listeners.set(me, listener)
@@ -146,6 +154,7 @@ export class SocialRoom extends Room {
     mine.add(client)
     const open = await this.presence.hincrby(ONLINE_KEY, me, 1)
     await this.sendFriends(me)
+    client.send('preferences', await getPreferences(db, me))
     // First connection anywhere: friends' counts go up.
     if (open === 1) await this.refresh(...(await friendIds(db, me)))
   }

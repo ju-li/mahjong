@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { maximumFor, minimumFor, type RuleConfig } from '@mahjong/engine'
+import { isStandard, maximumFor, minimumFor, type RuleConfig } from '@mahjong/engine'
+import HouseSummary from './house/HouseSummary.vue'
 import type { MessageKey } from '../i18n/messages'
 import { useI18n } from '../i18n/useI18n'
 
@@ -29,6 +30,10 @@ const limits = computed(() => ({ min: minimumFor(props.config), max: maximumFor(
 
 <template>
   <div class="tabs__body">
+    <section v-if="!isStandard(config)" class="guide__section">
+      <h3>{{ t('house.tableTitle') }}</h3>
+      <HouseSummary :config="config" only-changes />
+    </section>
     <section v-for="s in sections" :key="s.title" class="guide__section">
       <h3>{{ t(s.title) }}</h3>
       <p v-for="p in s.body" :key="p">{{ t(p, limits) }}</p>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { houseDiff, isRuleSet, sameConfig, type HouseRules, type RuleConfig } from '@mahjong/engine'
+import { houseDiff, isRuleSet, isStandard, sameConfig, type HouseRules, type RuleConfig } from '@mahjong/engine'
+import type { TableSettings } from '@mahjong/protocol'
 import type { Difficulty } from '@mahjong/bots'
 import FeedbackDialog from './components/FeedbackDialog.vue'
 import FriendsDialog from './components/FriendsDialog.vue'
@@ -56,6 +57,8 @@ const source = computed(() => (atTable.value ? online.source : solo))
 const view = computed(() => source.value.view.value)
 const shownRules = computed(() => source.value.rules.value)
 const shownConfig = computed<RuleConfig>(() => ({ rules: shownRules.value, house: source.value.house.value }))
+/** Rule set in the top bar, marked when the table plays house rules. */
+const rulesLabel = computed(() => `${t(`rules.short.${shownRules.value}`)}${isStandard(shownConfig.value) ? '' : ` · ${t('house.custom')}`}`)
 
 function openProfile() {
   if (profileOpen.value) return
@@ -113,9 +116,36 @@ watch(social.lastError, (e) => {
 const onlineOpen = ref(false)
 const inviteCode = ref<string | undefined>()
 
-async function hostTable() {
-  if (await online.host()) onlineOpen.value = false
+/** Host a table under your default rules and house rules. */
+async function hostWithDefaults(): Promise<string | null> {
+  const code = await online.host()
+  if (code) online.configure({ rules: preferredRules.value, house: preferredHouse.value[preferredRules.value] })
+  return code
 }
+async function hostTable() {
+  if (await hostWithDefaults()) onlineOpen.value = false
+}
+
+/** Host's table settings; another rule set brings the host's own house rules for it. */
+function configureTable(update: Partial<TableSettings>) {
+  online.configure(update.rules && !update.house ? { ...update, house: preferredHouse.value[update.rules] } : update)
+}
+
+/** The table's house rules: the host edits them (now, or from the next hand mid-match), everyone else reviews them. */
+const tableHouseOpen = ref(false)
+function saveTableHouse(house: HouseRules, asDefault: boolean) {
+  tableHouseOpen.value = false
+  const rules = snapshot.value?.settings.rules
+  if (!rules) return
+  online.configure({ house })
+  if (asDefault) preferredHouse.value = { ...preferredHouse.value, [rules]: house }
+}
+/** Mid-match, the host's changes wait for the next hand. */
+const houseFromNextHand = computed(() => {
+  const s = snapshot.value
+  const v = online.source.view.value
+  return !!s && s.phase === 'playing' && !!v && !sameConfig({ rules: s.settings.rules, house: s.settings.house }, v)
+})
 
 /** Invite links wait behind onboarding: the table code to offer at its end, and a friend invite to show. */
 const pendingRoom = ref<string | null>(null)
@@ -145,7 +175,7 @@ async function playWithFriend(userId: string) {
   friendsOpen.value = false
   if (atTable.value) return
   // Use the code from hosting itself: the table's first snapshot may not have arrived yet.
-  const code = await online.host()
+  const code = await hostWithDefaults()
   if (!code) {
     const error = online.error.value
     if (error) showNotice(t(`online.error.${error}`))
@@ -188,6 +218,21 @@ social.on('friendRequest', (f) => {
     sticky: true,
     actions: [{ label: t('friends.accept'), primary: true, run: () => social.respond(f.userId, true) }],
   })
+})
+
+/** Joining a table with house rules, or its host changing them, gets a notice you can review. */
+let tableHouse: { code: string; house: string } | null = null
+watch(snapshot, (s) => {
+  if (!s) return void (tableHouse = null)
+  const house = JSON.stringify(s.settings.house)
+  const before = tableHouse?.code === s.code ? tableHouse.house : null
+  tableHouse = { code: s.code, house }
+  if (s.you === s.host || before === house) return
+  const n = houseDiff({ rules: s.settings.rules, house: s.settings.house }).length
+  const review = [{ label: t('house.review'), primary: true, run: () => void (tableHouseOpen.value = true) }]
+  if (before === null) {
+    if (n > 0) toasts.push({ key: 'house-rules', text: t('toast.houseRules', { n }), actions: review })
+  } else toasts.push({ key: 'house-rules', text: t(s.phase === 'playing' ? 'toast.houseChangedNextHand' : 'toast.houseChanged', { name: hostName.value }), actions: review })
 })
 
 /** Friends sitting down at or leaving your table get a passing mention. */
@@ -420,11 +465,11 @@ async function loadLatest() {
           @click="navOpen = !navOpen"
         >
           <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
-          {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
+          {{ t('app.title') }} <small>{{ rulesLabel }}</small>
         </button>
         <template v-else>
           <img class="topbar__logo" src="/icon.svg" alt="" width="32" height="32" />
-          {{ t('app.title') }} <small>{{ t(`rules.short.${shownRules}`) }}</small>
+          {{ t('app.title') }} <small>{{ rulesLabel }}</small>
         </template>
         <button
           v-if="snapshot"
@@ -474,6 +519,7 @@ async function loadLatest() {
         <div class="topbar__group">
           <template v-if="atTable">
             <button class="action" @click="leaveTable"><MenuIcon name="leave" />{{ t('lobby.leave') }}</button>
+            <button class="action action--quiet-light" @click="tableHouseOpen = true"><MenuIcon name="rules" />{{ t('house.title') }}</button>
             <button v-if="canInviteFriends" class="action action--quiet-light" @click="friendsOpen = true"><MenuIcon name="friends" />{{ t('tableInvite.button') }}</button>
           </template>
           <template v-else>
@@ -504,7 +550,8 @@ async function loadLatest() {
       :snapshot="snapshot"
       :is-host="isHost"
       :can-invite-friends="canInviteFriends"
-      @configure="online.configure"
+      @configure="configureTable"
+      @house-rules="tableHouseOpen = true"
       @start="online.start"
       @edit-profile="openProfile()"
       @open-player="(p: number) => (playerCard = p)"
@@ -590,6 +637,18 @@ async function loadLatest() {
     <RulesDialog v-if="rulesDialog" :tab="rulesDialog.tab" :focus="rulesDialog.focus" :config="shownConfig" @close="rulesDialog = null" />
 
     <Onboarding v-if="needsOnboarding" :invite="pendingRoom" @done="onboardingDone" />
+
+    <HouseRulesDialog
+      v-if="tableHouseOpen && snapshot"
+      :key="`${snapshot.settings.rules}:${JSON.stringify(snapshot.settings.house)}`"
+      :rules="snapshot.settings.rules"
+      :initial="snapshot.settings.house"
+      :read-only="!isHost"
+      :offer-default="isHost"
+      :note="houseFromNextHand || (isHost && snapshot.phase === 'playing') ? t('house.fromNextHand') : undefined"
+      @save="saveTableHouse"
+      @close="tableHouseOpen = false"
+    />
 
     <HouseRulesDialog
       v-if="houseOpen"

@@ -9,6 +9,7 @@ import {
   type InviteResult,
   type MatchDetailReply,
   type PlayerStats,
+  type PreferencesSync,
   type SoloSaved,
   type SocialClientMessages,
   type SocialJoinOptions,
@@ -16,6 +17,7 @@ import {
   type TableInviteResult,
 } from '@mahjong/protocol'
 import { track } from './analytics'
+import { connectPreferences, disconnectPreferences, receivePreferences } from './preferenceSync'
 import { useAccount } from './useAccount'
 import { accountNameFor, useProfile } from './profile'
 import { SERVER_URL } from './serverUrl'
@@ -169,9 +171,13 @@ export function useSocial() {
       r.onMessage('historyPage', (page: HistoryPage) => answer('historyPage', page))
       r.onMessage('matchDetail', (detail: MatchDetailReply) => answer('matchDetail', detail))
       r.onMessage('stats', (stats: PlayerStats) => answer('stats', stats))
+      // Settings follow the account: the server sends its copy on joining and whenever another device saves.
+      r.onMessage('preferences', (p: PreferencesSync) => receivePreferences(p))
+      connectPreferences((p) => send('preferences', p))
       r.onLeave(() => {
         if (room !== r) return
         room = null
+        disconnectPreferences()
         for (const type of Object.keys(waiting) as (keyof Replies)[]) while (waiting[type].length) answer(type, null)
         retry()
       })
@@ -200,6 +206,7 @@ export function useSocial() {
     const r = room
     room = null
     friends.value = null
+    disconnectPreferences()
     void r?.leave().catch(() => {})
   }
 

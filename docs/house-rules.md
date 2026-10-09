@@ -1,6 +1,14 @@
 # House rules: research and plan
 
-Status: proposal, not started. Research catalog with sources: [`house-rules-research.md`](house-rules-research.md).
+Status: phase 1 is built (see SPEC T49), with these decisions:
+- House rules are part of a **mandatory full-screen onboarding** (settings v2), one question per page, each skippable, with a payout preview.
+- **Terminology** (和/胡, 点和/点炮/放炮/放铳, 荒庄/流局, 饼/筒, 条/索, 将/眼) is a personal display choice.
+- Preferences sync to the account.
+- Hosts' tables start with their defaults; joiners get a notice and can review; the host can change house rules mid-match, applying from the next hand, optionally saving them as their default.
+- MCR gets a casual minimum (8/4/0) and flowers on/off.
+- **Custom-rule matches are rated** on their rule set's ladder. This supersedes the "unrated" proposal below.
+
+Research catalog with sources: [`house-rules-research.md`](house-rules-research.md).
 
 ## Why
 

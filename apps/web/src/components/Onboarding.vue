@@ -10,6 +10,7 @@ import HouseSummary from './house/HouseSummary.vue'
 import PayoutPreview from './house/PayoutPreview.vue'
 import { avatarSvg } from '../game/avatar'
 import { isMobile } from '../game/device'
+import { restoredFromAccount } from '../game/preferenceSync'
 import { useProfile } from '../game/profile'
 import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, useSettings } from '../game/settings'
 import { playSound } from '../game/sound'
@@ -119,6 +120,9 @@ async function focusStep() {
 }
 watch(index, focusStep)
 onMounted(focusStep)
+
+// Signed in to an account that already has preferences: they are this player's, no questions needed.
+watch(restoredFromAccount, () => emit('done', props.invite ? 'join' : 'solo'))
 
 const titles: Record<Exclude<Step, `q:${string}`>, MessageKey> = {
   language: 'onboarding.language.title',
@@ -282,6 +286,9 @@ const intro = computed(() =>
       </div>
 
       <p v-if="step === 'rules' || step === 'terms' || step === 'defaults'" class="onboard__hint">{{ t('onboarding.later') }}</p>
+      <p v-if="step === 'language' && account.enabled && !account.signedIn.value" class="onboard__hint">
+        <button type="button" class="linklike" @click="account.signIn()">{{ t('onboarding.haveAccount') }}</button>
+      </p>
 
       <footer class="onboard__nav">
         <button v-if="index > 0" type="button" class="action action--quiet-light" @click="back">{{ t('onboarding.back') }}</button>

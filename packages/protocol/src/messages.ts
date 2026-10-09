@@ -1,5 +1,5 @@
 import type { Difficulty } from '@mahjong/bots'
-import type { Action, Player, PlayerView, RuleSet } from '@mahjong/engine'
+import type { Action, HouseRules, Player, PlayerView, RuleSet } from '@mahjong/engine'
 
 /** Name of the Colyseus room type every table uses. */
 export const ROOM_NAME = 'table'
@@ -37,6 +37,11 @@ export type JoinOptions = {
 
 export type TableSettings = {
   rules: RuleSet
+  /**
+   * House rules for `rules`. The host can change them during a match too: they apply from the
+   * next hand (each hand's view carries the rules it is played with).
+   */
+  house: HouseRules
   difficulty: Difficulty
   claimSeconds: OnlineClaimSeconds
   /** Players may send voice memos. The host can switch it during a match too. */
@@ -124,7 +129,7 @@ export type ClientMessages = {
   deal: Record<string, never>
   /** Change your name and/or avatar. */
   profile: { name?: string; avatar?: number }
-  /** Host: change table settings. `voiceChat` and `reactions` apply any time; the rest only in the lobby. */
+  /** Host: change table settings. `voiceChat`, `reactions` and `house` apply any time (house rules from the next hand); the rest only in the lobby. */
   configure: Partial<TableSettings>
   start: Record<string, never>
   /** Host, after the last hand: back to the lobby with the same people. */
@@ -222,7 +227,20 @@ export type SocialClientMessages = {
   matchDetail: { id: string }
   /** Your stats. Answered by `stats`. */
   stats: Record<string, never>
+  /** Save your preferences (default rules, house rules, terminology, game settings) to your account. */
+  preferences: PreferencesSync
 }
+
+/**
+ * Server → client on the social room, message type `preferences` (on joining, and whenever another
+ * device saves them); also client → server. `settings` is the web app's own settings object, which
+ * the server stores as is for the account; null = never saved. `updatedAt` is when they last changed
+ * (ms since the epoch), so the newer copy wins.
+ */
+export type PreferencesSync = { settings: Record<string, unknown> | null; updatedAt: number | null }
+
+/** Largest preferences object the server keeps, as JSON. */
+export const MAX_PREFERENCES_BYTES = 8 * 1024
 
 // ---------------------------------------------------------------------------
 // Match history, stats and rankings
@@ -242,6 +260,8 @@ export type HandOutcome =
 
 export type HandSummary = {
   handIndex: number
+  /** House rules the hand was played with (absent in older records: standard). */
+  house?: HouseRules
   /** Player who dealt. */
   dealer: Player
   prevailingWind: 'E' | 'S' | 'W' | 'N'
@@ -253,6 +273,8 @@ export type HandSummary = {
 /** Client → server: a solo match played on this device, once it is over. */
 export type SoloResult = {
   rules: RuleSet
+  /** House rules the match started with (absent from older builds: standard). */
+  house?: HouseRules
   difficulty: Difficulty
   /** Match seed: with the account, identifies the match so it is saved once. */
   seed: number
@@ -280,6 +302,8 @@ export type MatchSummary = {
   id: string
   kind: 'online' | 'solo'
   rules: RuleSet
+  /** House rules the match started with. */
+  house: HouseRules
   difficulty: Difficulty | null
   rated: boolean
   endedAt: number

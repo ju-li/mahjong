@@ -155,6 +155,7 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     if (complete)
       enqueueResult({
         rules: complete.rules,
+        house: complete.history[0]?.house ?? houseOf(complete),
         difficulty: difficulty.value,
         seed: complete.seed,
         startedAt,
@@ -246,8 +247,8 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   /** Rules for the match's next hands. */
   const config = computed<RuleConfig>(() => ({ rules: match.value.rules, house: houseOf(match.value) }))
 
-  /** Start a fresh match; keeps the current rules unless others are given (which become the preferred ones). */
-  function startNewMatch(next: RuleConfig = config.value): void {
+  /** Start a fresh match under the preferred rules, or under others given (which become the preferred ones). */
+  function startNewMatch(next: RuleConfig = preferredConfig.value): void {
     preferredRules.value = next.rules
     preferredHouse.value = { ...preferredHouse.value, [next.rules]: normalizeHouseRules(next.rules, next.house) }
     handLog = []

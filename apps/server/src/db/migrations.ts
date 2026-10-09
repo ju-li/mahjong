@@ -102,6 +102,29 @@ export const migrations: Record<string, Migration> = {
       for (const t of ['rating_history', 'ratings', 'match_hands', 'match_players', 'matches']) await db.schema.dropTable(t).execute()
     },
   },
+  '0003_house_rules': {
+    async up(db: Kysely<unknown>) {
+      for (const statement of [
+        // A player's synced preferences: default rules, house rules, terminology, game settings.
+        sql`alter table profiles add column preferences jsonb`,
+        sql`alter table profiles add column preferences_updated_at timestamptz`,
+        // House rules a match started with ('{}' = standard, as every earlier match was played).
+        sql`alter table matches add column house_rules jsonb not null default '{}'`,
+        // House rules each hand was played with; the host may change them between hands. Null = standard.
+        sql`alter table match_hands add column house_rules jsonb`,
+      ])
+        await statement.execute(db)
+    },
+    async down(db: Kysely<unknown>) {
+      for (const statement of [
+        sql`alter table match_hands drop column house_rules`,
+        sql`alter table matches drop column house_rules`,
+        sql`alter table profiles drop column preferences_updated_at`,
+        sql`alter table profiles drop column preferences`,
+      ])
+        await statement.execute(db)
+    },
+  },
 }
 
 const provider: MigrationProvider = { getMigrations: async () => migrations }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { chooseAction } from '@mahjong/bots'
-import { seatOf, settledScores, type GameState, type Match, type Player } from '@mahjong/engine'
+import { seatOf, settledScores, STANDARD_HOUSE, type GameState, type Match, type Player } from '@mahjong/engine'
 import { MAX_VOICE_BYTES, MAX_VOICE_MS, REACTION_BURST, REACTION_WINDOW_MS, type Snapshot } from '@mahjong/protocol'
 import { cleanAvatar, cleanName, RESERVE_MS, Table, TURN_MS, VOICE_GAP_MS, VOICE_PER_MINUTE, type TableEnv } from './table'
 
@@ -151,9 +151,36 @@ describe('lobby', () => {
     table.configure('c0', { difficulty: 'beginner' })
     expect(snap('c1').settings.difficulty).toBe('beginner')
     table.configure('c0', { difficulty: 'hard' })
-    expect(snap('c1').settings).toEqual({ rules: 'hk', difficulty: 'hard', claimSeconds: 60, voiceChat: true, reactions: true })
+    expect(snap('c1').settings).toEqual({ rules: 'hk', house: STANDARD_HOUSE.hk, difficulty: 'hard', claimSeconds: 60, voiceChat: true, reactions: true })
     table.start('c0')
     expect(snap('c1').phase).toBe('playing')
+  })
+
+  it('takes the host\'s house rules, cleaned, and resets them with another rule set', () => {
+    const { table, snap } = setup(['Ann', 'Bo'])
+    table.configure('c0', { rules: 'hk', house: { kongFaan: 'each1', payment: 'full', maxFaan: 99 } })
+    expect(snap('c1').settings.house).toEqual({ ...STANDARD_HOUSE.hk, kongFaan: 'each1', payment: 'full' })
+    table.configure('c1', { house: STANDARD_HOUSE.hk }) // not the host
+    expect(snap('c1').settings.house).toEqual({ ...STANDARD_HOUSE.hk, kongFaan: 'each1', payment: 'full' })
+    table.configure('c0', { rules: 'mcr' })
+    expect(snap('c1').settings.house).toEqual(STANDARD_HOUSE.mcr)
+    table.configure('c0', { rules: 'hk', house: { minFaan: 1 } })
+    table.start('c0')
+    expect(snap('c1').match!.view!.house).toEqual({ ...STANDARD_HOUSE.hk, minFaan: 1 })
+  })
+
+  it('applies house rules changed mid-match from the next hand', () => {
+    const { env, table, clients, snap } = setup(['Ann', 'Bo'])
+    table.configure('c0', { rules: 'hk' })
+    table.start('c0')
+    const changed = { ...STANDARD_HOUSE.hk, kongFaan: 'melded1concealed2' }
+    table.configure('c0', { house: changed, rules: 'mcr' }) // rule set: lobby only
+    expect(snap('c1').settings).toMatchObject({ rules: 'hk', house: changed })
+    expect(snap('c1').match!.view!.house).toEqual(STANDARD_HOUSE.hk)
+    playHand(env, table, clients, snap)
+    for (let i = 0; i < 100 && snap('c1').match!.handIndex === 0; i++) autoplay(table, clients, snap)
+    expect(snap('c1').match!.handIndex).toBe(1)
+    expect(snap('c1').match!.view!.house).toEqual(changed)
   })
 
   it('lets the host switch voice memos and reactions mid-match, but nothing else', () => {
@@ -164,7 +191,7 @@ describe('lobby', () => {
     table.configure('c1', { reactions: false }) // not the host
     expect(snap('c1').settings.reactions).toBe(true)
     table.configure('c0', { reactions: false, voiceChat: true, rules: 'hk', claimSeconds: 120 })
-    expect(snap('c1').settings).toEqual({ rules: 'mcr', difficulty: 'medium', claimSeconds: 40, voiceChat: true, reactions: false })
+    expect(snap('c1').settings).toEqual({ rules: 'mcr', house: STANDARD_HOUSE.mcr, difficulty: 'medium', claimSeconds: 40, voiceChat: true, reactions: false })
     table.configure('c0', { voiceChat: 'no' }) // not a switch: ignored
     expect(snap('c1').settings.voiceChat).toBe(true)
   })
