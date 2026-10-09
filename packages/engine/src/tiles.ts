@@ -89,16 +89,18 @@ export function sameKind(a: TileKind, b: TileKind): boolean {
   return tileKey(a) === tileKey(b)
 }
 
-/** Full 144-tile MCR set in canonical (unshuffled) order: 4 × 34 playable kinds, then 8 flowers. */
-export function createWall(): Tile[] {
+/** Full 144-tile set in canonical (unshuffled) order: 4 × 34 playable kinds, then 8 flowers (left out when `flowers` is false). */
+export function createWall(flowers = true): Tile[] {
   const tiles: Tile[] = []
   for (const kind of PLAYABLE_KINDS) {
     for (let i = 0; i < COPIES_PER_PLAYABLE_KIND; i++) {
       tiles.push({ id: tiles.length, kind })
     }
   }
-  for (const kind of FLOWER_KINDS) {
-    tiles.push({ id: tiles.length, kind })
+  if (flowers) {
+    for (const kind of FLOWER_KINDS) {
+      tiles.push({ id: tiles.length, kind })
+    }
   }
   return tiles
 }

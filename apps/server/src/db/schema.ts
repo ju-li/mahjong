@@ -19,6 +19,9 @@ export type ProfilesTable = {
   avatar: ColumnType<number | null, number | null | undefined, number | null>
   /** Code in the player's friend invite link. */
   friend_code: string
+  /** The player's synced app settings (`PreferencesSync.settings`); null = never saved. */
+  preferences: ColumnType<unknown, string | null | undefined, string | null>
+  preferences_updated_at: ColumnType<Date | null, Date | null | undefined, Date | null>
   created_at: ColumnType<Date, never, never>
   updated_at: ColumnType<Date, never, Date>
 }
@@ -43,6 +46,8 @@ export type MatchesTable = {
   rated: boolean
   /** Solo uploads: `userId:seed`, so the same match is never saved twice. */
   client_key: string | null
+  /** House rules the match started with, as JSON ('{}' = standard). */
+  house_rules: ColumnType<unknown, string | undefined, string>
   started_at: Date
   ended_at: Date
 }
@@ -73,6 +78,8 @@ export type MatchHandsTable = {
   player_deltas: number[]
   /** Every action of the hand, for replays (online matches only). */
   actions: ColumnType<unknown, string | null, string | null>
+  /** House rules the hand was played with, as JSON; null = standard. */
+  house_rules: ColumnType<unknown, string | null | undefined, string | null>
 }
 
 export type RatingsTable = {

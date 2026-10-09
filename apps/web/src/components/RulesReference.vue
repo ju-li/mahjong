@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { RuleSet } from '@mahjong/engine'
+import { isStandard, maximumFor, minimumFor, type RuleConfig } from '@mahjong/engine'
+import HouseSummary from './house/HouseSummary.vue'
 import type { MessageKey } from '../i18n/messages'
 import { useI18n } from '../i18n/useI18n'
 
-const props = defineProps<{ rules: RuleSet }>()
+const props = defineProps<{ config: RuleConfig }>()
 const emit = defineEmits<{ fans: [] }>()
 
 const { t } = useI18n()
 
 /** Each section: a heading and its paragraphs. Winning and scoring differ per rule set. */
 const sections = computed(() => {
-  const hk = props.rules === 'hk'
+  const hk = props.config.rules === 'hk'
   const list: { title: MessageKey; body: MessageKey[] }[] = [
     { title: 'guide.goal.title', body: ['guide.goal.body'] },
     { title: 'guide.tiles.title', body: ['guide.tiles.body', 'guide.tiles.flowers'] },
@@ -23,13 +24,19 @@ const sections = computed(() => {
   ]
   return list
 })
+/** The table's minimum and limit, for paragraphs that quote them. */
+const limits = computed(() => ({ min: minimumFor(props.config), max: maximumFor(props.config) ?? '' }))
 </script>
 
 <template>
   <div class="tabs__body">
+    <section v-if="!isStandard(config)" class="guide__section">
+      <h3>{{ t('house.tableTitle') }}</h3>
+      <HouseSummary :config="config" only-changes />
+    </section>
     <section v-for="s in sections" :key="s.title" class="guide__section">
       <h3>{{ t(s.title) }}</h3>
-      <p v-for="p in s.body" :key="p">{{ t(p) }}</p>
+      <p v-for="p in s.body" :key="p">{{ t(p, limits) }}</p>
     </section>
     <p class="guide__more">
       <button class="linklike" @click="emit('fans')">{{ t('guide.seeFans') }}</button>

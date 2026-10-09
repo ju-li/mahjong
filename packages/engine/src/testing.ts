@@ -3,6 +3,7 @@ import { createWall, isFlower, kindIndex, type Tile } from './tiles'
 import { mulberry32 } from './rng'
 import { applyAction, legalActions } from './rules'
 import { newHand } from './deal'
+import { normalizeHouseRules, type HouseRules, type RuleConfig } from './house'
 import { scoreFor, type RuleSet } from './ruleset'
 import { scoreHand, type ScoringMeld, type WinContext } from './scoring'
 
@@ -21,7 +22,8 @@ export function tileIdsInPlay(state: GameState): number[] {
 
 export function expectConservation(state: GameState): void {
   const ids = tileIdsInPlay(state).sort((a, b) => a - b)
-  if (ids.length !== 144 || ids.some((id, i) => id !== i)) {
+  const total = state.house?.flowers === false ? 136 : 144
+  if (ids.length !== total || ids.some((id, i) => id !== i)) {
     throw new Error(`tile conservation broken: ${ids.length} ids`)
   }
 }
@@ -111,6 +113,8 @@ export type BuildOptions = {
   turn?: Seat
   phase?: GameState['phase']
   rules?: RuleSet
+  /** House rules for `rules`; standard when left out. */
+  house?: HouseRules
 }
 
 /** Build an arbitrary but conserving state: listed tiles are taken from the 144-tile set, the rest fill the wall. */
@@ -142,8 +146,10 @@ export function buildState(o: BuildOptions): GameState {
     for (const t of surplus) (isFlower(t.kind) ? flowerSink[3]! : discards[3]!).push(t)
   }
   while (hands.length < 4) hands.push([])
+  const rules = o.rules ?? 'mcr'
   return {
-    rules: o.rules ?? 'mcr',
+    rules,
+    house: normalizeHouseRules(rules, o.house),
     seed: 0,
     dealer: o.dealer ?? 0,
     prevailingWind: 'E',
@@ -167,9 +173,9 @@ export function scoreNotation(hand: string, win: string, o: ScoreOptions = {}) {
   return scoreHand(notationContext(hand, win, o))
 }
 
-/** `scoreNotation` under any rule set. */
-export function scoreNotationFor(rules: RuleSet, hand: string, win: string, o: ScoreOptions = {}) {
-  return scoreFor(rules, notationContext(hand, win, o))
+/** `scoreNotation` under any rule set, with optional house rules. */
+export function scoreNotationFor(config: RuleSet | RuleConfig, hand: string, win: string, o: ScoreOptions = {}) {
+  return scoreFor(typeof config === 'string' ? { rules: config } : config, notationContext(hand, win, o))
 }
 
 function notationContext(hand: string, win: string, o: ScoreOptions): WinContext {

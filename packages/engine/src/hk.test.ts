@@ -75,14 +75,15 @@ describe('Hong Kong scoring', () => {
       expect(f.chinese && f.description.en && f.description.zh).toBeTruthy()
       expect(fanDef(f.id)).toBe(f)
     }
-    expect(fansFor('hk')).toBe(HK_FANS)
+    // The standard table hides the house-rule elements (kong faan, chicken hand).
+    expect(fansFor({ rules: 'hk' }).map((f) => f.id)).toEqual(HK_FANS.map((f) => f.id).filter((id) => !['hk.meldedKong', 'hk.concealedKong', 'hk.chickenHand'].includes(id)))
     expect(fanDef('allGreen')?.points).toBe(88)
   })
 })
 
 describe('Hong Kong payment', () => {
   it('uses the half-spicy table', () => {
-    expect([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(hkBasePoints)).toEqual([8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384])
+    expect([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((f) => hkBasePoints(f))).toEqual([8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384])
     expect(hkBasePoints(20)).toBe(384)
   })
 

@@ -1,5 +1,5 @@
 import type { Presence } from '@colyseus/core'
-import type { FriendTable, TableInvite } from '@mahjong/protocol'
+import type { FriendTable, PreferencesSync, TableInvite } from '@mahjong/protocol'
 
 /**
  * What the social and table rooms share through Colyseus Presence, so it keeps working if rooms
@@ -17,7 +17,7 @@ export const TABLES_KEY = 'social:tables'
 export const topic = (userId: string) => `social:user:${userId}`
 
 /** Published on a user's topic: refresh their friends list, or hand them a table invite. */
-export type SocialEvent = { kind: 'refresh' } | { kind: 'invite'; invite: TableInvite }
+export type SocialEvent = { kind: 'refresh' } | { kind: 'invite'; invite: TableInvite } | { kind: 'preferences'; preferences: PreferencesSync }
 
 /** Tell every connection of these users, in any room, to refresh their friends list. */
 export async function publishRefresh(presence: Presence, ...userIds: string[]): Promise<void> {

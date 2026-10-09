@@ -1,3 +1,4 @@
+import { normalizeHouseRules, type HouseRules } from './house'
 import { shuffle } from './rng'
 import { DEFAULT_RULES, type RuleSet } from './ruleset'
 import type { GameState, Seat } from './state'
@@ -10,6 +11,8 @@ export type NewHandOptions = {
   prevailingWind: Wind
   /** Defaults to MCR. */
   rules?: RuleSet
+  /** House rules for `rules`; defaults to the standard. */
+  house?: HouseRules
 }
 
 /** Draw from the back of the wall (replacement for flowers and kongs). */
@@ -31,10 +34,12 @@ export function replaceFlowers(state: GameState, seat: Seat): void {
 }
 
 /** Shuffle, deal 13 to each seat and a 14th to the dealer, then replace flowers starting with the dealer. */
-export function newHand({ seed, dealer, prevailingWind, rules = DEFAULT_RULES }: NewHandOptions): GameState {
-  const wall = shuffle(createWall(), seed)
+export function newHand({ seed, dealer, prevailingWind, rules = DEFAULT_RULES, house }: NewHandOptions): GameState {
+  const rulesHouse = normalizeHouseRules(rules, house)
+  const wall = shuffle(createWall(rulesHouse.flowers), seed)
   const state: GameState = {
     rules,
+    house: rulesHouse,
     seed,
     dealer,
     prevailingWind,

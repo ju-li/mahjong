@@ -1,6 +1,8 @@
 import { computed, ref, watch } from 'vue'
 import { fanDef } from '@mahjong/engine'
+import { useSettings } from '../game/settings'
 import { MESSAGES, type Locale, type MessageKey } from './messages'
+import { DEFAULT_TERMS, resolveTerms, type Terms } from './terms'
 
 const STORAGE_KEY = 'mahjong.locale'
 
@@ -30,23 +32,27 @@ watch(
   { immediate: true },
 )
 
-export function translate(l: Locale, key: MessageKey, params: Record<string, string | number> = {}): string {
-  return MESSAGES[l][key].replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? `{${name}}`))
+/** A message in `l` with the player's `terms` and then `params` filled in. */
+export function translate(l: Locale, key: MessageKey, params: Record<string, string | number> = {}, terms: Terms = DEFAULT_TERMS): string {
+  return resolveTerms(MESSAGES[l][key], terms).replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? `{${name}}`))
 }
 
 export function useI18n() {
-  const t = (key: MessageKey, params?: Record<string, string | number>) => translate(locale.value, key, params)
+  const { terms } = useSettings()
+  const t = (key: MessageKey, params?: Record<string, string | number>) => translate(locale.value, key, params, terms.value)
+  /** Fill the player's Chinese terms into engine text (fan names and descriptions). */
+  const term = (text: string) => resolveTerms(text, terms.value)
   const fanName = (id: string) => {
     const def = fanDef(id)
     if (!def) return id
-    return locale.value === 'zh-Hans' ? def.chinese : def.name
+    return locale.value === 'zh-Hans' ? term(def.chinese) : def.name
   }
   const fanDescription = (id: string) => {
     const def = fanDef(id)
-    return def ? (locale.value === 'zh-Hans' ? def.description.zh : def.description.en) : ''
+    return def ? (locale.value === 'zh-Hans' ? term(def.description.zh) : def.description.en) : ''
   }
   const toggle = () => {
     locale.value = locale.value === 'en' ? 'zh-Hans' : 'en'
   }
-  return { locale, t, fanName, fanDescription, toggle, isZh: computed(() => locale.value === 'zh-Hans') }
+  return { locale, t, term, terms, fanName, fanDescription, toggle, isZh: computed(() => locale.value === 'zh-Hans') }
 }

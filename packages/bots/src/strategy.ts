@@ -102,11 +102,11 @@ function validWaits(ctx: Ctx, counts: number[], melds: ScoringMeld[]): number {
       robbingKong: false,
       winTileVisible: 4 - ctx.unseen[k]! - counts[k]!,
     }
-    const rules = ctx.view.rules
-    const byDiscard = scoreFor(rules, { ...base, selfDrawn: false })
-    const bySelf = scoreFor(rules, { ...base, selfDrawn: true })
-    if (byDiscard && meetsMinimumFor(rules, byDiscard)) total += ctx.unseen[k]!
-    else if (bySelf && meetsMinimumFor(rules, bySelf)) total += ctx.unseen[k]! / 3 // only a third of draws are ours
+    const config = ctx.view
+    const byDiscard = scoreFor(config, { ...base, selfDrawn: false })
+    const bySelf = scoreFor(config, { ...base, selfDrawn: true })
+    if (byDiscard && meetsMinimumFor(config, byDiscard)) total += ctx.unseen[k]!
+    else if (bySelf && meetsMinimumFor(config, bySelf)) total += ctx.unseen[k]! / 3 // only a third of draws are ours
   }
   return total
 }

@@ -7,6 +7,7 @@ import {
   isMatchOver,
   isRuleSet,
   legalActions,
+  normalizeHouseRules,
   matchPoints,
   newMatch,
   nextHand,
@@ -14,7 +15,9 @@ import {
   sameAction,
   seatOf,
   settledScores,
+  standardHouse,
   viewFor,
+  withHouse,
   type Action,
   type Match,
   type Player,
@@ -113,7 +116,7 @@ export function cleanAvatar(raw: unknown, fallback: number | null): number | nul
 export class Table {
   readonly code: string
   phase: 'lobby' | 'playing' = 'lobby'
-  settings: TableSettings = { rules: 'mcr', difficulty: 'medium', claimSeconds: 40, voiceChat: true, reactions: true }
+  settings: TableSettings = { rules: 'mcr', house: standardHouse('mcr'), difficulty: 'medium', claimSeconds: 40, voiceChat: true, reactions: true }
   private slots: Slot[] = PLAYERS.map(() => emptySlot())
   private host: Player = 0
   private match: Match | null = null
@@ -329,16 +332,28 @@ export class Table {
   // ---------------------------------------------------------------------------
   // Lobby
 
-  /** Host: change the table's settings. Voice memos and reactions can be switched mid-match; the rest only in the lobby. */
+  /**
+   * Host: change the table's settings. Voice memos, reactions and house rules can change
+   * mid-match (house rules from the next hand); the rest only in the lobby.
+   */
   configure(client: string, update: unknown): void {
     if (this.playerOf(client) !== this.host || typeof update !== 'object' || !update) return
     const u = update as Partial<Record<keyof TableSettings, unknown>>
     if (typeof u.voiceChat === 'boolean') this.settings.voiceChat = u.voiceChat
     if (typeof u.reactions === 'boolean') this.settings.reactions = u.reactions
     if (this.phase === 'lobby') {
-      if (isRuleSet(u.rules)) this.settings.rules = u.rules
+      // Another rule set starts from its standard house rules unless new ones come along.
+      if (isRuleSet(u.rules) && u.rules !== this.settings.rules) {
+        this.settings.rules = u.rules
+        this.settings.house = standardHouse(u.rules)
+      }
       if (DIFFICULTIES.includes(u.difficulty as never)) this.settings.difficulty = u.difficulty as TableSettings['difficulty']
       if (ONLINE_CLAIM_SECONDS.includes(u.claimSeconds as never)) this.settings.claimSeconds = u.claimSeconds as TableSettings['claimSeconds']
+    }
+    if (u.house !== undefined) {
+      this.settings.house = normalizeHouseRules(this.settings.rules, u.house)
+      // The hand in play keeps its rules; the next one is dealt with these.
+      if (this.match) this.match = withHouse(this.match, this.settings.house)
     }
     this.changed()
   }
@@ -352,7 +367,7 @@ export class Table {
   private newMatch(scores?: readonly number[]): void {
     this.stopTimers()
     this.phase = 'playing'
-    this.match = newMatch(this.env.random32(), this.settings.rules, scores)
+    this.match = newMatch(this.env.random32(), { rules: this.settings.rules, house: this.settings.house }, scores)
     this.handLog = []
     this.handLogs = []
     this.matchId = randomUUID()
@@ -407,6 +422,7 @@ export class Table {
     this.env.onMatchEnd?.({
       id: this.matchId,
       rules: done.rules,
+      house: done.history[0]?.house ?? normalizeHouseRules(done.rules, done.house),
       seed: done.seed,
       startedAt: new Date(this.matchStartedAt),
       endedAt: new Date(this.env.now()),
