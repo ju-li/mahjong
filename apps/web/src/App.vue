@@ -23,7 +23,7 @@ import { friendsCount, parseFriendCode, seatChanges } from './game/friends'
 import { signed } from './game/stats'
 import { useInstall } from './game/install'
 import { shareInvite } from './game/invite'
-import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, useSettings } from './game/settings'
+import { CLAIM_TIMER_OPTIONS, RULE_OPTIONS, TEXT_SIZE_OPTIONS, TILE_SIZE_OPTIONS, useSettings } from './game/settings'
 import { useMatch } from './game/useMatch'
 import { useOnline } from './game/useOnline'
 import { useProfile } from './game/profile'
@@ -42,7 +42,7 @@ const rulesDialog = ref<{ tab: RulesTab; focus?: string } | null>(null)
 
 const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
-const { claimSeconds, sound, voice, voiceChat, textSize, needsOnboarding, finishOnboarding, rules: preferredRules, house: preferredHouse, ruleConfig, terms } = useSettings()
+const { claimSeconds, sound, voice, voiceChat, textSize, tileSize, needsOnboarding, finishOnboarding, rules: preferredRules, house: preferredHouse, ruleConfig, terms } = useSettings()
 const online = useOnline()
 const { snapshot, isHost, link } = online
 /** At an online table (lobby or match); the solo match waits meanwhile. */
@@ -420,6 +420,7 @@ function captureFeedback() {
       voice: voice.value,
       voiceChat: voiceChat.value,
       textSize: textSize.value,
+      tileSize: tileSize.value,
     },
     screen: atTable.value ? `online ${s?.phase}` : 'solo',
     onBreak: onBreak.value,
@@ -699,6 +700,12 @@ async function loadLatest() {
             <span>{{ t('app.textSize') }}</span>
             <select v-model="textSize" :aria-label="t('app.textSize')">
               <option v-for="s in TEXT_SIZE_OPTIONS" :key="s" :value="s">{{ t(`textSize.${s}`) }}</option>
+            </select>
+          </label>
+          <label class="select">
+            <span>{{ t('app.tileSize') }}</span>
+            <select v-model.number="tileSize" :aria-label="t('app.tileSize')">
+              <option v-for="s in TILE_SIZE_OPTIONS" :key="s" :value="s">{{ t(`tileSize.${s}`) }}</option>
             </select>
           </label>
           <label class="select toggle">

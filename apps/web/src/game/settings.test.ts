@@ -20,7 +20,7 @@ async function importSettings() {
 }
 
 const STANDARD = { mcr: STANDARD_HOUSE.mcr, hk: STANDARD_HOUSE.hk }
-const DEFAULTS = { claimSeconds: 0, sound: true, voice: true, voiceChat: true, difficulty: 'easy', rules: 'mcr', house: STANDARD, textSize: 'normal', terms: DEFAULT_TERMS }
+const DEFAULTS = { claimSeconds: 0, sound: true, voice: true, voiceChat: true, difficulty: 'easy', rules: 'mcr', house: STANDARD, textSize: 'normal', tileSize: 150, terms: DEFAULT_TERMS }
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -72,6 +72,7 @@ describe('settings', () => {
     s.rules.value = 'hk'
     s.house.value = { ...s.house.value, hk: { ...STANDARD_HOUSE.hk, kongFaan: 'each1' } }
     s.textSize.value = 'larger'
+    s.tileSize.value = 200
     s.terms.value = { ...s.terms.value, win: '胡' }
     await nextTick()
     const expected = {
@@ -83,6 +84,7 @@ describe('settings', () => {
       rules: 'hk',
       house: { mcr: STANDARD_HOUSE.mcr, hk: { ...STANDARD_HOUSE.hk, kongFaan: 'each1' } },
       textSize: 'larger',
+      tileSize: 200,
       terms: { ...DEFAULT_TERMS, win: '胡' },
     }
     expect(JSON.parse(data.get('mahjong.settings.v2')!)).toEqual(expected)
@@ -100,7 +102,7 @@ describe('settings', () => {
 
   it('ignores invalid stored values', async () => {
     stubStorage({
-      'mahjong.settings.v2': JSON.stringify({ claimSeconds: 10, sound: 'yes', difficulty: 'insane', rules: 'riichi-x', textSize: 'huge', house: { hk: { maxFaan: 99 } }, terms: { win: 'x' } }),
+      'mahjong.settings.v2': JSON.stringify({ claimSeconds: 10, sound: 'yes', difficulty: 'insane', rules: 'riichi-x', textSize: 'huge', tileSize: 100, house: { hk: { maxFaan: 99 } }, terms: { win: 'x' } }),
     })
     const { load } = await importSettings()
     expect(load()).toEqual(DEFAULTS)

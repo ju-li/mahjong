@@ -24,6 +24,9 @@ const DIFFICULTIES: readonly Difficulty[] = ['beginner', 'easy', 'medium', 'hard
 /** Scales every text size in the app (see the type scale in style.css). */
 export const TEXT_SIZE_OPTIONS = ['normal', 'large', 'larger'] as const
 export type TextSize = (typeof TEXT_SIZE_OPTIONS)[number]
+/** Face-up tiles, as a percentage of their original size (face-down tiles keep theirs). */
+export const TILE_SIZE_OPTIONS = [125, 150, 200] as const
+export type TileSize = (typeof TILE_SIZE_OPTIONS)[number]
 
 /** House rules the player plays by default, kept per rule set so switching rule sets loses nothing. */
 export type HouseByRules = HouseRulesFor
@@ -37,6 +40,7 @@ export type Settings = {
   rules: RuleSet
   house: HouseByRules
   textSize: TextSize
+  tileSize: TileSize
   terms: Terms
 }
 
@@ -44,7 +48,7 @@ export function standardHouseByRules(): HouseByRules {
   return { mcr: normalizeHouseRules('mcr', undefined), hk: normalizeHouseRules('hk', undefined) }
 }
 
-/** New players start gently: easy bots, no claim timer, sound on. */
+/** New players start gently: easy bots, no claim timer, sound on, tiles half again as big. */
 export const DEFAULTS: Settings = {
   claimSeconds: 0,
   sound: true,
@@ -54,6 +58,7 @@ export const DEFAULTS: Settings = {
   rules: 'mcr',
   house: standardHouseByRules(),
   textSize: 'normal',
+  tileSize: 150,
   terms: DEFAULT_TERMS,
 }
 
@@ -84,6 +89,7 @@ export function normalizeSettings(raw: Record<string, unknown> | null): Settings
     rules: isRuleSet(rules) ? rules : DEFAULTS.rules,
     house: normalizeHouseByRules(raw?.house),
     textSize: TEXT_SIZE_OPTIONS.includes(raw?.textSize as TextSize) ? (raw!.textSize as TextSize) : DEFAULTS.textSize,
+    tileSize: TILE_SIZE_OPTIONS.includes(raw?.tileSize as TileSize) ? (raw!.tileSize as TileSize) : DEFAULTS.tileSize,
     terms: normalizeTerms(raw?.terms),
   }
 }
@@ -110,6 +116,7 @@ const house = ref<HouseByRules>(initial.house)
 /** The preferred rule set with its house rules. */
 const ruleConfig = computed<RuleConfig>(() => ({ rules: rules.value, house: house.value[rules.value] }))
 const textSize = ref<TextSize>(initial.textSize)
+const tileSize = ref<TileSize>(initial.tileSize)
 /** Chinese words the player prefers (和 or 胡, 点和 or 点炮…); display only. */
 const terms = ref<Terms>(initial.terms)
 
@@ -124,12 +131,13 @@ function current(): Settings {
     rules: rules.value,
     house: house.value,
     textSize: textSize.value,
+    tileSize: tileSize.value,
     terms: terms.value,
   }
 }
 
 watch(
-  [claimSeconds, sound, voice, voiceChat, difficulty, rules, house, textSize, terms, needsOnboarding],
+  [claimSeconds, sound, voice, voiceChat, difficulty, rules, house, textSize, tileSize, terms, needsOnboarding],
   () => {
     if (needsOnboarding.value) return
     try {
@@ -150,6 +158,14 @@ watch(
   { immediate: true },
 )
 
+watch(
+  tileSize,
+  (size) => {
+    if (typeof document !== 'undefined') document.documentElement.dataset.tileSize = String(size)
+  },
+  { immediate: true },
+)
+
 export function useSettings() {
   const finishOnboarding = () => {
     needsOnboarding.value = false
@@ -164,7 +180,8 @@ export function useSettings() {
     rules.value = next.rules
     house.value = next.house
     textSize.value = next.textSize
+    tileSize.value = next.tileSize
     terms.value = next.terms
   }
-  return { claimSeconds, sound, voice, voiceChat, difficulty, rules, house, ruleConfig, textSize, terms, needsOnboarding, finishOnboarding, apply, current }
+  return { claimSeconds, sound, voice, voiceChat, difficulty, rules, house, ruleConfig, textSize, tileSize, terms, needsOnboarding, finishOnboarding, apply, current }
 }
