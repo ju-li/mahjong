@@ -50,4 +50,8 @@ self.addEventListener('fetch', (event) => {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), offlineServiceWorker()],
+  build: {
+    // Keep recorded callouts as files: inlined, every clip would be base64 inside the JS bundle.
+    assetsInlineLimit: (file) => (file.endsWith('.mp3') ? false : undefined),
+  },
 })

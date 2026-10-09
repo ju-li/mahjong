@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { applyAction, legalActions, newHand, viewFor, type Action, type GameState, type Seat } from '@mahjong/engine'
+import { applyAction, legalActions, newHand, PLAYABLE_KINDS, viewFor, type Action, type GameState, type Seat } from '@mahjong/engine'
+import { TERM_OPTIONS } from '../i18n/terms'
 import { calloutFor, tileCall } from './callout'
+import { CALLOUT_PHRASES, MELD_CALLS, WIN_CALLS } from './calloutVocab'
 
 /** Play a hand, preferring claims, and collect every callout; also checks a seat's view calls the same. */
 function playHand(seed: number): string[] {
@@ -58,5 +60,30 @@ describe('calloutFor', () => {
     expect(calloutFor(s, win(null))).toEqual({ seat: 1, text: '自摸' })
     expect(calloutFor(s, win(2))).toEqual({ seat: 1, text: '胡' })
     expect(calloutFor(s, { ...s, phase: { kind: 'ended', result: { type: 'drawn' } } })).toBeNull()
+  })
+})
+
+describe('recorded callouts', () => {
+  const texts = new Set(CALLOUT_PHRASES.map((p) => p.text))
+
+  it('cover every phrase a callout can say, under every suit-word choice', () => {
+    for (const dots of TERM_OPTIONS.dots)
+      for (const bamboo of TERM_OPTIONS.bamboo)
+        for (const kind of PLAYABLE_KINDS) expect(texts).toContain(tileCall(kind, { dots, bamboo }))
+    for (const call of [...Object.values(MELD_CALLS), ...Object.values(WIN_CALLS)]) expect(texts).toContain(call)
+  })
+
+  it('give each phrase its own filename-safe id', () => {
+    const ids = CALLOUT_PHRASES.map((p) => p.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(texts.size).toBe(ids.length)
+    for (const id of ids) expect(id).toMatch(/^[a-z0-9]+$/)
+  })
+
+  it('are recorded for every seat and phrase, or not at all', () => {
+    // A phrase added without regenerating the clips would fall back to speech for some seats only.
+    const clips = Object.keys(import.meta.glob('../assets/callouts/**/*.mp3')).sort()
+    const expected = [0, 1, 2, 3].flatMap((seat) => CALLOUT_PHRASES.map((p) => `../assets/callouts/seat${seat}/${p.id}.mp3`)).sort()
+    if (clips.length > 0) expect(clips).toEqual(expected)
   })
 })
