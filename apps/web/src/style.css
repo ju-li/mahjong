@@ -94,8 +94,11 @@
     --tile-w: clamp(18px, calc((100vw - 48px) / 14.6), 40px);
     --tile-sm-w: clamp(13px, 3.6vw, 20px);
     --tile-xs-w: clamp(10px, 2.7vw, 16px);
-    /* A phone has no width to spare: face-up tiles grow by half at most. */
-    --tile-scale: min(var(--tile-scale-chosen, 1), 1.5);
+    /* The hand takes the full size and scrolls sideways when it no longer fits. */
+    --hand-w: calc(var(--tile-w) * var(--tile-scale));
+    /* Discards grow as far as three columns of them still fit each side of the compass
+       (see the phone layout of the middle below). */
+    --face-sm-w: min(calc(var(--tile-sm-w) * var(--tile-scale)), calc((100vw - 238px) / 6 - 2px));
   }
 }
 
@@ -1189,6 +1192,10 @@ body {
   --tw: var(--hand-w);
 }
 
+.pond .tile {
+  --tw: var(--face-sm-w);
+}
+
 /* Lying face up: the ivory face over a blue back, seen from slightly above. */
 .tile--flat {
   margin-bottom: calc(var(--tw) * 0.12);
@@ -1277,7 +1284,9 @@ body {
       'info info top top'
       'left middle middle right'
       'me me me me';
-    min-height: 0;
+    /* Down to the bottom of the screen: the ponds spread into whatever height is left. */
+    min-height: calc(100vh - 86px);
+    min-height: calc(100dvh - 86px);
     gap: 8px 6px;
     padding: 8px 6px;
   }
@@ -1326,17 +1335,51 @@ body {
     max-width: none;
   }
 
+  /* The middle fills the felt and the ponds spread out over it, each halfway between the
+     compass and the wall, rather than huddling round the compass with bare felt beyond. */
+  .middle {
+    place-items: stretch;
+  }
+
+  .middle__table {
+    display: grid;
+  }
+
+  /* The ponds across and below span the full width, so the side ponds have all the room
+     beside the compass: 2 × 3 columns + compass + gaps + wall = 100vw − 238px + 6 × 2px. */
   .middle__grid {
-    padding: 6px 2px;
+    grid-template-areas:
+      'ptop ptop ptop'
+      'pleft compass pright'
+      'pbottom pbottom pbottom';
+    padding: 2px;
     gap: 4px;
   }
 
-  /* Tall and narrow instead: a phone held upright has height to spare, not width. */
+  .pond--top,
+  .pond--bottom {
+    align-self: center;
+  }
+
+  .pond--left,
+  .pond--right {
+    justify-self: center;
+  }
+
+  /* Tall and narrow instead: a phone held upright has height to spare, not width.
+     Across and below: 8 tiles a row, 3 rows. Left and right: 8 tiles a column, 3 columns. */
   .pond,
   .pond--left,
   .pond--right {
-    --pond-cols: 6;
+    --pond-cols: 8;
     --pond-rows: 3;
+  }
+
+  /* The side players' melds run down their edge of the table, keeping their columns narrow. */
+  .seat--left .meld,
+  .seat--right .meld {
+    flex-direction: column;
+    padding: 2px 2px 0;
   }
 
 
