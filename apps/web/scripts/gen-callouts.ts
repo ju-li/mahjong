@@ -20,7 +20,7 @@ import { CALLOUT_PHRASES, MELD_CALLS, WIN_CALLS, type CalloutPhrase } from '../s
  * One ElevenLabs voice id per seat, so players can be told apart by ear: pick native Mandarin
  * speakers from the Voice Library (say two women, two men). ELEVENLABS_VOICES=id0,id1,id2,id3 overrides.
  */
-const SEAT_VOICES: readonly string[] = ['', '', '', '']
+const SEAT_VOICES: readonly string[] = ['hZTuv9Zqrq4yHYrEmF1r', 'DowyQ68vDpgFYdWVGjc3', 'bhJUNIXWQQ94l8eI2VUf', 'BqljjWyTnrioXPCNkCd4']
 /** eleven_turbo_v2_5 / eleven_flash_v2_5 also take a language code; multilingual v2 sounds best. */
 const MODEL = 'eleven_multilingual_v2'
 const VOICE_SETTINGS = { stability: 0.5, similarity_boost: 0.75, style: 0.2, use_speaker_boost: true }
