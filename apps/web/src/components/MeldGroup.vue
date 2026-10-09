@@ -6,7 +6,7 @@ withDefaults(defineProps<{ meld: ViewMeld; size?: 'xs' | 'sm' }>(), { size: 'sm'
 </script>
 
 <template>
-  <span class="meld" :class="{ 'meld--concealed': !meld.exposed, 'meld--shown': !!meld.tiles }">
+  <span class="meld" :class="{ 'meld--concealed': !meld.exposed }">
     <template v-if="meld.tiles">
       <TileFace
         v-for="(t, i) in meld.tiles"

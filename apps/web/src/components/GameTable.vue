@@ -2,15 +2,20 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { kindIndex, type Action, type PlayerView, type Seat, type Tile, type Wind } from '@mahjong/engine'
 import { REACTIONS, type ReactionId, type VoiceClip } from '@mahjong/protocol'
-import { actionForKey, shortcutFor } from '../game/keyboard'
+import { actionForKey } from '../game/keyboard'
 import { REACTION_EMOJI } from '../game/reactions'
+import { useSettings } from '../game/settings'
+import { useDiscardSpotlight } from '../game/useDiscardSpotlight'
 import { useDragScroll } from '../game/useDragScroll'
 import { useTileMotion } from '../game/useTileMotion'
 import { useI18n } from '../i18n/useI18n'
+import ClaimButtons from './ClaimButtons.vue'
 import MeldGroup from './MeldGroup.vue'
 import MenuIcon from './MenuIcon.vue'
 import PlayerBadge from './PlayerBadge.vue'
+import TableSpotlight from './TableSpotlight.vue'
 import TileFace from './TileFace.vue'
+import { tileLabel } from './tileLabel'
 import VoiceMemoButton from './VoiceMemoButton.vue'
 
 const props = defineProps<{
@@ -41,6 +46,7 @@ const props = defineProps<{
 const emit = defineEmits<{ act: [action: Action]; editProfile: []; openPlayer: [seat: Seat]; react: [reaction: ReactionId]; voice: [clip: VoiceClip] }>()
 
 const { t } = useI18n()
+const { oneTapDiscard } = useSettings()
 
 const root = ref<HTMLElement | null>(null)
 useTileMotion(root)
@@ -55,6 +61,10 @@ let repeat = 0
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && reactMenu.value) {
     closeMenu()
+    return
+  }
+  if (e.key === 'Escape' && pickedId.value !== null) {
+    pickedId.value = null
     return
   }
   if (e.ctrlKey || e.metaKey || e.altKey) return
@@ -208,6 +218,40 @@ watch(drawnId, async (id) => {
   if (el && el.scrollWidth > el.clientWidth) el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' })
 })
 
+// ---- Tiles off the ends of a hand too wide for the screen ----
+
+/** How many tiles are (mostly) out of view on each side; each side with any shows an arrow. */
+const hiddenTiles = ref({ left: 0, right: 0 })
+function measureHand() {
+  const el = handEl.value
+  if (!el) return
+  // Layout positions, not screen ones, so tiles still flying in are counted where they will be.
+  const from = el.scrollLeft
+  const to = from + el.clientWidth
+  let left = 0
+  let right = 0
+  for (const tile of el.querySelectorAll<HTMLElement>('.tile')) {
+    const middle = tile.offsetLeft + tile.offsetWidth / 2
+    if (middle < from) left++
+    else if (middle > to) right++
+  }
+  if (left !== hiddenTiles.value.left || right !== hiddenTiles.value.right) hiddenTiles.value = { left, right }
+}
+function scrollHand(direction: -1 | 1) {
+  const el = handEl.value
+  el?.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' })
+}
+watch(handTiles, () => nextTick(measureHand), { flush: 'post' })
+let handResize: ResizeObserver | undefined
+onMounted(() => {
+  if (handEl.value && typeof ResizeObserver !== 'undefined') {
+    handResize = new ResizeObserver(measureHand)
+    handResize.observe(handEl.value)
+  }
+  measureHand()
+})
+onBeforeUnmount(() => handResize?.disconnect())
+
 const discardIds = computed(() => new Set(props.actions.flatMap((a) => (a.type === 'discard' ? [a.tileId] : []))))
 const otherActions = computed(() => props.actions.filter((a) => a.type !== 'discard' && a.type !== 'draw'))
 
@@ -218,32 +262,147 @@ function discard(tile: Tile) {
   if (action) emit('act', action)
 }
 
-function actionLabel(a: Action): string {
-  switch (a.type) {
-    case 'win':
-      return t('action.win')
-    case 'pung':
-      return t('action.pung')
-    case 'kong':
-      return a.tileIds && a.tileIds.length === 4 ? t('action.concealedKong') : a.tileIds ? t('action.addKong') : t('action.kong')
-    case 'chow':
-      return t('action.chow')
-    case 'pass':
-      return t('action.pass')
-    default:
-      return a.type
+// ---- Discarding: tap a tile to lift it, tap it again to discard (or once, by setting) ----
+
+const pickedId = ref<number | null>(null)
+const pickedTile = computed(() => (pickedId.value === null ? null : (tileById.value.get(pickedId.value) ?? null)))
+// The turn moved on (or the tile left the hand): nothing is lifted any more.
+watch(discardIds, (ids) => {
+  if (pickedId.value !== null && !ids.has(pickedId.value)) pickedId.value = null
+})
+function tapTile(tile: Tile) {
+  if (oneTapDiscard.value || pickedId.value === tile.id) {
+    pickedId.value = null
+    discard(tile)
+  } else {
+    pickedId.value = tile.id
   }
 }
 
-function actionTiles(a: Action): Tile[] {
-  if (a.type === 'chow') return a.tileIds.map((id) => tileById.value.get(id)!).filter(Boolean)
-  if (a.type === 'kong' && a.tileIds) return [tileById.value.get(a.tileIds[0]!)!].filter(Boolean)
-  return []
+// ---- Opponents' discards, shown big in the middle of the table ----
+
+const spot = useDiscardSpotlight()
+const compassEl = ref<HTMLElement | null>(null)
+/** The discard this player can claim right now (pung, chow, kong or win, not just pass). */
+const claimTileId = computed(() => {
+  const p = phase.value
+  if (p.kind !== 'claim' && p.kind !== 'robKong') return null
+  if (p.from === props.view.seat || !p.awaiting || !otherActions.value.some((a) => a.type !== 'pass')) return null
+  return p.tile.id
+})
+/**
+ * Bring a discard to the middle. While the player is studying a pile they opened, only one
+ * they can claim interrupts them (the pile shows the others as they land).
+ */
+function spotlight(tile: Tile, seat: Seat) {
+  const held = tile.id === claimTileId.value
+  if (pile.value && !held) return
+  pile.value = null
+  spot.add(tile, seat, held)
 }
+// A pond that grew got a new discard. A claim shrinks a pond; a new hand empties them all.
+watch(
+  () => props.view.discards.map((d) => d.length),
+  (lengths, before) => {
+    if (lengths.every((n) => n === 0)) return spot.reset()
+    lengths.forEach((n, seat) => {
+      if (seat === props.view.seat || n <= (before[seat] ?? 0)) return
+      spotlight(props.view.discards[seat]![n - 1]!, seat as Seat)
+    })
+  },
+)
+// A tile added to a kong can be robbed: it comes to the middle too.
+watch(
+  () => (phase.value.kind === 'robKong' && phase.value.from !== props.view.seat ? phase.value : null),
+  (p) => p && spotlight(p.tile, p.from),
+)
+// A pile opened late, after its discard was skipped, can still be interrupted by a claim.
+watch(claimTileId, (id) => {
+  const p = phase.value
+  if (id !== null && pile.value && (p.kind === 'claim' || p.kind === 'robKong')) spotlight(p.tile, p.from)
+})
+watch(claimTileId, (id) => spot.hold(id))
+onBeforeUnmount(spot.reset)
+
+/** The claim buttons sit with the tile in the middle while it is there. */
+const claimInSpotlight = computed(() => spot.entries.value.some((e) => e.held))
+/** Read out each discard as it comes in. */
+const spotText = computed(() => {
+  const last = spot.entries.value[spot.entries.value.length - 1]
+  return last ? t('spot.discarded', { name: props.names[last.seat]!, tile: tileLabel(last.tile.kind, t) }) : ''
+})
+
+const FLY_MS = 450
+const EASE = 'cubic-bezier(.2,.75,.25,1)'
+const reducedMotion = () => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+const fade = (el: HTMLElement, to: 0 | 1, then: () => void) =>
+  el.animate([{ opacity: 1 - to }, { opacity: to }], { duration: 200, fill: 'forwards' }).finished.then(then, then)
+
+/** In from the discarder's hand to its place in the middle. */
+function onSpotEnter(el: Element, done: () => void) {
+  const item = el as HTMLElement
+  const origin = root.value?.querySelector(`[data-origin="hand-${item.dataset.seat}"]`)?.getBoundingClientRect()
+  if (reducedMotion() || !origin) return void fade(item, 1, done)
+  const to = item.getBoundingClientRect()
+  const dx = origin.left + origin.width / 2 - (to.left + to.width / 2)
+  const dy = origin.top + origin.height / 2 - (to.top + to.height / 2)
+  item
+    .animate([{ transform: `translate(${dx}px, ${dy}px) scale(0.4)`, opacity: 0.4 }, { transform: 'none', opacity: 1 }], { duration: FLY_MS, easing: EASE })
+    .finished.then(done, done)
+}
+
+/** Back down onto the table: its pond, or the meld it was claimed into. */
+function onSpotLeave(el: Element, done: () => void) {
+  const item = el as HTMLElement
+  const id = Number(item.dataset.spot)
+  const finish = () => {
+    spot.landed(id)
+    done()
+  }
+  const tile = item.querySelector<HTMLElement>('.spot__tile')
+  const to = root.value?.querySelector(`.board__felt [data-tile-id="${id}"]`)?.getBoundingClientRect()
+  if (reducedMotion() || !tile || !to?.width) return void fade(item, 0, finish)
+  const from = tile.getBoundingClientRect()
+  const box = item.getBoundingClientRect()
+  const pivot = `${from.left - box.left}px ${from.top - box.top}px`
+  for (const extra of item.querySelectorAll<HTMLElement>('.spot__who, .actions')) extra.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FLY_MS / 2, fill: 'forwards' })
+  item
+    .animate(
+      [
+        { transformOrigin: pivot, transform: 'none' },
+        { transformOrigin: pivot, transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width})` },
+      ],
+      { duration: FLY_MS, easing: EASE, fill: 'forwards' },
+    )
+    .finished.then(finish, finish)
+}
+
+// ---- A pond, or your melds, shown big on request ----
+
+type Pile = { kind: 'pond'; seat: Seat } | { kind: 'melds' }
+const pile = ref<Pile | null>(null)
+let pileOpener: HTMLElement | null = null
+function openPile(next: Pile, e: Event) {
+  pileOpener = e.currentTarget as HTMLElement
+  pile.value = next
+}
+function closePile() {
+  pile.value = null
+  pileOpener?.focus({ preventScroll: true })
+  pileOpener = null
+}
+const pileSeat = computed(() => (pile.value?.kind === 'pond' ? pile.value.seat : props.view.seat))
+const pileTitle = computed(() => {
+  const p = pile.value
+  if (!p) return ''
+  if (p.kind === 'melds') return t('spot.yourMelds')
+  return p.seat === props.view.seat ? t('spot.yourDiscards') : t('spot.discards', { name: props.names[p.seat]! })
+})
 
 const status = computed(() => {
   const p = phase.value
   const me = props.view.seat
+  if (pickedTile.value && p.kind === 'discard') return t('status.confirmDiscard', { tile: tileLabel(pickedTile.value.kind, t) })
   if (p.kind === 'ended') {
     if (p.result.type === 'drawn') return t('status.drawn')
     const name = props.names[p.result.winner]!
@@ -338,10 +497,16 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
               class="pond"
               :class="`pond--${side}`"
               :data-from="`hand-${sides[side]}`"
+              role="button"
+              tabindex="0"
+              :aria-label="sides[side] === view.seat ? t('spot.yourDiscards') : t('spot.showDiscards', { name: names[sides[side]]! })"
+              @click="openPile({ kind: 'pond', seat: sides[side] }, $event)"
+              @keydown.enter.space.prevent="openPile({ kind: 'pond', seat: sides[side] }, $event)"
             >
               <TileFace
                 v-for="tile in view.discards[sides[side]]"
                 :key="tile.id"
+                :class="{ 'is-spotlit': spot.spotlit.value.has(tile.id) }"
                 :kind="tile.kind"
                 :tile-id="tile.id"
                 size="sm"
@@ -349,7 +514,7 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
               />
             </div>
 
-            <div class="compass" data-origin="wall">
+            <div ref="compassEl" class="compass" data-origin="wall">
               <span
                 v-for="side in SIDE_ORDER"
                 :key="side"
@@ -388,52 +553,97 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
         <div class="me__main">
           <p class="status" role="status">{{ status }}</p>
 
-          <div v-if="otherActions.length" class="actions">
-            <button
-              v-for="(a, i) in otherActions"
-              :key="`${a.type}-${i}`"
-              class="action action--claim"
-              :class="[`action--${a.type}`, { 'action--primary': a.type === 'win', 'action--quiet': a.type === 'pass' }]"
-              :title="shortcutFor(a) ? t('keys.hint', { key: shortcutFor(a)! }) : undefined"
-              @click="emit('act', a)"
-            >
-              {{ actionLabel(a) }}
-              <kbd v-if="shortcutFor(a)">{{ shortcutFor(a) }}</kbd>
-              <TileFace v-for="tile in actionTiles(a)" :key="tile.id" :kind="tile.kind" size="xs" />
-            </button>
-          </div>
+          <ClaimButtons v-if="otherActions.length && !claimInSpotlight" :actions="otherActions" :hand="view.hand" @act="(a) => emit('act', a)" />
 
           <div class="me__row">
-            <div class="me__melds" :data-from="`hand-${view.seat}`">
+            <div
+              class="me__melds"
+              :data-from="`hand-${view.seat}`"
+              role="button"
+              tabindex="0"
+              :aria-label="t('spot.showMelds')"
+              @click="openPile({ kind: 'melds' }, $event)"
+              @keydown.enter.space.prevent="openPile({ kind: 'melds' }, $event)"
+            >
               <MeldGroup v-for="(m, i) in view.melds[view.seat]" :key="i" :meld="m" />
               <TileFace v-for="f in view.flowers[view.seat]" :key="f.id" :kind="f.kind" :tile-id="f.id" size="sm" />
             </div>
 
-            <div ref="handEl" class="hand" data-deal :aria-label="t('keys.help')">
-              <TileFace
-                v-for="tile in handTiles.main"
-                :key="tile.id"
-                :kind="tile.kind"
-                :tile-id="tile.id"
-                pose="stand"
-                :selectable="discardIds.has(tile.id)"
-                @select="discard(tile)"
-              />
-              <span v-if="handTiles.drawn" class="hand__gap" />
-              <TileFace
-                v-if="handTiles.drawn"
-                :kind="handTiles.drawn.kind"
-                :tile-id="handTiles.drawn.id"
-                pose="stand"
-                :selectable="discardIds.has(handTiles.drawn.id)"
-                highlight
-                @select="discard(handTiles.drawn)"
-              />
+            <div class="hand-wrap" :class="{ 'has-left': hiddenTiles.left, 'has-right': hiddenTiles.right }">
+              <div ref="handEl" class="hand" data-deal :aria-label="t(oneTapDiscard ? 'keys.help' : 'keys.helpConfirm')" @scroll.passive="measureHand">
+                <TileFace
+                  v-for="tile in handTiles.main"
+                  :key="tile.id"
+                  :kind="tile.kind"
+                  :tile-id="tile.id"
+                  pose="stand"
+                  :selectable="discardIds.has(tile.id)"
+                  :picked="tile.id === pickedId"
+                  @select="tapTile(tile)"
+                />
+                <span v-if="handTiles.drawn" class="hand__gap" />
+                <TileFace
+                  v-if="handTiles.drawn"
+                  :kind="handTiles.drawn.kind"
+                  :tile-id="handTiles.drawn.id"
+                  pose="stand"
+                  :selectable="discardIds.has(handTiles.drawn.id)"
+                  :picked="handTiles.drawn.id === pickedId"
+                  highlight
+                  @select="tapTile(handTiles.drawn)"
+                />
+              </div>
+              <button v-if="hiddenTiles.left" type="button" class="hand__more hand__more--left" :aria-label="t('hand.moreLeft', { n: hiddenTiles.left })" @click="scrollHand(-1)">
+                <span aria-hidden="true">‹</span> {{ hiddenTiles.left }}
+              </button>
+              <button v-if="hiddenTiles.right" type="button" class="hand__more hand__more--right" :aria-label="t('hand.moreRight', { n: hiddenTiles.right })" @click="scrollHand(1)">
+                {{ hiddenTiles.right }} <span aria-hidden="true">›</span>
+              </button>
             </div>
           </div>
         </div>
       </section>
     </div>
+
+    <p class="visually-hidden" aria-live="polite">{{ spotText }}</p>
+
+    <TableSpotlight
+      v-if="spot.entries.value.length || spot.spotlit.value.size"
+      :anchor="compassEl"
+      :label="t('spot.label')"
+      :catching="spot.entries.value.length > 0"
+      @dismiss="spot.dismissAll()"
+    >
+      <TransitionGroup tag="div" class="spot__queue" :css="false" appear @enter="onSpotEnter" @leave="onSpotLeave">
+        <div
+          v-for="e in spot.entries.value"
+          :key="e.tile.id"
+          class="spot__item"
+          :data-spot="e.tile.id"
+          :data-seat="e.seat"
+          @click.stop="spot.dismiss(e.tile.id)"
+        >
+          <TileFace class="spot__tile" :kind="e.tile.kind" />
+          <span class="spot__who"><span class="spot__face" v-html="avatars[e.seat]" />{{ names[e.seat] }}</span>
+          <ClaimButtons v-if="e.held" :actions="otherActions" :hand="view.hand" @act="(a) => emit('act', a)" />
+        </div>
+      </TransitionGroup>
+    </TableSpotlight>
+
+    <TableSpotlight v-if="pile && !spot.entries.value.length" :anchor="compassEl" :label="pileTitle" @dismiss="closePile">
+      <div class="spot__pile">
+        <p class="spot__who"><span class="spot__face" v-html="avatars[pileSeat]" />{{ pileTitle }}</p>
+        <div v-if="pile.kind === 'pond'" class="spot__tiles">
+          <TileFace v-for="tile in view.discards[pile.seat]" :key="tile.id" :kind="tile.kind" :highlight="tile.id === lastDiscardId" />
+        </div>
+        <div v-else class="spot__melds">
+          <MeldGroup v-for="(m, i) in view.melds[view.seat]" :key="i" :meld="m" />
+          <TileFace v-for="f in view.flowers[view.seat]" :key="f.id" :kind="f.kind" />
+        </div>
+        <p v-if="pile.kind === 'pond' && !view.discards[pile.seat]!.length" class="spot__hint">{{ t('spot.none') }}</p>
+        <p class="spot__hint">{{ t('spot.close') }}</p>
+      </div>
+    </TableSpotlight>
 
     <Teleport to="body">
       <div v-if="reactMenu" class="react-menu" role="group" :aria-label="canReact ? t('reaction.menu') : t('talk.record')">

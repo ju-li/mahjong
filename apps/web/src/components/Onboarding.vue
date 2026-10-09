@@ -33,7 +33,7 @@ const props = defineProps<{ invite?: string | null }>()
 const emit = defineEmits<{ done: [choice: OnboardingChoice] }>()
 
 const { t, locale, isZh } = useI18n()
-const { claimSeconds, sound, difficulty, rules, house, ruleConfig, terms, tileSize } = useSettings()
+const { claimSeconds, sound, difficulty, rules, house, ruleConfig, terms, tileSize, oneTapDiscard } = useSettings()
 const profile = useProfile()
 const account = useAccount()
 
@@ -102,7 +102,7 @@ function standardForRest() {
 const PAYOUT_QUESTIONS = new Set(['payment', 'curve', 'maxFaan', 'minFaan', 'minFan'])
 
 // ---- Defaults ----
-type Row = 'tiles' | 'bots' | 'timer' | 'sound'
+type Row = 'tiles' | 'discard' | 'bots' | 'timer' | 'sound'
 /** Tile size starts open: seeing the tiles at the chosen size is what tells a player it suits them. */
 const openRow = ref<Row | null>('tiles')
 const toggleRow = (row: Row) => (openRow.value = openRow.value === row ? null : row)
@@ -233,6 +233,23 @@ const intro = computed(() =>
               </div>
               <p class="onboard__hint">{{ t('onboarding.tiles.hint') }}</p>
             </template>
+          </div>
+          <div class="onboard__default">
+            <button type="button" class="onboard__default-row" :aria-expanded="openRow === 'discard'" @click="toggleRow('discard')">
+              <span>{{ t('app.discarding') }}</span><strong>{{ oneTapDiscard ? t('onboarding.discard.once') : t('onboarding.discard.twice') }}</strong>
+            </button>
+            <div v-if="openRow === 'discard'" class="onboard__options">
+              <label class="onboard__option" :class="{ 'is-selected': !oneTapDiscard }">
+                <input v-model="oneTapDiscard" type="radio" name="discard" :value="false" />
+                <span class="onboard__option-title">{{ t('onboarding.discard.twice') }}</span>
+                <span class="onboard__option-desc">{{ t('onboarding.discard.twiceDesc') }}</span>
+              </label>
+              <label class="onboard__option" :class="{ 'is-selected': oneTapDiscard }">
+                <input v-model="oneTapDiscard" type="radio" name="discard" :value="true" />
+                <span class="onboard__option-title">{{ t('onboarding.discard.once') }}</span>
+                <span class="onboard__option-desc">{{ t('onboarding.discard.onceDesc') }}</span>
+              </label>
+            </div>
           </div>
           <div class="onboard__default">
             <button type="button" class="onboard__default-row" :aria-expanded="openRow === 'bots'" @click="toggleRow('bots')">

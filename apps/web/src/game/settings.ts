@@ -24,7 +24,7 @@ const DIFFICULTIES: readonly Difficulty[] = ['beginner', 'easy', 'medium', 'hard
 /** Scales every text size in the app (see the type scale in style.css). */
 export const TEXT_SIZE_OPTIONS = ['normal', 'large', 'larger'] as const
 export type TextSize = (typeof TEXT_SIZE_OPTIONS)[number]
-/** Face-up tiles, as a percentage of their original size (face-down tiles keep theirs). */
+/** Your hand's tiles, as a percentage of their original size (every other tile keeps its size). */
 export const TILE_SIZE_OPTIONS = [125, 150, 200] as const
 export type TileSize = (typeof TILE_SIZE_OPTIONS)[number]
 
@@ -41,6 +41,7 @@ export type Settings = {
   house: HouseByRules
   textSize: TextSize
   tileSize: TileSize
+  oneTapDiscard: boolean
   terms: Terms
 }
 
@@ -48,7 +49,7 @@ export function standardHouseByRules(): HouseByRules {
   return { mcr: normalizeHouseRules('mcr', undefined), hk: normalizeHouseRules('hk', undefined) }
 }
 
-/** New players start gently: easy bots, no claim timer, sound on, tiles half again as big. */
+/** New players start gently: easy bots, no claim timer, sound on, a hand half again as big, discards confirmed. */
 export const DEFAULTS: Settings = {
   claimSeconds: 0,
   sound: true,
@@ -59,6 +60,7 @@ export const DEFAULTS: Settings = {
   house: standardHouseByRules(),
   textSize: 'normal',
   tileSize: 150,
+  oneTapDiscard: false,
   terms: DEFAULT_TERMS,
 }
 
@@ -90,6 +92,7 @@ export function normalizeSettings(raw: Record<string, unknown> | null): Settings
     house: normalizeHouseByRules(raw?.house),
     textSize: TEXT_SIZE_OPTIONS.includes(raw?.textSize as TextSize) ? (raw!.textSize as TextSize) : DEFAULTS.textSize,
     tileSize: TILE_SIZE_OPTIONS.includes(raw?.tileSize as TileSize) ? (raw!.tileSize as TileSize) : DEFAULTS.tileSize,
+    oneTapDiscard: typeof raw?.oneTapDiscard === 'boolean' ? raw.oneTapDiscard : DEFAULTS.oneTapDiscard,
     terms: normalizeTerms(raw?.terms),
   }
 }
@@ -117,6 +120,8 @@ const house = ref<HouseByRules>(initial.house)
 const ruleConfig = computed<RuleConfig>(() => ({ rules: rules.value, house: house.value[rules.value] }))
 const textSize = ref<TextSize>(initial.textSize)
 const tileSize = ref<TileSize>(initial.tileSize)
+/** A tap on a tile discards it at once; otherwise the first tap lifts it and a second confirms. */
+const oneTapDiscard = ref(initial.oneTapDiscard)
 /** Chinese words the player prefers (和 or 胡, 点和 or 点炮…); display only. */
 const terms = ref<Terms>(initial.terms)
 
@@ -132,12 +137,13 @@ function current(): Settings {
     house: house.value,
     textSize: textSize.value,
     tileSize: tileSize.value,
+    oneTapDiscard: oneTapDiscard.value,
     terms: terms.value,
   }
 }
 
 watch(
-  [claimSeconds, sound, voice, voiceChat, difficulty, rules, house, textSize, tileSize, terms, needsOnboarding],
+  [claimSeconds, sound, voice, voiceChat, difficulty, rules, house, textSize, tileSize, oneTapDiscard, terms, needsOnboarding],
   () => {
     if (needsOnboarding.value) return
     try {
@@ -181,7 +187,8 @@ export function useSettings() {
     house.value = next.house
     textSize.value = next.textSize
     tileSize.value = next.tileSize
+    oneTapDiscard.value = next.oneTapDiscard
     terms.value = next.terms
   }
-  return { claimSeconds, sound, voice, voiceChat, difficulty, rules, house, ruleConfig, textSize, tileSize, terms, needsOnboarding, finishOnboarding, apply, current }
+  return { claimSeconds, sound, voice, voiceChat, difficulty, rules, house, ruleConfig, textSize, tileSize, oneTapDiscard, terms, needsOnboarding, finishOnboarding, apply, current }
 }

@@ -42,7 +42,7 @@ const rulesDialog = ref<{ tab: RulesTab; focus?: string } | null>(null)
 
 const LEVELS: Difficulty[] = ['beginner', 'easy', 'medium', 'hard']
 
-const { claimSeconds, sound, voice, voiceChat, textSize, tileSize, needsOnboarding, finishOnboarding, rules: preferredRules, house: preferredHouse, ruleConfig, terms } = useSettings()
+const { claimSeconds, sound, voice, voiceChat, textSize, tileSize, oneTapDiscard, needsOnboarding, finishOnboarding, rules: preferredRules, house: preferredHouse, ruleConfig, terms } = useSettings()
 const online = useOnline()
 const { snapshot, isHost, link } = online
 /** At an online table (lobby or match); the solo match waits meanwhile. */
@@ -421,6 +421,7 @@ function captureFeedback() {
       voiceChat: voiceChat.value,
       textSize: textSize.value,
       tileSize: tileSize.value,
+      oneTapDiscard: oneTapDiscard.value,
     },
     screen: atTable.value ? `online ${s?.phase}` : 'solo',
     onBreak: onBreak.value,
@@ -707,6 +708,15 @@ async function loadLatest() {
             <select v-model.number="tileSize" :aria-label="t('app.tileSize')">
               <option v-for="s in TILE_SIZE_OPTIONS" :key="s" :value="s">{{ t(`tileSize.${s}`) }}</option>
             </select>
+          </label>
+          <label class="select toggle">
+            <span class="toggle__label">
+              <svg class="toggle__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 11V5a2 2 0 0 1 4 0v6m0-2a2 2 0 0 1 4 0v4a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15a2 2 0 0 1 3.3-2.2L9 15" />
+              </svg>
+              {{ t('app.oneTapDiscard') }}
+            </span>
+            <input v-model="oneTapDiscard" class="toggle__input" type="checkbox" role="switch" />
           </label>
           <label class="select toggle">
             <span class="toggle__label">
