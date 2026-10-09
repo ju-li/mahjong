@@ -2246,6 +2246,26 @@ body {
   flex-direction: column;
 }
 
+/* Large screens: a card centred on the felt, sized so the buttons stay put from step to step. */
+@media (min-width: 720px) and (min-height: 560px) {
+  .onboard-page {
+    display: flex;
+    padding: 32px;
+    background: var(--felt-edge);
+  }
+
+  .onboard-page__inner {
+    /* Auto margins centre it both ways, yet a tall step still scrolls from its top. */
+    margin: auto;
+    width: min(620px, 100%);
+    min-height: min(680px, 100%);
+    padding: 28px 32px 24px;
+    border-radius: 18px;
+    background: var(--bg);
+    box-shadow: 0 24px 60px rgb(0 0 0 / 0.35);
+  }
+}
+
 .onboard-page h2 {
   margin: 8px 0 0;
   font-size: var(--fs-xl);
