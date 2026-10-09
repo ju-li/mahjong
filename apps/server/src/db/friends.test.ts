@@ -23,7 +23,7 @@ const states = async (id: string) => Object.fromEntries((await listFriends(db, i
 
 describe('migrations', () => {
   it('are idempotent', async () => {
-    expect(await migrateToLatest(db)).toEqual([])
+    expect(await migrateToLatest(db)).toEqual({ moved: [], applied: [] })
   })
 })
 
