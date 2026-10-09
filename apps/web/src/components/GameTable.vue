@@ -390,7 +390,7 @@ function onSpotLeave(el: Element, done: () => void) {
 
 // ---- A pond, or your melds, shown big on request ----
 
-type Pile = { kind: 'pond'; seat: Seat } | { kind: 'melds' }
+type Pile = { kind: 'pond' | 'melds'; seat: Seat }
 const pile = ref<Pile | null>(null)
 let pileOpener: HTMLElement | null = null
 function openPile(next: Pile, e: Event) {
@@ -402,11 +402,11 @@ function closePile() {
   pileOpener?.focus({ preventScroll: true })
   pileOpener = null
 }
-const pileSeat = computed(() => (pile.value?.kind === 'pond' ? pile.value.seat : props.view.seat))
+const pileSeat = computed(() => pile.value?.seat ?? props.view.seat)
 const pileTitle = computed(() => {
   const p = pile.value
   if (!p) return ''
-  if (p.kind === 'melds') return t('spot.yourMelds')
+  if (p.kind === 'melds') return p.seat === props.view.seat ? t('spot.yourMelds') : t('spot.melds', { name: props.names[p.seat]! })
   return p.seat === props.view.seat ? t('spot.yourDiscards') : t('spot.discards', { name: props.names[p.seat]! })
 })
 
@@ -488,7 +488,12 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
             <span v-for="i in view.concealedCounts[o.seat]" :key="i" class="edge" />
           </template>
         </div>
-        <div class="seat__melds">
+        <div
+          class="seat__melds"
+          v-bind="view.melds[o.seat]!.length || view.flowers[o.seat]!.length ? { role: 'button', tabindex: 0, 'aria-label': t('spot.showPlayerMelds', { name: names[o.seat]! }) } : {}"
+          @click="openPile({ kind: 'melds', seat: o.seat }, $event)"
+          @keydown.enter.space.prevent="openPile({ kind: 'melds', seat: o.seat }, $event)"
+        >
           <MeldGroup v-for="(m, i) in view.melds[o.seat]" :key="i" :meld="m" size="xs" />
           <TileFace v-for="f in view.flowers[o.seat]" :key="f.id" :kind="f.kind" :tile-id="f.id" size="xs" />
         </div>
@@ -573,8 +578,8 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
               role="button"
               tabindex="0"
               :aria-label="t('spot.showMelds')"
-              @click="openPile({ kind: 'melds' }, $event)"
-              @keydown.enter.space.prevent="openPile({ kind: 'melds' }, $event)"
+              @click="openPile({ kind: 'melds', seat: view.seat }, $event)"
+              @keydown.enter.space.prevent="openPile({ kind: 'melds', seat: view.seat }, $event)"
             >
               <MeldGroup v-for="(m, i) in view.melds[view.seat]" :key="i" :meld="m" />
               <TileFace v-for="f in view.flowers[view.seat]" :key="f.id" :kind="f.kind" :tile-id="f.id" size="sm" />
@@ -650,8 +655,8 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
           <TileFace v-for="tile in view.discards[pile.seat]" :key="tile.id" :kind="tile.kind" :highlight="tile.id === lastDiscardId" />
         </div>
         <div v-else class="spot__melds">
-          <MeldGroup v-for="(m, i) in view.melds[view.seat]" :key="i" :meld="m" />
-          <TileFace v-for="f in view.flowers[view.seat]" :key="f.id" :kind="f.kind" />
+          <MeldGroup v-for="(m, i) in view.melds[pile.seat]" :key="i" :meld="m" />
+          <TileFace v-for="f in view.flowers[pile.seat]" :key="f.id" :kind="f.kind" />
         </div>
         <p v-if="pile.kind === 'pond' && !view.discards[pile.seat]!.length" class="spot__hint">{{ t('spot.none') }}</p>
         <p class="spot__hint">{{ t('spot.close') }}</p>
