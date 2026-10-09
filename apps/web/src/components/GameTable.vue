@@ -10,6 +10,7 @@ import { useDragScroll } from '../game/useDragScroll'
 import { useTileMotion } from '../game/useTileMotion'
 import { useI18n } from '../i18n/useI18n'
 import ClaimButtons from './ClaimButtons.vue'
+import { feltPoint } from './feltPoint'
 import MeldGroup from './MeldGroup.vue'
 import MenuIcon from './MenuIcon.vue'
 import PlayerBadge from './PlayerBadge.vue'
@@ -282,7 +283,6 @@ function tapTile(tile: Tile) {
 // ---- Opponents' discards, shown big in the middle of the table ----
 
 const spot = useDiscardSpotlight()
-const compassEl = ref<HTMLElement | null>(null)
 /** The discard this player can claim right now (pung, chow, kong or win, not just pass). */
 const claimTileId = computed(() => {
   const p = phase.value
@@ -338,20 +338,37 @@ const reducedMotion = () => typeof window.matchMedia === 'function' && window.ma
 const fade = (el: HTMLElement, to: 0 | 1, then: () => void) =>
   el.animate([{ opacity: 1 - to }, { opacity: to }], { duration: 200, fill: 'forwards' }).finished.then(then, then)
 
-/** In from the discarder's hand to its place in the middle. */
+const feltEl = ref<HTMLElement | null>(null)
+/** Where a seat's tiles leave and rejoin its edge of the table: fixed points on the felt, whatever its hand and pond look like. */
+const SIDE_POINT: Record<Side, [number, number]> = { left: [0.1, 0.45], right: [0.9, 0.45], top: [0.5, 0.12], bottom: [0.5, 0.88] }
+function sidePoint(seat: Seat): { x: number; y: number } | null {
+  const side = SIDE_ORDER.find((s) => sides.value[s] === seat)
+  return side ? feltPoint(feltEl.value, ...SIDE_POINT[side]) : null
+}
+/**
+ * The move from a card's place in the middle to `point`, shrunk to `scale`. Measured from where
+ * the card rests, leaving out any glide of the queue still under way (which the flight is added to).
+ */
+function towards(item: HTMLElement, point: { x: number; y: number }, scale: number): string {
+  const box = item.getBoundingClientRect()
+  const gliding = new DOMMatrixReadOnly(getComputedStyle(item).transform)
+  const x = box.left + box.width / 2 - gliding.e
+  const y = box.top + box.height / 2 - gliding.f
+  return `translate(${point.x - x}px, ${point.y - y}px) scale(${scale})`
+}
+
+/** In from the discarder's edge of the table to its place in the middle. */
 function onSpotEnter(el: Element, done: () => void) {
   const item = el as HTMLElement
-  const origin = root.value?.querySelector(`[data-origin="hand-${item.dataset.seat}"]`)?.getBoundingClientRect()
-  if (reducedMotion() || !origin) return void fade(item, 1, done)
-  const to = item.getBoundingClientRect()
-  const dx = origin.left + origin.width / 2 - (to.left + to.width / 2)
-  const dy = origin.top + origin.height / 2 - (to.top + to.height / 2)
+  const from = sidePoint(Number(item.dataset.seat) as Seat)
+  if (reducedMotion() || !from) return void fade(item, 1, done)
+  // Added to any glide of the queue making room, so a card still flying in follows it smoothly.
   item
-    .animate([{ transform: `translate(${dx}px, ${dy}px) scale(0.4)`, opacity: 0.4 }, { transform: 'none', opacity: 1 }], { duration: FLY_MS, easing: EASE })
+    .animate([{ transform: towards(item, from, 0.4), opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: FLY_MS, easing: EASE, composite: 'add' })
     .finished.then(done, done)
 }
 
-/** Back down onto the table: its pond, or the meld it was claimed into. */
+/** Back to the discarder's edge of the table; the tile then fades in on its pond. */
 function onSpotLeave(el: Element, done: () => void) {
   const item = el as HTMLElement
   const id = Number(item.dataset.spot)
@@ -359,21 +376,15 @@ function onSpotLeave(el: Element, done: () => void) {
     spot.landed(id)
     done()
   }
-  const tile = item.querySelector<HTMLElement>('.spot__tile')
-  const to = root.value?.querySelector(`.board__felt [data-tile-id="${id}"]`)?.getBoundingClientRect()
-  if (reducedMotion() || !tile || !to?.width) return void fade(item, 0, finish)
-  const from = tile.getBoundingClientRect()
-  const box = item.getBoundingClientRect()
-  const pivot = `${from.left - box.left}px ${from.top - box.top}px`
-  for (const extra of item.querySelectorAll<HTMLElement>('.spot__who, .actions')) extra.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FLY_MS / 2, fill: 'forwards' })
+  // Out of the row where it is, so the cards after it glide over at once instead of waiting.
+  const { offsetLeft, offsetTop, offsetWidth } = item
+  Object.assign(item.style, { position: 'absolute', left: `${offsetLeft}px`, top: `${offsetTop}px`, width: `${offsetWidth}px` })
+  item.dataset.leaving = ''
+  const to = sidePoint(Number(item.dataset.seat) as Seat)
+  if (reducedMotion() || !to) return void fade(item, 0, finish)
+  item.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FLY_MS, easing: EASE, fill: 'forwards' })
   item
-    .animate(
-      [
-        { transformOrigin: pivot, transform: 'none' },
-        { transformOrigin: pivot, transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width})` },
-      ],
-      { duration: FLY_MS, easing: EASE, fill: 'forwards' },
-    )
+    .animate([{ transform: 'none' }, { transform: towards(item, to, 0.4) }], { duration: FLY_MS, easing: EASE, fill: 'forwards', composite: 'add' })
     .finished.then(finish, finish)
 }
 
@@ -441,7 +452,7 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
 
 <template>
   <div ref="root" class="board">
-    <div class="board__felt">
+    <div ref="feltEl" class="board__felt">
       <div class="board__info">
         <span>{{ handLabel }}</span>
         <span>{{ t('table.prevailing', { wind: windName(view.prevailingWind) }) }}</span>
@@ -514,7 +525,7 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
               />
             </div>
 
-            <div ref="compassEl" class="compass" data-origin="wall">
+            <div class="compass" data-origin="wall">
               <span
                 v-for="side in SIDE_ORDER"
                 :key="side"
@@ -609,28 +620,30 @@ const seatActive = (seat: Seat) => live.value && props.view.turn === seat
 
     <TableSpotlight
       v-if="spot.entries.value.length || spot.spotlit.value.size"
-      :anchor="compassEl"
+      :anchor="feltEl"
+      align="first"
       :label="t('spot.label')"
       :catching="spot.entries.value.length > 0"
       @dismiss="spot.dismissAll()"
     >
-      <TransitionGroup tag="div" class="spot__queue" :css="false" appear @enter="onSpotEnter" @leave="onSpotLeave">
+      <TransitionGroup tag="div" name="spot" class="spot__queue" appear @enter="onSpotEnter" @leave="onSpotLeave">
         <div
           v-for="e in spot.entries.value"
           :key="e.tile.id"
           class="spot__item"
+          data-slot
           :data-spot="e.tile.id"
           :data-seat="e.seat"
           @click.stop="spot.dismiss(e.tile.id)"
         >
           <TileFace class="spot__tile" :kind="e.tile.kind" />
-          <span class="spot__who"><span class="spot__face" v-html="avatars[e.seat]" />{{ names[e.seat] }}</span>
+          <span class="spot__who"><span class="spot__face" v-html="avatars[e.seat]" /><span class="spot__name">{{ names[e.seat] }}</span></span>
           <ClaimButtons v-if="e.held" :actions="otherActions" :hand="view.hand" @act="(a) => emit('act', a)" />
         </div>
       </TransitionGroup>
     </TableSpotlight>
 
-    <TableSpotlight v-if="pile && !spot.entries.value.length" :anchor="compassEl" :label="pileTitle" @dismiss="closePile">
+    <TableSpotlight v-if="pile && !spot.entries.value.length" :anchor="feltEl" :label="pileTitle" @dismiss="closePile">
       <div class="spot__pile">
         <p class="spot__who"><span class="spot__face" v-html="avatars[pileSeat]" />{{ pileTitle }}</p>
         <div v-if="pile.kind === 'pond'" class="spot__tiles">
