@@ -61,8 +61,8 @@ export const HOUSE_OPTIONS: { readonly [R in RuleSet]: { readonly [K in keyof Ho
 }
 
 /** Option keys of a rule set, in questionnaire order. */
-export function houseKeys<R extends RuleSet>(rules: R): (keyof HouseRulesFor[R] & string)[] {
-  return Object.keys(HOUSE_OPTIONS[rules]) as (keyof HouseRulesFor[R] & string)[]
+export function houseKeys(rules: RuleSet): string[] {
+  return Object.keys(HOUSE_OPTIONS[rules])
 }
 
 /** The standard house rules of a rule set, as a fresh object. */
@@ -102,6 +102,14 @@ export function houseDiff(config: RuleConfig): HouseDiff[] {
 
 export function isStandard(config: RuleConfig): boolean {
   return houseDiff(config).length === 0
+}
+
+/** Same rule set and same house rules. */
+export function sameConfig(a: RuleConfig, b: RuleConfig): boolean {
+  if (a.rules !== b.rules) return false
+  const x = normalizeHouseRules(a.rules, a.house) as Record<string, unknown>
+  const y = normalizeHouseRules(b.rules, b.house) as Record<string, unknown>
+  return houseKeys(a.rules).every((key) => x[key] === y[key])
 }
 
 /** Whether the wall holds flowers and seasons. */

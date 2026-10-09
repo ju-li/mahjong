@@ -18,6 +18,7 @@ import {
   normalizeHouseRules,
   type Action,
   type HouseRules,
+  type RuleConfig,
   type Match,
   type RuleSet,
   type Player,
@@ -91,9 +92,9 @@ function randomSeed(): number {
 export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
   const bots = new BotClient()
   const saved = load()
-  const { claimSeconds, difficulty, rules: preferredRules, needsOnboarding } = useSettings()
+  const { claimSeconds, difficulty, rules: preferredRules, house: preferredHouse, ruleConfig: preferredConfig, needsOnboarding } = useSettings()
   const { t } = useI18n()
-  const match = shallowRef<Match>(saved?.match ?? newMatch(randomSeed(), preferredRules.value))
+  const match = shallowRef<Match>(saved?.match ?? newMatch(randomSeed(), preferredConfig.value))
   /** Actions applied in the hand in play; null if it was restored from a save that didn't keep them. */
   let handLog: Action[] | null = saved ? (Array.isArray(saved.handLog) ? saved.handLog : null) : []
   /** When this match was dealt, for the player's history. */
@@ -242,10 +243,13 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
 
   const rules = computed<RuleSet>(() => match.value.rules)
   const house = computed<HouseRules>(() => match.value.current?.house ?? houseOf(match.value))
+  /** Rules for the match's next hands. */
+  const config = computed<RuleConfig>(() => ({ rules: match.value.rules, house: houseOf(match.value) }))
 
-  /** Start a fresh match; keeps the current rule set unless another is given. */
-  function startNewMatch(next: RuleSet = match.value.rules): void {
-    preferredRules.value = next
+  /** Start a fresh match; keeps the current rules unless others are given (which become the preferred ones). */
+  function startNewMatch(next: RuleConfig = config.value): void {
+    preferredRules.value = next.rules
+    preferredHouse.value = { ...preferredHouse.value, [next.rules]: normalizeHouseRules(next.rules, next.house) }
     handLog = []
     startedAt = Date.now()
     match.value = newMatch(randomSeed(), next)
@@ -257,7 +261,7 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     const scores = settledScores(match.value)
     handLog = []
     startedAt = Date.now()
-    match.value = newMatch(randomSeed(), match.value.rules, scores)
+    match.value = newMatch(randomSeed(), config.value, scores)
     restartPump()
   }
 
@@ -314,6 +318,7 @@ export function useMatch(paused: Readonly<Ref<boolean>> = ref(false)) {
     resumed: saved !== null,
     /** The whole match, every hidden tile included, and this hand's actions so far: for bug reports. */
     debugState: () => ({ match: match.value, handLog }),
+    config,
     startNewMatch,
     keepGoing,
   }

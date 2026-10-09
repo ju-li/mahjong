@@ -4,8 +4,9 @@ import { MAX_NAME_LENGTH } from '@mahjong/protocol'
 import HistoryTab from './HistoryTab.vue'
 import LeaderboardTab from './LeaderboardTab.vue'
 import StatsTab from './StatsTab.vue'
+import AvatarPicker from './AvatarPicker.vue'
 import { avatarSvg } from '../game/avatar'
-import { randomAvatarSeed, tidyName, useProfile } from '../game/profile'
+import { tidyName, useProfile } from '../game/profile'
 import { useAccount } from '../game/useAccount'
 import { useI18n } from '../i18n/useI18n'
 
@@ -20,19 +21,10 @@ const profile = useProfile()
 const account = useAccount()
 
 // ---- Name and face (changes apply on Save) ----
-const FACES = 11
 const draftName = ref(profile.name.value)
 const picked = ref(profile.avatar.value)
-/** Your current face first, then fresh ones to choose from. */
-const choices = ref<number[]>([profile.avatar.value, ...Array.from({ length: FACES }, randomAvatarSeed)])
-const faces = computed(() => choices.value.map((seed) => ({ seed, svg: avatarSvg(seed) })))
 const dirty = computed(() => tidyName(draftName.value) !== profile.name.value.trim() || picked.value !== profile.avatar.value)
 const saved = ref(false)
-
-function shuffle() {
-  // Keep the face you picked; deal new ones around it.
-  choices.value = [picked.value, ...Array.from({ length: FACES }, randomAvatarSeed)]
-}
 
 function save() {
   profile.name.value = tidyName(draftName.value)
@@ -102,23 +94,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           </label>
         </div>
 
-        <fieldset class="profile__faces">
-          <legend>{{ t('profile.pickAvatar') }}</legend>
-          <button
-            v-for="(f, i) in faces"
-            :key="f.seed"
-            type="button"
-            class="profile__face"
-            :class="{ 'is-picked': f.seed === picked }"
-            :aria-pressed="f.seed === picked"
-            :aria-label="t('profile.avatarN', { n: i + 1 })"
-            @click="picked = f.seed"
-            v-html="f.svg"
-          />
-        </fieldset>
+        <AvatarPicker v-model="picked" />
 
         <div class="profile__buttons">
-          <button type="button" class="action profile__shuffle" @click="shuffle">{{ t('profile.shuffle') }}</button>
           <button type="submit" class="action action--primary" :disabled="!dirty && !saved">{{ saved ? t('profile.saved') : t('profile.save') }}</button>
         </div>
 
