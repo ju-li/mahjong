@@ -1,7 +1,7 @@
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import type LogtoClient from '@logto/browser'
 import { useI18n } from '../i18n/useI18n'
-import { track } from './analytics'
+import { identify, track } from './analytics'
 
 /**
  * Optional accounts through Logto's hosted sign-in page (email + password, Google, Apple). Guests
@@ -24,6 +24,8 @@ export const accountsEnabled = Boolean(ENDPOINT && APP_ID && RESOURCE)
 export type AccountUser = { userId: string; email: string | null; name: string | null }
 
 const user = shallowRef<AccountUser | null>(null)
+// Synchronous, so an event tracked right after signing in or out is already tagged correctly.
+watch(user, (u) => identify(u?.userId ?? null), { flush: 'sync' })
 /** The saved session has been checked (or there was none to check). */
 const ready = ref(!accountsEnabled)
 let client: Promise<LogtoClient> | null = null
@@ -104,8 +106,8 @@ async function signIn(firstScreen: 'signIn' | 'register' = 'signIn'): Promise<vo
 async function signOut(): Promise<void> {
   if (!accountsEnabled) return
   const c = await logto()
-  user.value = null
   track('signed_out')
+  user.value = null
   await c.signOut(location.origin)
 }
 
