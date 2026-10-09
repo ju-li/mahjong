@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Listening page written by scripts/gen-callouts.ts
+scripts/callouts-review.html
