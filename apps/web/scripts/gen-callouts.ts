@@ -21,15 +21,17 @@ import { CALLOUT_PHRASES, MELD_CALLS, WIN_CALLS, type CalloutPhrase } from '../s
  * speakers from the Voice Library (say two women, two men). ELEVENLABS_VOICES=id0,id1,id2,id3 overrides.
  */
 const SEAT_VOICES: readonly string[] = ['hZTuv9Zqrq4yHYrEmF1r', 'DowyQ68vDpgFYdWVGjc3', 'bhJUNIXWQQ94l8eI2VUf', 'BqljjWyTnrioXPCNkCd4']
-/** eleven_turbo_v2_5 / eleven_flash_v2_5 also take a language code; multilingual v2 sounds best. */
-const MODEL = 'eleven_multilingual_v2'
+/** Eleven v4: ElevenLabs singles out Mandarin among its improvements over v3. */
+const MODEL: string = 'eleven_v4'
+/**
+ * Pins the language, so 九条, 白板 and 一万 aren't read as the Japanese words they also are.
+ * eleven_multilingual_v2 rejects it. If v4 refuses `zh`, try `cmn`.
+ */
+const LANGUAGE_CODE = 'zh'
 const VOICE_SETTINGS = { stability: 0.5, similarity_boost: 0.75, style: 0.2, use_speaker_boost: true }
 /** Same seed, same audio: re-running for one clip doesn't change the rest of a voice's character. */
 const SEED = 1688
-/**
- * Read before each phrase but not recorded. It sets the scene so the phrase is said as Mandarin
- * at the table: 九条, 白板 and 一万 are Japanese words too.
- */
+/** Read before each phrase but not recorded: it sets the scene, a call shouted across the table. */
 const PREVIOUS_TEXT = '打麻将的时候，大声喊：'
 /** Claims are barked; a bare one-character text is also often mumbled or dropped. */
 const SHOUTED = new Set<string>([...Object.values(MELD_CALLS), ...Object.values(WIN_CALLS)])
@@ -74,7 +76,7 @@ async function synthesize(apiKey: string, voice: string, phrase: CalloutPhrase):
     voice_settings: VOICE_SETTINGS,
     seed: SEED,
     previous_text: PREVIOUS_TEXT,
-    ...(MODEL.endsWith('_v2_5') ? { language_code: 'zh' } : {}),
+    ...(MODEL === 'eleven_multilingual_v2' ? {} : { language_code: LANGUAGE_CODE }),
   }
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`, {

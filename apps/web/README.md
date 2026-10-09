@@ -6,7 +6,7 @@ Learn more about the recommended Project Setup and IDE Support in the [Vue Docs 
 
 ## Voice callouts
 
-Callouts (碰, 胡, 五万…) play recorded clips from `src/assets/callouts/seat{0-3}/`, one ElevenLabs voice per seat. They are bundled as hashed `/assets` files, so each player downloads them once and the service worker keeps them for offline play. If a clip is missing or fails to load, the browser's speech synthesis says the call instead.
+Callouts (碰, 胡, 五万…) play recorded clips from `src/assets/callouts/seat{0-3}/`, one ElevenLabs voice per seat, recorded with the Eleven v4 model. They are bundled as hashed `/assets` files, so each player downloads them once and the service worker keeps them for offline play. If a clip is missing or fails to load, the browser's speech synthesis says the call instead.
 
 To record or redo the clips you need Node 22.18+, `ffmpeg` and an ElevenLabs API key. First set the four voice ids in `SEAT_VOICES` in `scripts/gen-callouts.ts`, then run:
 
