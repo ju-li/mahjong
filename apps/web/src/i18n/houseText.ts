@@ -1,4 +1,4 @@
-import { HOUSE_OPTIONS, houseKeys, type RuleSet } from '@mahjong/engine'
+import { HOUSE_OPTIONS, houseKeys, RULE_SETS, type RuleSet } from '@mahjong/engine'
 import type { MessageKey } from './messages'
 
 /** Dictionary keys for the house-rule questions; every option of `HOUSE_OPTIONS` has a label and a hint. */
@@ -9,7 +9,7 @@ export const houseHint = (rules: RuleSet, key: string, value: unknown) => `house
 
 /** Every key the house-rule screens use, for the dictionary test. */
 export function houseMessageKeys(): MessageKey[] {
-  return (['mcr', 'hk'] as const).flatMap((rules) =>
+  return RULE_SETS.flatMap((rules) =>
     houseKeys(rules).flatMap((key) => [
       houseTitle(rules, key),
       houseShort(rules, key),

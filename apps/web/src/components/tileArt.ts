@@ -15,6 +15,9 @@ const NUMERALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九']
 const WINDS = { E: '東', S: '南', W: '西', N: '北' } as const
 const FLOWERS = ['梅', '蘭', '菊', '竹', '春', '夏', '秋', '冬']
 const FLOWER_COLORS = [RED, BLUE, '#c07a12', GREEN, GREEN, RED, '#c07a12', BLUE]
+/** Singapore animals (bonus tiles 9–12): cat, mouse, rooster, centipede. */
+const ANIMALS = ['貓', '鼠', '雞', '蜈蚣']
+const ANIMAL_COLORS = ['#c07a12', BLUE, RED, GREEN]
 
 const f = (n: number) => +n.toFixed(2)
 
@@ -155,6 +158,14 @@ function draw(kind: TileKind): string {
         `<rect x="15" y="16" width="30" height="48" rx="2" fill="none" stroke="${BLUE}" stroke-width="1.5"/>`
       )
     case 'flowers': {
+      if (kind.flower >= 9) {
+        const a = kind.flower - 9
+        const name = ANIMALS[a]!
+        const color = ANIMAL_COLORS[a]!
+        // Two-character names (蜈蚣) stack; a ring marks every animal apart from the numbered flowers.
+        const face = name.length === 1 ? text(30, 42, 36, color, name, 800) : text(30, 27, 24, color, name[0]!, 800) + text(30, 55, 24, color, name[1]!, 800)
+        return face + `<circle cx="47" cy="12" r="6" fill="none" stroke="${color}" stroke-width="2"/>`
+      }
       const i = kind.flower - 1
       const color = FLOWER_COLORS[i]!
       return (

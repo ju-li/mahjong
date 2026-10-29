@@ -169,6 +169,16 @@ describe('lobby', () => {
     expect(snap('c1').match!.view!.house).toEqual({ ...STANDARD_HOUSE.hk, minFaan: 1 })
   })
 
+  it('plays Singapore with its own house rules', () => {
+    const { table, snap } = setup(['Ann', 'Bo'])
+    table.configure('c0', { rules: 'sg', house: { minTai: 3, payment: 'split', curve: 'full' } })
+    expect(snap('c1').settings).toMatchObject({ rules: 'sg', house: { ...STANDARD_HOUSE.sg, minTai: 3, payment: 'split' } })
+    table.start('c0')
+    const view = snap('c1').match!.view!
+    expect(view.rules).toBe('sg')
+    expect(view.wallCount + view.concealedCounts.reduce((a, b) => a + b, 0) + view.flowers.flat().length).toBe(148)
+  })
+
   it('applies house rules changed mid-match from the next hand', () => {
     const { env, table, clients, snap } = setup(['Ann', 'Bo'])
     table.configure('c0', { rules: 'hk' })

@@ -4,8 +4,11 @@ export type SuitedSuit = 'characters' | 'dots' | 'bamboo'
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 export type Wind = 'E' | 'S' | 'W' | 'N'
 export type Dragon = 'red' | 'green' | 'white'
-/** 1–4 = flowers (plum, orchid, chrysanthemum, bamboo), 5–8 = seasons (spring, summer, autumn, winter). */
-export type FlowerNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+/**
+ * Bonus tiles. 1–4 = flowers (plum, orchid, chrysanthemum, bamboo), 5–8 = seasons (spring, summer, autumn, winter),
+ * 9–12 = animals (cat, mouse, rooster, centipede; Singapore only).
+ */
+export type FlowerNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12
 
 export type SuitedKind = { suit: SuitedSuit; rank: Rank }
 export type WindKind = { suit: 'winds'; wind: Wind }
@@ -14,7 +17,7 @@ export type FlowerKind = { suit: 'flowers'; flower: FlowerNumber }
 
 export type TileKind = SuitedKind | WindKind | DragonKind | FlowerKind
 
-/** One physical tile. `id` is unique within a wall (0..143). */
+/** One physical tile. `id` is unique within a wall (0..143, or 0..147 with animals). */
 export type Tile = { readonly id: number; readonly kind: TileKind }
 
 export const SUITED_SUITS: readonly SuitedSuit[] = ['characters', 'dots', 'bamboo']
@@ -22,6 +25,8 @@ export const RANKS: readonly Rank[] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const WINDS: readonly Wind[] = ['E', 'S', 'W', 'N']
 export const DRAGONS: readonly Dragon[] = ['red', 'green', 'white']
 export const FLOWER_NUMBERS: readonly FlowerNumber[] = [1, 2, 3, 4, 5, 6, 7, 8]
+/** Cat, mouse, rooster, centipede. */
+export const ANIMAL_NUMBERS: readonly FlowerNumber[] = [9, 10, 11, 12]
 
 export const COPIES_PER_PLAYABLE_KIND = 4
 
@@ -37,8 +42,18 @@ export const FLOWER_KINDS: readonly FlowerKind[] = FLOWER_NUMBERS.map(
   (flower): FlowerKind => ({ suit: 'flowers', flower }),
 )
 
+/** The 4 Singapore animal tiles, one copy each. */
+export const ANIMAL_KINDS: readonly FlowerKind[] = ANIMAL_NUMBERS.map(
+  (flower): FlowerKind => ({ suit: 'flowers', flower }),
+)
+
+/** Any bonus tile: flower, season or animal. Bonus tiles are set aside and replaced as soon as they are drawn. */
 export function isFlower(kind: TileKind): kind is FlowerKind {
   return kind.suit === 'flowers'
+}
+
+export function isAnimal(kind: TileKind): kind is FlowerKind {
+  return kind.suit === 'flowers' && kind.flower >= 9
 }
 
 /** Stable string key for a tile kind, e.g. `characters-5`, `winds-E`, `dragons-red`, `flowers-3`. */
@@ -89,8 +104,11 @@ export function sameKind(a: TileKind, b: TileKind): boolean {
   return tileKey(a) === tileKey(b)
 }
 
-/** Full 144-tile set in canonical (unshuffled) order: 4 × 34 playable kinds, then 8 flowers (left out when `flowers` is false). */
-export function createWall(flowers = true): Tile[] {
+/**
+ * Full tile set in canonical (unshuffled) order: 4 × 34 playable kinds, then 8 flowers (left out when `flowers`
+ * is false), then 4 animals (only when `animals` is true). 144 tiles by default, 148 for Singapore.
+ */
+export function createWall(flowers = true, animals = false): Tile[] {
   const tiles: Tile[] = []
   for (const kind of PLAYABLE_KINDS) {
     for (let i = 0; i < COPIES_PER_PLAYABLE_KIND; i++) {
@@ -99,6 +117,11 @@ export function createWall(flowers = true): Tile[] {
   }
   if (flowers) {
     for (const kind of FLOWER_KINDS) {
+      tiles.push({ id: tiles.length, kind })
+    }
+  }
+  if (animals) {
+    for (const kind of ANIMAL_KINDS) {
       tiles.push({ id: tiles.length, kind })
     }
   }

@@ -3,11 +3,11 @@ import { createWall, isFlower, kindIndex, type Tile } from './tiles'
 import { mulberry32 } from './rng'
 import { applyAction, legalActions } from './rules'
 import { newHand } from './deal'
-import { normalizeHouseRules, type HouseRules, type RuleConfig } from './house'
+import { hasAnimals, hasFlowers, normalizeHouseRules, type HouseRules, type RuleConfig } from './house'
 import { scoreFor, type RuleSet } from './ruleset'
 import { scoreHand, type ScoringMeld, type WinContext } from './scoring'
 
-/** Every tile id 0..143 appears exactly once across wall, hands, melds, discards, flowers and any pending claim tile. */
+/** Every tile id (0..143, 0..135 without flowers, 0..147 with animals) appears exactly once across wall, hands, melds, discards, flowers and any pending claim tile. */
 export function tileIdsInPlay(state: GameState): number[] {
   const ids: number[] = []
   ids.push(...state.wall.map((t) => t.id))
@@ -22,7 +22,8 @@ export function tileIdsInPlay(state: GameState): number[] {
 
 export function expectConservation(state: GameState): void {
   const ids = tileIdsInPlay(state).sort((a, b) => a - b)
-  const total = state.house?.flowers === false ? 136 : 144
+  const config = { rules: state.rules, house: state.house }
+  const total = 136 + (hasFlowers(config) ? 8 : 0) + (hasAnimals(config) ? 4 : 0)
   if (ids.length !== total || ids.some((id, i) => id !== i)) {
     throw new Error(`tile conservation broken: ${ids.length} ids`)
   }
@@ -117,9 +118,11 @@ export type BuildOptions = {
   house?: HouseRules
 }
 
-/** Build an arbitrary but conserving state: listed tiles are taken from the 144-tile set, the rest fill the wall. */
+/** Build an arbitrary but conserving state: listed tiles are taken from the 144-tile set (148 for Singapore with animals), the rest fill the wall. */
 export function buildState(o: BuildOptions): GameState {
-  const pool = createWall()
+  const rules = o.rules ?? 'mcr'
+  const house = normalizeHouseRules(rules, o.house)
+  const pool = createWall(true, hasAnimals({ rules, house }))
   const take = (index: number) => {
     const at = pool.findIndex((t) => kindIndex(t.kind) === index)
     if (at < 0) throw new Error(`no tile left for kind ${index}`)
@@ -146,10 +149,9 @@ export function buildState(o: BuildOptions): GameState {
     for (const t of surplus) (isFlower(t.kind) ? flowerSink[3]! : discards[3]!).push(t)
   }
   while (hands.length < 4) hands.push([])
-  const rules = o.rules ?? 'mcr'
   return {
     rules,
-    house: normalizeHouseRules(rules, o.house),
+    house,
     seed: 0,
     dealer: o.dealer ?? 0,
     prevailingWind: 'E',

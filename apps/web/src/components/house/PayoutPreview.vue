@@ -7,6 +7,7 @@ import { useI18n } from '../../i18n/useI18n'
 const props = defineProps<{ config: RuleConfig; highlight?: 'discard' | 'curve' }>()
 
 const { t } = useI18n()
+const UNIT = { mcr: 'payout.fan', hk: 'payout.faan', sg: 'payout.tai' } as const
 const rows = computed(() => paymentTable(props.config))
 </script>
 
@@ -16,7 +17,7 @@ const rows = computed(() => paymentTable(props.config))
     <table class="explain__table payout__table">
       <thead>
         <tr>
-          <th>{{ t(config.rules === 'hk' ? 'payout.faan' : 'payout.fan') }}</th>
+          <th>{{ t(UNIT[config.rules]) }}</th>
           <th class="num" :class="{ 'is-focus': highlight === 'discard' }">{{ t('payout.discarder') }}</th>
           <th class="num" :class="{ 'is-focus': highlight === 'discard' }">{{ t('payout.others') }}</th>
           <th class="num">{{ t('payout.selfDraw') }}</th>

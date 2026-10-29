@@ -1,4 +1,5 @@
 import type { ColumnType, Generated } from 'kysely'
+import type { RuleSet } from '@mahjong/engine'
 
 /** Kysely's view of the app database. Column names are snake_case, as in the migrations. */
 export type Database = {
@@ -39,7 +40,7 @@ export type FriendshipsTable = {
 export type MatchesTable = {
   id: string
   kind: 'online' | 'solo'
-  rule_set: 'mcr' | 'hk'
+  rule_set: RuleSet
   /** Bot difficulty of a solo match. */
   difficulty: string | null
   /** Changed ratings (online matches with ≥ 2 full-match signed-in players). */
@@ -84,7 +85,7 @@ export type MatchHandsTable = {
 
 export type RatingsTable = {
   user_id: string
-  rule_set: 'mcr' | 'hk'
+  rule_set: RuleSet
   mu: number
   sigma: number
   matches: number
@@ -95,7 +96,7 @@ export type RatingsTable = {
 export type RatingHistoryTable = {
   match_id: string
   user_id: string
-  rule_set: 'mcr' | 'hk'
+  rule_set: RuleSet
   mu_before: number
   sigma_before: number
   mu_after: number

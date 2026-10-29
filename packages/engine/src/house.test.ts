@@ -18,6 +18,7 @@ import {
   normalizeHouseRules,
   paymentFor,
   paymentTable,
+  RULE_SETS,
   settleFor,
   STANDARD_HOUSE,
   viewFor,
@@ -38,10 +39,11 @@ describe('normalizeHouseRules', () => {
     expect(normalizeHouseRules('hk', 'junk')).toEqual(STANDARD_HOUSE.hk)
     expect(normalizeHouseRules('hk', { kongFaan: 'each1', minFaan: 2, maxFaan: '8', extra: 1 })).toEqual({ ...STANDARD_HOUSE.hk, kongFaan: 'each1' })
     expect(normalizeHouseRules('mcr', { minFan: 4, flowers: false, kongFaan: 'each1' })).toEqual({ minFan: 4, flowers: false })
+    expect(normalizeHouseRules('sg', { minTai: 3, maxTai: 13, payment: 'full', bites: false })).toEqual({ ...STANDARD_HOUSE.sg, minTai: 3, bites: false })
   })
 
   it('keeps every listed value of every option', () => {
-    for (const rules of ['mcr', 'hk'] as const) {
+    for (const rules of RULE_SETS) {
       for (const key of houseKeys(rules)) {
         for (const value of (HOUSE_OPTIONS[rules] as Record<string, readonly unknown[]>)[key]!) {
           expect((normalizeHouseRules(rules, { [key]: value }) as Record<string, unknown>)[key]).toBe(value)

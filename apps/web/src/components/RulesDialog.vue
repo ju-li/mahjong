@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { RuleConfig } from '@mahjong/engine'
+import { ruleKey } from '../i18n/ruleKeys'
 import { useI18n } from '../i18n/useI18n'
 import DifficultyReference from './DifficultyReference.vue'
 import FanReference from './FanReference.vue'
@@ -24,7 +25,7 @@ const TABS: { id: RulesTab; label: 'app.howToPlay' | 'app.fanReference' | 'app.d
 const title = computed(() => {
   if (active.value === 'rules') return t('guide.title', { rules: t(`rules.${props.config.rules}`) })
   if (active.value === 'difficulty') return t('app.botDifficulty')
-  return props.config.rules === 'hk' ? t('fans.titleHk') : t('fans.title')
+  return t(ruleKey('fans.title', props.config.rules))
 })
 
 function select(tab: RulesTab) {

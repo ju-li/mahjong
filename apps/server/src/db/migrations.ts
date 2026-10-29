@@ -127,6 +127,29 @@ export const migrations: Record<string, Migration> = {
         await statement.execute(db)
     },
   },
+  '0004_sg_rule_set': {
+    async up(db: Kysely<unknown>) {
+      // Singapore joins the rule sets (the check constraints keep Postgres's default names from 0002).
+      for (const statement of [
+        sql`alter table matches drop constraint matches_rule_set_check`,
+        sql`alter table matches add constraint matches_rule_set_check check (rule_set in ('mcr', 'hk', 'sg'))`,
+        sql`alter table ratings drop constraint ratings_rule_set_check`,
+        sql`alter table ratings add constraint ratings_rule_set_check check (rule_set in ('mcr', 'hk', 'sg'))`,
+      ])
+        await statement.execute(db)
+    },
+    async down(db: Kysely<unknown>) {
+      for (const statement of [
+        sql`delete from ratings where rule_set = 'sg'`,
+        sql`delete from matches where rule_set = 'sg'`,
+        sql`alter table ratings drop constraint ratings_rule_set_check`,
+        sql`alter table ratings add constraint ratings_rule_set_check check (rule_set in ('mcr', 'hk'))`,
+        sql`alter table matches drop constraint matches_rule_set_check`,
+        sql`alter table matches add constraint matches_rule_set_check check (rule_set in ('mcr', 'hk'))`,
+      ])
+        await statement.execute(db)
+    },
+  },
 }
 
 const provider: MigrationProvider = { getMigrations: async () => migrations }

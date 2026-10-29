@@ -112,7 +112,7 @@ function standardForRest() {
   goTo('summary')
 }
 /** Questions whose answer changes the payout table show it. */
-const PAYOUT_QUESTIONS = new Set(['payment', 'curve', 'maxFaan', 'minFaan', 'minFan'])
+const PAYOUT_QUESTIONS = new Set(['payment', 'curve', 'maxFaan', 'minFaan', 'minFan', 'maxTai', 'minTai'])
 
 // ---- Defaults ----
 type Row = 'tiles' | 'discard' | 'bots' | 'timer' | 'sound'

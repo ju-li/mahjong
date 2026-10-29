@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { sql, type Transaction } from 'kysely'
 import { DIFFICULTIES, type Difficulty } from '@mahjong/bots'
-import { handSeed, HANDS_PER_MATCH, isRuleSet, normalizeHouseRules, placements, type Action, type HouseRules, type Player, type RuleSet } from '@mahjong/engine'
+import { handSeed, HANDS_PER_MATCH, isRuleSet, normalizeHouseRules, placements, RULE_SETS, type Action, type HouseRules, type Player, type RuleSet } from '@mahjong/engine'
 import {
   LEADERBOARD_MIN_MATCHES,
   type HandSummary,
@@ -18,8 +18,6 @@ import {
 import type { Db } from './db'
 import type { Database } from './schema'
 import { displayRating, initialSkill, rateMatch, type Skill } from './rating'
-
-const RULE_SETS: RuleSet[] = ['mcr', 'hk']
 
 /** Everything the server knows about an online match that just ended. */
 export type OnlineMatchRecord = {
@@ -162,14 +160,15 @@ async function ratingChanges(db: Db | Tx, matchId: string, rules: RuleSet): Prom
 const isInt = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n)
 const isPlayer = (n: unknown): n is Player => isInt(n) && n >= 0 && n <= 3
 
-function validHand(h: unknown, index: number): h is HandSummary {
+/** A drawn hand moves no points, except Singapore bites (paid even when nobody wins). */
+function validHand(h: unknown, index: number, rules: RuleSet): h is HandSummary {
   if (typeof h !== 'object' || h === null) return false
   const hand = h as Partial<HandSummary>
   const d = hand.deltas
   if (hand.handIndex !== index || !isPlayer(hand.dealer) || !['E', 'S', 'W', 'N'].includes(hand.prevailingWind as string)) return false
   if (!Array.isArray(d) || d.length !== 4 || !d.every(isInt) || d.reduce((a, b) => a + b, 0) !== 0) return false
   const o = hand.outcome as Record<string, unknown> | undefined
-  if (o?.type === 'drawn') return d.every((x) => x === 0)
+  if (o?.type === 'drawn') return rules === 'sg' || d.every((x) => x === 0)
   if (o?.type !== 'win' || !isPlayer(o.winner) || !(o.from === null || isPlayer(o.from)) || !isInt(o.total) || !isInt(o.flowerPoints)) return false
   const fans = o.fans
   return Array.isArray(fans) && fans.length <= 40 && fans.every((f) => typeof f?.id === 'string' && f.id.length <= 64 && isInt(f.points) && isInt(f.count))
@@ -182,7 +181,7 @@ export function validSoloResult(r: unknown, now = Date.now()): r is SoloResult {
   if (!isRuleSet(s.rules) || !DIFFICULTIES.includes(s.difficulty as Difficulty)) return false
   if (!isInt(s.seed) || s.seed < 0 || s.seed >= 2 ** 32) return false
   if (!isInt(s.startedAt) || !isInt(s.endedAt) || s.startedAt > s.endedAt || s.endedAt > now + 86_400_000 || s.startedAt < Date.UTC(2025, 0, 1)) return false
-  if (!Array.isArray(s.hands) || s.hands.length !== HANDS_PER_MATCH || !s.hands.every((h, i) => validHand(h, i))) return false
+  if (!Array.isArray(s.hands) || s.hands.length !== HANDS_PER_MATCH || !s.hands.every((h, i) => validHand(h, i, s.rules!))) return false
   if (!Array.isArray(s.scores) || s.scores.length !== 4) return false
   return s.scores.every((score, p) => score === s.hands!.reduce((sum, h) => sum + h.deltas[p]!, 0))
 }

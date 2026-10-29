@@ -1,8 +1,8 @@
 import { standardHouse, type HkHouseRules } from './house'
 import type { ScoringMeld, WinContext } from './scoring'
+import { isDragon, isHonor, isNineGates, isTerminal, isWind, SEAT_NUMBER, setKinds, suitOf, WIND_INDEX, type HSet } from './kinds'
 import { countsOf, decomposeCounts, type Form } from './shapes'
 import type { HandScore, Seat } from './state'
-import type { Wind } from './tiles'
 
 /**
  * Hong Kong (Cantonese) faan scoring, "3 faan to win, 13 faan limit" table style.
@@ -133,19 +133,6 @@ export function hkFansFor(house: HkHouseRules = STANDARD): HkFanDef[] {
   }).map((d) => ({ ...d, points: hkFanPoints(d.id, house) }))
 }
 
-const WIND_INDEX: Record<Wind, number> = { E: 27, S: 28, W: 29, N: 30 }
-const SEAT_NUMBER: Record<Wind, number> = { E: 1, S: 2, W: 3, N: 4 }
-const isHonor = (k: number) => k >= 27
-const isWind = (k: number) => k >= 27 && k <= 30
-const isDragon = (k: number) => k >= 31
-const isTerminal = (k: number) => k < 27 && (k % 9 === 0 || k % 9 === 8)
-const suitOf = (k: number) => (k < 27 ? Math.floor(k / 9) : 3)
-
-type HSet = { type: 'chow' | 'pung' | 'kong'; index: number; concealed: boolean }
-
-const setKinds = (s: { type: string; index: number }): number[] =>
-  s.type === 'chow' ? [s.index, s.index + 1, s.index + 2] : new Array<number>(s.type === 'kong' ? 4 : 3).fill(s.index)
-
 function tileFans(all: number[], out: HkFanId[]): void {
   const suits = new Set(all.filter((k) => !isHonor(k)).map(suitOf))
   const honors = all.some(isHonor)
@@ -195,16 +182,6 @@ function setFans(sets: HSet[], pair: number, ctx: WinContext, out: HkFanId[]): v
   if (pungs.length === 0) out.push('hk.allChows')
   if (pungs.filter((s) => s.type === 'kong').length === 4) out.push('hk.fourKongs')
   if (pungs.length === 4 && pungs.every((s) => s.concealed)) out.push('hk.fourConcealedPungs')
-}
-
-function isNineGates(ctx: WinContext): boolean {
-  if (ctx.melds.length > 0) return false
-  const before = countsOf(ctx.concealed)
-  before[ctx.winTile]!--
-  const suit = suitOf(ctx.winTile)
-  if (suit > 2) return false
-  const pattern = [3, 1, 1, 1, 1, 1, 1, 1, 3]
-  return before.every((c, k) => (suitOf(k) === suit ? c === pattern[k % 9] : c === 0))
 }
 
 /** Fan lists for each way of reading the hand. */

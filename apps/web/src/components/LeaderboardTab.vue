@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import type { RuleSet } from '@mahjong/engine'
+import { RULE_SETS, type RuleSet } from '@mahjong/engine'
 import { LEADERBOARD_MIN_MATCHES, type LeaderboardEntry } from '@mahjong/protocol'
 import { avatarSvg } from '../game/avatar'
 import { fetchLeaderboard } from '../game/leaderboard'
@@ -13,7 +13,7 @@ const { t } = useI18n()
 const account = useAccount()
 const social = useSocial()
 
-const RULES: RuleSet[] = ['mcr', 'hk']
+const RULES: readonly RuleSet[] = RULE_SETS
 const rules = ref<RuleSet>('mcr')
 const entries = ref<LeaderboardEntry[] | null>(null)
 const failed = ref(false)

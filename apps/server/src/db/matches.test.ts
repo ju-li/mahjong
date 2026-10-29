@@ -160,6 +160,32 @@ describe('online matches', () => {
     expect((await history(db, 'a')).matches[0]!.house).toEqual(start)
   })
 
+  it('of Singapore are stored, rated on their own ladder and replay with their bites', async () => {
+    const sg = playMatch(12, { rules: 'sg' })
+    const rec: OnlineMatchRecord = {
+      ...online([human('a', 'Ann'), human('b', 'Bo'), bot, bot]),
+      rules: 'sg',
+      house: STANDARD_HOUSE.sg,
+      seed: sg.match.seed,
+      hands: handSummaries(sg.match),
+      actions: sg.actions,
+      scores: sg.match.scores,
+    }
+    expect((await recordOnlineMatch(db, rec)).size).toBe(2)
+    const ratings = await db.selectFrom('ratings').select(['user_id', 'rule_set']).orderBy('user_id').execute()
+    expect(ratings).toEqual([
+      { user_id: 'a', rule_set: 'sg' },
+      { user_id: 'b', rule_set: 'sg' },
+    ])
+    const hands = await db.selectFrom('match_hands').selectAll().where('match_id', '=', rec.id).orderBy('hand_index').execute()
+    for (const h of hands) {
+      const init = newHand({ seed: handSeed(rec.seed, h.hand_index), dealer: dealerFor(h.hand_index), prevailingWind: prevailingWindFor(h.hand_index), rules: 'sg' })
+      const end = replay(init, h.actions as Action[])
+      expect(end.phase.kind === 'ended' && end.phase.result).toEqual(sg.match.history[h.hand_index]!.result)
+    }
+    expect(hands.reduce((sum, h) => sum + h.player_deltas[0]!, 0)).toBe(sg.match.scores[0])
+  })
+
   it('leave ratings alone with fewer than two rated players', async () => {
     const changes = await recordOnlineMatch(db, online([human('a', 'Ann'), human('b', 'Bo', false), bot, bot]))
     expect(changes.size).toBe(0)
@@ -178,6 +204,15 @@ describe('solo matches', () => {
     bent.hands[3]!.deltas = [100, 0, 0, 0]
     expect(validSoloResult(bent)).toBe(false)
     expect(validSoloResult(null)).toBe(false)
+  })
+
+  it('accept points on a drawn hand only for Singapore bites', () => {
+    const { match } = playMatch(12, { rules: 'sg' })
+    const r: SoloResult = { ...solo(), rules: 'sg', seed: 12, hands: handSummaries(match), scores: match.scores }
+    const bitten = r.hands.find((h) => h.outcome.type === 'drawn' && h.deltas.some((d) => d !== 0))
+    expect(bitten).toBeDefined()
+    expect(validSoloResult(r)).toBe(true)
+    expect(validSoloResult({ ...r, rules: 'mcr' })).toBe(false)
   })
 
   it('are stored once for the uploader and never rated', async () => {

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { isStandard, maximumFor, minimumFor, type RuleConfig } from '@mahjong/engine'
 import HouseSummary from './house/HouseSummary.vue'
 import type { MessageKey } from '../i18n/messages'
+import { ruleKey } from '../i18n/ruleKeys'
 import { useI18n } from '../i18n/useI18n'
 
 const props = defineProps<{ config: RuleConfig }>()
@@ -12,15 +13,16 @@ const { t } = useI18n()
 
 /** Each section: a heading and its paragraphs. Winning and scoring differ per rule set. */
 const sections = computed(() => {
-  const hk = props.config.rules === 'hk'
+  const rules = props.config.rules
+  const sg = rules === 'sg'
   const list: { title: MessageKey; body: MessageKey[] }[] = [
     { title: 'guide.goal.title', body: ['guide.goal.body'] },
-    { title: 'guide.tiles.title', body: ['guide.tiles.body', 'guide.tiles.flowers'] },
-    { title: 'guide.turn.title', body: ['guide.turn.body', 'guide.turn.end'] },
+    { title: 'guide.tiles.title', body: ['guide.tiles.body', 'guide.tiles.flowers', ...(sg ? (['guide.tiles.animalsSg'] as const) : [])] },
+    { title: 'guide.turn.title', body: ['guide.turn.body', sg ? 'guide.turn.endSg' : 'guide.turn.end'] },
     { title: 'guide.claims.title', body: ['guide.claims.chow', 'guide.claims.pung', 'guide.claims.kong', 'guide.claims.priority'] },
-    { title: 'guide.win.title', body: hk ? ['guide.win.bodyHk'] : ['guide.win.body'] },
-    { title: 'guide.scoring.title', body: hk ? ['guide.scoring.bodyHk'] : ['guide.scoring.body'] },
-    { title: 'guide.match.title', body: [hk ? 'guide.match.bodyHk' : 'guide.match.body'] },
+    { title: 'guide.win.title', body: [ruleKey('guide.win.body', rules)] },
+    { title: 'guide.scoring.title', body: [ruleKey('guide.scoring.body', rules), ...(sg ? (['guide.scoring.bitesSg'] as const) : [])] },
+    { title: 'guide.match.title', body: [ruleKey('guide.match.body', rules)] },
   ]
   return list
 })
