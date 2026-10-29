@@ -201,6 +201,7 @@ function notationContext(hand: string, win: string, o: ScoreOptions): WinContext
     flowerNumbers: o.flowerNumbers ?? [],
     lastTileOfWall: o.lastTileOfWall ?? false,
     replacement: o.replacement ?? false,
+    bonusReplacement: o.bonusReplacement ?? false,
     robbingKong: o.robbingKong ?? false,
     winTileVisible: o.winTileVisible ?? 0,
   }
