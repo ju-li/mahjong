@@ -265,6 +265,9 @@ async function shareTable() {
   setTimeout(() => (codeCopied.value = false), 2000)
 }
 const pausedBy = computed(() => online.source.pausedBy?.value ?? null)
+const waitingFor = online.waitingFor
+/** "Ann, Bo and Cy" in the UI language. */
+const listNames = (names: string[]) => new Intl.ListFormat(locale.value, { type: 'conjunction' }).format(names)
 /** On a break: someone paused the online table, or you paused your solo match. */
 const onBreak = computed(() => (atTable.value ? pausedBy.value !== null : solo.onBreak.value))
 /** Pausing makes sense while a hand is being played. */
@@ -604,8 +607,16 @@ async function loadLatest() {
       @edit-profile="openProfile()"
     />
 
+    <!-- Just restored after a server restart: play waits a moment for everyone to reconnect. -->
+    <div v-if="atTable && link === 'up' && waitingFor" class="result" role="status" aria-labelledby="back-title">
+      <div class="result__card pause">
+        <h2 id="back-title">{{ t('link.backTitle') }}</h2>
+        <p>{{ t('link.waitingFor', { names: listNames(waitingFor) }) }}</p>
+      </div>
+    </div>
+
     <!-- A break: everyone at the online table sees this until someone resumes. -->
-    <div v-if="onBreak && link === 'up'" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+    <div v-else-if="onBreak && link === 'up'" class="result" role="dialog" aria-modal="true" aria-labelledby="pause-title">
       <div class="result__card pause">
         <h2 id="pause-title">{{ t('pause.title') }}</h2>
         <template v-if="atTable">

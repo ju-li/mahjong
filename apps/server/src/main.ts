@@ -2,9 +2,10 @@ import { createEndpoint, createRouter, defineRoom, defineServer } from '@colyseu
 import { WebSocketTransport } from '@colyseus/ws-transport'
 import { isRuleSet } from '@mahjong/engine'
 import { FEEDBACK_PATH, LEADERBOARD_PATH, MAX_VOICE_BYTES, ROOM_NAME, SOCIAL_ROOM } from '@mahjong/protocol'
+import { purgeLiveTables } from './db/liveTables'
 import { leaderboard } from './db/matches'
 import { createFeedbackHandler, smtpSender, type FeedbackEnv } from './feedback'
-import { TableRoom, tableDiagnostics } from './room'
+import { EMPTY_TABLE_MS, TableRoom, tableDiagnostics } from './room'
 import { configureServicesFromEnv, services } from './services'
 import { SocialRoom } from './social'
 
@@ -51,6 +52,8 @@ export const server = defineServer({
 // Railway injects PORT; 2567 is Colyseus' usual port for local development.
 if (process.env.NODE_ENV !== 'test') {
   configureServicesFromEnv()
+  // Tables saved before an earlier restart that nobody came back to.
+  if (services.db) await purgeLiveTables(services.db, EMPTY_TABLE_MS).catch((error) => console.error('live table purge:', error))
   const port = Number(process.env.PORT ?? 2567)
   await server.listen(port)
   console.log(`mahjong server listening on ${port}; accounts ${process.env.DATABASE_URL && process.env.LOGTO_ENDPOINT ? 'on' : 'off'}`)

@@ -41,13 +41,17 @@ async function relations(db: Kysely<any>, kinds: string[]): Promise<Record<strin
   return bySchema
 }
 const tables = (db: Kysely<any>) => relations(db, ['r', 'p'])
+/** Tables created in `mahjong` directly, after the move. */
+const GAME_TABLES = [...LEGACY_PUBLIC_TABLES, 'live_tables'].sort()
+/** The migrations that ran before the move; later ones create their tables in `mahjong` from the start. */
+const legacyMigrations = Object.fromEntries(Object.entries(migrations).filter(([name]) => name < '0005'))
 
 describe('migrateToLatest', () => {
   it('creates every table in mahjong on an empty database', async () => {
     const db = createDb(url, 1)
     try {
       expect(await migrateToLatest(db)).toEqual({ moved: [], applied: Object.keys(migrations) })
-      expect(await tables(db)).toEqual({ mahjong: [...LEGACY_PUBLIC_TABLES].sort() })
+      expect(await tables(db)).toEqual({ mahjong: GAME_TABLES })
       expect(await migrateToLatest(db)).toEqual({ moved: [], applied: [] })
     } finally {
       await db.destroy()
@@ -57,7 +61,7 @@ describe('migrateToLatest', () => {
   it('moves the tables an earlier deploy left in public, with their data, and leaves the rest of public alone', async () => {
     // The state before this change: migrations run with the default search path, next to Logto's tables.
     const old = plainDb()
-    const { error } = await new Migrator({ db: old, provider: { getMigrations: async () => migrations } }).migrateToLatest()
+    const { error } = await new Migrator({ db: old, provider: { getMigrations: async () => legacyMigrations } }).migrateToLatest()
     expect(error).toBeUndefined()
     await sql`create table users (id text primary key)`.execute(old)
     await sql`alter table users enable row level security`.execute(old)
@@ -70,10 +74,10 @@ describe('migrateToLatest', () => {
 
     const db = createDb(url, 1)
     try {
-      expect(await migrateToLatest(db)).toEqual({ moved: [...LEGACY_PUBLIC_TABLES], applied: [] })
-      expect(await tables(db)).toEqual({ mahjong: [...LEGACY_PUBLIC_TABLES].sort(), public: ['users'] })
-      expect(await relations(db, ['i'])).toEqual({ mahjong: indexesBefore, public: ['users_pkey'] })
-      expect((await sql`select name, timestamp from mahjong.kysely_migration order by name`.execute(db)).rows).toEqual(applied)
+      expect(await migrateToLatest(db)).toEqual({ moved: [...LEGACY_PUBLIC_TABLES], applied: ['0005_live_tables'] })
+      expect(await tables(db)).toEqual({ mahjong: GAME_TABLES, public: ['users'] })
+      expect(await relations(db, ['i'])).toEqual({ mahjong: [...indexesBefore, 'live_tables_pkey'].sort(), public: ['users_pkey'] })
+      expect((await sql`select name from mahjong.kysely_migration order by name`.execute(db)).rows).toEqual([...applied.map(({ name }) => ({ name })), { name: '0005_live_tables' }])
       expect((await sql<{ rls: boolean }>`select relrowsecurity as rls from pg_class where oid = 'public.users'::regclass`.execute(db)).rows).toEqual([{ rls: true }])
       expect((await sql`select id from public.users`.execute(db)).rows).toEqual([{ id: 'logto-user' }])
       expect((await getProfile(db, 'a'))?.name).toBe('Ann')

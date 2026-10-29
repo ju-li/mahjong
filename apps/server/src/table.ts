@@ -56,6 +56,11 @@ export const TURN_MS = 60_000
 /** A dropped player's seat is kept for them this long; after that anyone joining may take it over. */
 export const RESERVE_MS = 2 * 60_000
 
+/** After a restart, a restored match waits this long at most for the players who were at it to come back. */
+export const RESTORE_GRACE_MS = 20_000
+/** Bump whenever `SavedTable` or the engine's `Match` changes shape: older saves are then dropped, not restored. */
+export const SAVED_TABLE_VERSION = 1
+
 /** A player's voice memos must be at least this far apart... */
 export const VOICE_GAP_MS = 1000
 /** ...and no more than this many in any minute. */
@@ -95,6 +100,33 @@ type Slot = {
 const emptySlot = (formerToken: string | null = null): Slot => ({ token: null, name: '', avatar: null, client: null, droppedAt: null, formerToken, userId: null })
 
 type Timer = { clear(): void } | null
+
+/**
+ * Everything a table needs to carry on after a server restart, as JSON. Connections, timers and
+ * rate limits are left out; a claim countdown keeps the time it had left.
+ */
+export type SavedTable = {
+  version: number
+  phase: 'lobby' | 'playing'
+  settings: TableSettings
+  slots: (Omit<Slot, 'client' | 'droppedAt'> & { connected: boolean })[]
+  host: Player
+  match: Match | null
+  avatarSeed: number
+  step: number
+  lastAction: Action | null
+  ready: Player[]
+  pausedBy: Player | null
+  claim: { key: string; leftMs: number } | null
+  banned: { tokens: string[]; userIds: string[] }
+  handLog: Action[]
+  handLogs: Action[][]
+  matchId: string
+  matchStartedAt: number
+  startOccupants: ({ token: string; userId: string | null } | null)[]
+  occupantChanged: boolean[]
+  matchReported: boolean
+}
 
 /** Tidies a player's chosen name: printable, trimmed, bounded. */
 export function cleanName(raw: unknown, fallback: string): string {
@@ -153,6 +185,9 @@ export class Table {
   private occupantChanged: boolean[] = []
   /** `onMatchEnd` already called for this match. */
   private matchReported = false
+  /** Restored after a restart: players who were here then, whom play waits for (see `RESTORE_GRACE_MS`). */
+  private awaiting = new Set<Player>()
+  private graceTimer: Timer = null
 
   constructor(
     code: string,
@@ -269,7 +304,9 @@ export class Table {
     seated.name = cleanName(options.name, seated.name || `Player ${p + 1}`)
     seated.avatar = cleanAvatar(options.avatar, seated.avatar)
     seated.userId = userId
-    if (!this.connected(this.host) || this.slots[this.host]!.token === null) this.host = p
+    // A host expected back after a restart stays host.
+    if ((!this.connected(this.host) && !this.awaiting.has(this.host)) || this.slots[this.host]!.token === null) this.host = p
+    this.awaiting.delete(p)
     this.changed()
     return p
   }
@@ -551,7 +588,8 @@ export class Table {
       this.stopTimers()
       return
     }
-    if (this.pausedBy !== null) return this.freeze()
+    // Paused, or just restored and still waiting for its players: every clock stops.
+    if (this.pausedBy !== null || this.holding()) return this.freeze()
     this.thaw()
 
     if (s.phase.kind === 'ended') {
@@ -616,6 +654,16 @@ export class Table {
     if (key === null) return
     this.claimDeadline = this.env.now() + left
     this.claimTimer = this.env.setTimeout(() => this.claimExpired(key), left)
+  }
+
+  /** Still waiting for players who were here before a restart; a seat that emptied meanwhile isn't waited for. */
+  private holding(): boolean {
+    for (const p of this.awaiting) if (this.slots[p]!.token === null || this.connected(p)) this.awaiting.delete(p)
+    if (this.awaiting.size === 0) {
+      this.graceTimer?.clear()
+      this.graceTimer = null
+    }
+    return this.awaiting.size > 0
   }
 
   private stepIs(step: number): boolean {
@@ -774,6 +822,7 @@ export class Table {
       allReady: this.betweenHands() && this.allReady(),
       final: this.finished(),
       paused: this.pausedBy,
+      returning: this.awaiting.size > 0 ? [...this.awaiting].sort() : null,
     }
   }
 
@@ -796,7 +845,95 @@ export class Table {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Restarts
+
+  /** The table as JSON, to survive a server restart (see `Table.restore`). Holds seat tokens: server-side only. */
+  save(): SavedTable {
+    const claimLeft = this.claimLeft ?? (this.claimDeadline === null ? null : Math.max(0, this.claimDeadline - this.env.now()))
+    return {
+      version: SAVED_TABLE_VERSION,
+      phase: this.phase,
+      settings: this.settings,
+      slots: this.slots.map(({ client, droppedAt: _, ...slot }) => ({ ...slot, connected: client !== null })),
+      host: this.host,
+      match: this.match,
+      avatarSeed: this.avatarSeed,
+      step: this.step,
+      lastAction: this.lastAction,
+      ready: [...this.ready],
+      pausedBy: this.pausedBy,
+      claim: this.claimKey !== null && claimLeft !== null ? { key: this.claimKey, leftMs: claimLeft } : null,
+      banned: { tokens: [...this.banned.tokens], userIds: [...this.banned.userIds] },
+      handLog: this.handLog,
+      handLogs: this.handLogs,
+      matchId: this.matchId,
+      matchStartedAt: this.matchStartedAt,
+      startOccupants: this.startOccupants,
+      occupantChanged: this.occupantChanged,
+      matchReported: this.matchReported,
+    }
+  }
+
+  /**
+   * A table saved by `save`, possibly by another server process, as it was: same seats, tokens,
+   * match and step. Nobody is connected yet; each player's seat is reserved for them from now on
+   * (V44), and a match under way holds still until those who were at it return or
+   * `RESTORE_GRACE_MS` passes; the host stays host if they return within it. Null if the save is
+   * from an incompatible version.
+   */
+  static restore(code: string, env: TableEnv, onChange: () => void, saved: unknown): Table | null {
+    const s = saved as Partial<SavedTable> | null
+    if (!s || typeof s !== 'object' || s.version !== SAVED_TABLE_VERSION) return null
+    try {
+      return Table.fromSave(code, env, onChange, s as SavedTable)
+    } catch {
+      return null
+    }
+  }
+
+  private static fromSave(code: string, env: TableEnv, onChange: () => void, s: SavedTable): Table {
+    const t = new Table(code, env, onChange)
+    const now = env.now()
+    t.phase = s.phase
+    t.settings = s.settings
+    t.slots = s.slots.map(({ connected: _, ...slot }) => ({ ...slot, client: null, droppedAt: slot.token === null ? null : now }))
+    t.host = s.host
+    t.match = s.match
+    t.avatarSeed = s.avatarSeed
+    t.step = s.step
+    t.lastAction = s.lastAction
+    t.ready = new Set(s.ready)
+    t.pausedBy = s.pausedBy
+    if (s.claim) {
+      // `thaw` resumes the countdown from here once play runs again.
+      t.claimKey = s.claim.key
+      t.claimLeft = s.claim.leftMs
+    }
+    t.banned = { tokens: new Set(s.banned.tokens), userIds: new Set(s.banned.userIds) }
+    t.handLog = s.handLog
+    t.handLogs = s.handLogs
+    t.matchId = s.matchId
+    t.matchStartedAt = s.matchStartedAt
+    t.startOccupants = s.startOccupants
+    t.occupantChanged = s.occupantChanged
+    t.matchReported = s.matchReported
+    t.awaiting = new Set(PLAYERS.filter((p) => s.slots[p]!.connected && s.slots[p]!.token !== null))
+    if (t.awaiting.size > 0)
+      t.graceTimer = env.setTimeout(() => {
+        t.graceTimer = null
+        t.awaiting.clear()
+        // The host didn't make it back: hosting passes on, as it does when a host drops.
+        const next = PLAYERS.find((p) => t.connected(p))
+        if (!t.connected(t.host) && next !== undefined) t.host = next
+        t.changed()
+      }, RESTORE_GRACE_MS)
+    return t
+  }
+
   dispose(): void {
     this.stopTimers()
+    this.graceTimer?.clear()
+    this.graceTimer = null
   }
 }

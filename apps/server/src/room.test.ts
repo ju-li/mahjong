@@ -1,13 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { CloseCode, ErrorCode } from '@colyseus/core'
 import { boot, type ColyseusTestServer } from '@colyseus/testing'
 import type { Room } from '@colyseus/sdk'
-import { FEEDBACK_PATH, KICKED_CODE, LEADERBOARD_PATH, ROOM_NAME, SOCIAL_ROOM, type HistoryPage, type MatchDetailReply, type PlayerStats, type FriendsSnapshot, type InviteResult, type Reaction, type Snapshot, type TableInvite, type TableInviteResult, type VoiceMemo } from '@mahjong/protocol'
+import { FEEDBACK_PATH, KICKED_CODE, LEADERBOARD_PATH, REMOVED_CODE, ROOM_NAME, SOCIAL_ROOM, TABLE_FULL_CODE, TABLE_MOVING_CODE, type HistoryPage, type MatchDetailReply, type PlayerStats, type FriendsSnapshot, type InviteResult, type Reaction, type Snapshot, type TableInvite, type TableInviteResult, type VoiceMemo } from '@mahjong/protocol'
 import { tokenVerifier } from './auth'
 import type { FeedbackMail } from './feedback'
 import { feedbackEnv, server } from './main'
 import { services } from './services'
 import { testIssuer } from './testAuth'
 import { startTestDb } from './db/testDb'
+import type { Table } from './table'
 
 let colyseus: ColyseusTestServer
 let stopDb: () => Promise<void>
@@ -71,7 +73,7 @@ describe('TableRoom', () => {
   it('turns away a fifth player', async () => {
     const host = await colyseus.sdk.create(ROOM_NAME, { name: 'A' })
     const others = [await colyseus.sdk.joinById(host.roomId, {}), await colyseus.sdk.joinById(host.roomId, {}), await colyseus.sdk.joinById(host.roomId, {})]
-    await expect(colyseus.sdk.joinById(host.roomId, {})).rejects.toThrow()
+    await expect(colyseus.sdk.joinById(host.roomId, {})).rejects.toMatchObject({ code: TABLE_FULL_CODE })
     for (const r of [host, ...others]) await r.leave()
   })
 
@@ -168,18 +170,88 @@ describe('removing players', () => {
     host.send('kick', { player: 1 })
     expect(await closed).toBe(KICKED_CODE)
     await seatFreed
-    await expect(colyseus.sdk.joinById(code, { name: 'Bo', token })).rejects.toThrow()
+    await expect(colyseus.sdk.joinById(code, { name: 'Bo', token })).rejects.toMatchObject({ code: REMOVED_CODE })
 
     const cyClosed = new Promise<number>((resolve) => signedIn.onLeave((c) => resolve(c)))
     host.send('kick', { player: 2 })
     expect(await cyClosed).toBe(KICKED_CODE)
     // A fresh browser, same account: still out.
-    await expect(colyseus.sdk.joinById(code, { name: 'Cy', accessToken: await issuer.token('kick-cy') })).rejects.toThrow()
+    await expect(colyseus.sdk.joinById(code, { name: 'Cy', accessToken: await issuer.token('kick-cy') })).rejects.toMatchObject({ code: REMOVED_CODE })
     // Anyone else may take the seat.
     const di = await colyseus.sdk.joinById(code, { name: 'Di' })
     await next(di)
     await di.leave()
     await host.leave()
+  })
+})
+
+describe('server restarts', () => {
+  /** Bring a table back by its code, trying again while it is still on its way (as the web client does). */
+  async function restore(code: string, options: { name?: string; token?: string }) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await colyseus.sdk.create(ROOM_NAME, { ...options, restore: code })
+      } catch (error) {
+        if ((error as { code?: number }).code !== TABLE_MOVING_CODE || attempt > 100) throw error
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+    }
+  }
+
+  it('saves a table on shutdown and brings it back, mid-match, for the players who were at it (V65)', async () => {
+    const host = await colyseus.sdk.create(ROOM_NAME, { name: 'Ann' })
+    const code = host.roomId
+    await next(host)
+    const friend = await colyseus.sdk.joinById(code, { name: 'Bo' })
+    await next(friend)
+    const started = next(host, (s) => s.match !== null)
+    host.send('start', {})
+    await started
+    // Paused, so nothing moves while we compare.
+    const paused = next(friend, (s) => s.match?.paused === 0)
+    host.send('pause', {})
+    const before = await paused
+
+    // A table that is open here can't be restored a second time.
+    await expect(colyseus.sdk.create(ROOM_NAME, { restore: code })).rejects.toMatchObject({ code: TABLE_MOVING_CODE })
+
+    const closed = Promise.all([host, friend].map((r) => new Promise<number>((resolve) => r.onLeave((c) => resolve(c)))))
+    await colyseus.getRoomById(code).onBeforeShutdown()
+    expect(await closed).toEqual([CloseCode.SERVER_SHUTDOWN, CloseCode.SERVER_SHUTDOWN])
+    await expect(colyseus.sdk.joinById(code, { token: before.token })).rejects.toMatchObject({ code: ErrorCode.MATCHMAKE_INVALID_ROOM_ID })
+
+    // Bo comes back first: same seat, same hand; the table waits for Ann.
+    const bo = await restore(code, { name: 'Bo', token: before.token })
+    expect(bo.roomId).toBe(code)
+    const boBack = await next(bo)
+    expect(boBack.you).toBe(1)
+    expect(boBack.match).toMatchObject({ step: before.match!.step, view: before.match!.view, scores: before.match!.scores, paused: 0, returning: [0] })
+    // Ann's seat token, as her browser kept it (the test client doesn't store it).
+    const annToken = (colyseus.getRoomById(code) as unknown as { table: Table }).table.save().slots[0]!.token!
+    const ann = await colyseus.sdk.joinById(code, { name: 'Ann', token: annToken })
+    const annBack = await next(ann)
+    expect(annBack.you).toBe(0)
+    expect(annBack.host).toBe(0)
+    expect(annBack.match!.returning).toBeNull()
+    // Play goes on from there: bots move, and so do Ann and Bo when it is their turn.
+    const moved = Promise.race(
+      [ann, bo].map((r) =>
+        next(r, (s) => {
+          const m = s.match!
+          if (m.step > before.match!.step) return true
+          if (m.paused === null && m.legal.length) r.send('act', { step: m.step, action: m.legal[0]! })
+          return false
+        }),
+      ),
+    )
+    ann.send('resume', {})
+    await moved
+    await bo.leave()
+    await ann.leave()
+  })
+
+  it('has nothing to restore under a code that was never saved', async () => {
+    await expect(colyseus.sdk.create(ROOM_NAME, { restore: 'QQQQ' })).rejects.toMatchObject({ code: ErrorCode.MATCHMAKE_INVALID_ROOM_ID })
   })
 })
 

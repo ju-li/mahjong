@@ -10,6 +10,7 @@ export type Database = {
   match_hands: MatchHandsTable
   ratings: RatingsTable
   rating_history: RatingHistoryTable
+  live_tables: LiveTablesTable
 }
 
 export type ProfilesTable = {
@@ -101,4 +102,17 @@ export type RatingHistoryTable = {
   sigma_before: number
   mu_after: number
   sigma_after: number
+}
+
+export type LiveTablesTable = {
+  /** The table's four-letter code. */
+  code: string
+  /** `SavedTable` as JSON. */
+  state: ColumnType<unknown, string, string>
+  /** Boot id of the server process that holds the table. */
+  owner: string
+  /** The owner shut down and handed the table on: any process may restore it now. */
+  released: ColumnType<boolean, boolean | undefined, boolean>
+  /** Last save or heartbeat; an owner silent for a while is presumed gone. */
+  saved_at: ColumnType<Date, Date | undefined, Date>
 }
