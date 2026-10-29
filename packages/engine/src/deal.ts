@@ -23,9 +23,11 @@ export function drawReplacement(wall: Tile[]): Tile | undefined {
 
 /**
  * Move every bonus tile in `seat`'s hand aside, replacing each from the back of the wall until none remain,
- * then pay any Singapore bite the new bonus tiles complete.
+ * then pay any Singapore bite the new bonus tiles complete (`opening`: during the deal). Returns whether any
+ * tile was replaced.
  */
-export function replaceFlowers(state: GameState, seat: Seat): void {
+export function replaceFlowers(state: GameState, seat: Seat, opening = false): boolean {
+  const before = state.flowers[seat]!.length
   const hand = state.hands[seat]!
   for (;;) {
     const index = hand.findIndex((t) => isFlower(t.kind))
@@ -35,7 +37,8 @@ export function replaceFlowers(state: GameState, seat: Seat): void {
     if (!replacement) break
     hand.push(replacement)
   }
-  bonusTileBites(state, seat)
+  bonusTileBites(state, seat, opening)
+  return state.flowers[seat]!.length > before
 }
 
 /** Shuffle, deal 13 to each seat and a 14th to the dealer, then replace flowers starting with the dealer. */
@@ -67,7 +70,7 @@ export function newHand({ seed, dealer, prevailingWind, rules = DEFAULT_RULES, h
 
   seat = dealer
   for (let i = 0; i < 4; i++) {
-    replaceFlowers(state, seat)
+    replaceFlowers(state, seat, true)
     seat = nextSeat(seat)
   }
   for (const hand of state.hands) hand.sort((a, b) => a.id - b.id)

@@ -18,7 +18,7 @@ export type ViewMeld = {
 export type ViewPhase =
   | { kind: 'draw' }
   /** `drawnTileId` is only shown to the seat that drew it. */
-  | { kind: 'discard'; drawnTileId: number | null; afterKong: boolean }
+  | { kind: 'discard'; drawnTileId: number | null; afterKong: boolean; afterBonus?: boolean }
   /** `awaiting`: this seat still has to answer. Other seats' answers stay hidden. */
   | { kind: 'claim' | 'robKong'; tile: Tile; from: Seat; awaiting: boolean }
   /** At the end of a hand every hand is public: `hands` holds each seat's concealed tiles, in seat order. */
@@ -61,6 +61,7 @@ export function viewFor(state: GameState, seat: Seat): PlayerView {
         kind: 'discard',
         drawnTileId: state.turn === seat ? phase.drawnTileId : null,
         afterKong: phase.afterKong,
+        ...(phase.afterBonus ? { afterBonus: true } : {}),
       }
       break
     case 'claim':

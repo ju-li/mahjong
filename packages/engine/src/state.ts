@@ -42,11 +42,12 @@ export type HandScore = {
 }
 
 /**
- * Singapore instant payouts (咬): an animal pair, all four animals, a complete flower or season set, or a kong.
- * Each other seat pays `units` to `seat` the moment it happens; `deltas` is that transfer (sums to zero).
+ * Singapore instant payouts (咬): an animal pair, all four animals, own flower and season (wedding), a complete
+ * flower or season set, or a kong. Each other seat pays `units` to `seat` the moment it happens; `deltas` is that
+ * transfer (sums to zero). `opening`: a pair completed during the deal, paid double.
  */
-export type BiteKind = 'catMouse' | 'roosterCentipede' | 'allAnimals' | 'flowerSet' | 'seasonSet' | 'meldedKong' | 'concealedKong'
-export type Bite = { seat: Seat; kind: BiteKind; units: number; deltas: number[] }
+export type BiteKind = 'catMouse' | 'roosterCentipede' | 'allAnimals' | 'wedding' | 'flowerSet' | 'seasonSet' | 'meldedKong' | 'concealedKong'
+export type Bite = { seat: Seat; kind: BiteKind; units: number; deltas: number[]; opening?: boolean }
 
 /**
  * `deltas` is the win settlement. `bonus` (Singapore) is the sum of the hand's bites per seat; it is paid on
@@ -66,8 +67,11 @@ export type ClaimWindow = {
 export type Phase =
   /** `turn` must draw. */
   | { kind: 'draw' }
-  /** `turn` holds 14 (kongs counted as 3) and must discard, kong or win. */
-  | { kind: 'discard'; drawnTileId: number | null; afterKong: boolean }
+  /**
+   * `turn` holds 14 (kongs counted as 3) and must discard, kong or win. `afterBonus`: the drawn tile replaced
+   * a flower or animal (absent in older states = false).
+   */
+  | { kind: 'discard'; drawnTileId: number | null; afterKong: boolean; afterBonus?: boolean }
   /** Other seats answer a discard. */
   | ({ kind: 'claim' } & ClaimWindow)
   /** Other seats may rob a promoted kong. `meldIndex` is the pung being promoted. */
