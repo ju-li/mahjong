@@ -1,5 +1,6 @@
 import { replaceFlowers } from './deal'
 import { meetsMinimumFor, scoreFor, settleFor } from './ruleset'
+import { biteTotals, kongBite } from './sg'
 import type { ScoringMeld, WinContext } from './scoring'
 import type { Action, ClaimWindow, GameState, HandScore, Meld, Seat } from './state'
 import { nextSeat, seatWind } from './state'
@@ -175,8 +176,14 @@ export function legalActions(state: GameState, seat: Seat): Action[] {
 // Transitions (operate on a private clone)
 // ---------------------------------------------------------------------------
 
+/** The hand's Singapore bites, to carry on its result. */
+function bonusOf(s: GameState): { bonus?: number[] } {
+  const bonus = biteTotals(s.bites)
+  return bonus ? { bonus } : {}
+}
+
 function endDrawn(s: GameState): void {
-  s.phase = { kind: 'ended', result: { type: 'drawn' } }
+  s.phase = { kind: 'ended', result: { type: 'drawn', ...bonusOf(s) } }
 }
 
 function openWindow(s: GameState, tile: Tile, from: Seat, robKongMeld: number | null): void {
@@ -235,8 +242,9 @@ function takeDiscard(s: GameState, from: Seat, tile: Tile): Tile {
   return pond.splice(pond.findIndex((t) => t.id === tile.id), 1)[0]!
 }
 
-/** Replacement draw after a kong: from the back of the wall, with flower replacement. */
-function kongReplacement(s: GameState, seat: Seat): void {
+/** Replacement draw after a kong (paying its bite first): from the back of the wall, with flower replacement. */
+function kongReplacement(s: GameState, seat: Seat, concealed: boolean): void {
+  kongBite(s, seat, concealed)
   const tile = s.wall.pop()
   if (!tile) return endDrawn(s)
   const hand = s.hands[seat]!
@@ -255,7 +263,7 @@ function winOnTile(s: GameState, seat: Seat, tile: Tile, from: Seat): void {
   else takeDiscard(s, from, tile)
   s.hands[seat]!.push(tile)
   s.turn = seat
-  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from, tileId: tile.id, score, deltas: settleFor(s, { winner: seat, from }, score) } }
+  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from, tileId: tile.id, score, deltas: settleFor(s, { winner: seat, from }, score), ...bonusOf(s) } }
 }
 
 function applyClaim(s: GameState, claim: Action, claimWindow: ClaimWindow): void {
@@ -270,7 +278,7 @@ function applyClaim(s: GameState, claim: Action, claimWindow: ClaimWindow): void
       takeFromHand(s, seat, own.map((t) => t.id))
       const tile = takeDiscard(s, claimWindow.from, claimWindow.tile)
       s.melds[seat]!.push({ type: claim.type, tiles: [...own, tile], exposed: true, from: claimWindow.from, claimedTileId: tile.id })
-      if (claim.type === 'kong') return kongReplacement(s, seat)
+      if (claim.type === 'kong') return kongReplacement(s, seat, false)
       break
     }
     case 'chow': {
@@ -292,14 +300,14 @@ function completePromotedKong(s: GameState, seat: Seat, meldIndex: number, tile:
   const meld = s.melds[seat]![meldIndex]!
   meld.type = 'kong'
   meld.tiles.push(tile)
-  kongReplacement(s, seat)
+  kongReplacement(s, seat, false)
 }
 
 function doKong(s: GameState, seat: Seat, tileIds: readonly number[]): void {
   if (tileIds.length === 4) {
     const tiles = takeFromHand(s, seat, tileIds)
     s.melds[seat]!.push({ type: 'kong', tiles, exposed: false })
-    return kongReplacement(s, seat)
+    return kongReplacement(s, seat, true)
   }
   // Promotion: others may rob the kong before it completes.
   const tile = s.hands[seat]!.find((t) => t.id === tileIds[0])!
@@ -313,7 +321,7 @@ function selfDrawWin(s: GameState, seat: Seat): void {
   const tile = s.hands[seat]!.find((t) => t.id === phase.drawnTileId)!
   const score = evaluateWin(s, seat, tile, 'selfDraw')
   if (!score) throw new Error('win accepted without a valid score')
-  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from: null, tileId: tile.id, score, deltas: settleFor(s, { winner: seat, from: null }, score) } }
+  s.phase = { kind: 'ended', result: { type: 'win', winner: seat, from: null, tileId: tile.id, score, deltas: settleFor(s, { winner: seat, from: null }, score), ...bonusOf(s) } }
 }
 
 function doDraw(s: GameState, seat: Seat): void {

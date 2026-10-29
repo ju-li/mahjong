@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { kindIndex, type HandResult, type PlayerView, type Seat } from '@mahjong/engine'
+import { handDeltas, kindIndex, type HandResult, type PlayerView, type Seat } from '@mahjong/engine'
 import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
 import ScoreExplain from './ScoreExplain.vue'
@@ -38,7 +38,7 @@ const outcome = computed<'win' | 'loss' | 'draw'>(() => {
 /** One line in the style of "Bot 1 wins 12 fan · you lose 20 (self-draw)". */
 const headline = computed(() => {
   const r = props.result
-  if (r.type === 'drawn') return t('result.noPoints')
+  if (r.type === 'drawn') return t(r.bonus ? 'result.noWinner' : 'result.noPoints')
   const me = props.view.seat
   const fan = r.score.total
   const won = r.winner === me ? t('result.youWinFan', { fan }) : t('result.theyWinFan', { name: props.names[r.winner]!, fan })
@@ -52,6 +52,12 @@ const how = computed(() => {
   if (r.type === 'drawn') return ''
   if (r.from === null) return t('result.howSelfDraw', { name: r.winner === props.view.seat ? t('player.you') : props.names[r.winner]! })
   return r.from === props.view.seat ? t('result.howYourDiscard') : t('result.howDiscard', { from: props.names[r.from]! })
+})
+
+/** Singapore: what bites paid you during the hand, if any were paid. */
+const myBites = computed(() => {
+  const bonus = props.result.bonus
+  return bonus ? signed(bonus[props.view.seat]!) : null
 })
 
 /** Whose tiles the summary shows: the winner's first (yours on a draw); click a player to switch. */
@@ -75,7 +81,7 @@ const players = computed(() =>
     name,
     seat: seat as Seat,
     avatar: props.avatars[seat]!,
-    delta: props.result.type === 'win' ? props.result.deltas[seat]! : 0,
+    delta: handDeltas(props.result)[seat]!,
     total: props.finalScores[seat]!,
   })),
 )
@@ -139,11 +145,13 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
         </ul>
         <div class="summary__totals">
           <p class="summary__total">
-            {{ t('result.totalFan') }} <strong>{{ result.score.total }}</strong>
+            {{ t(view.rules === 'sg' ? 'result.totalTai' : 'result.totalFan') }} <strong>{{ result.score.total }}</strong>
           </p>
           <button class="summary__how" @click="explaining = true">{{ t('result.howScored') }}</button>
         </div>
       </template>
+
+      <p v-if="myBites" class="summary__bites">{{ t('result.bites', { n: myBites }) }}</p>
 
       <ul class="summary__players">
         <li

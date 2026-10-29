@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { fanDef, fansFor, maximumFor, minimumFor, type RuleConfig, type RuleFanDef } from '@mahjong/engine'
+import { ruleKey } from '../i18n/ruleKeys'
 import { useI18n } from '../i18n/useI18n'
 
 const props = defineProps<{ focus?: string | null; config: RuleConfig }>()
@@ -32,11 +33,11 @@ onMounted(async () => {
 
 <template>
   <div class="tabs__body">
-    <p class="result__note">{{ t(config.rules === 'hk' ? 'fans.minimumHk' : 'fans.minimum', { min: minimumFor(config), max: maximumFor(config) ?? '' }) }}</p>
+    <p class="result__note">{{ t(ruleKey('fans.minimum', config.rules), { min: minimumFor(config), max: maximumFor(config) ?? '' }) }}</p>
     <input v-model="query" class="fans__search" type="search" :placeholder="t('fans.search')" :aria-label="t('fans.search')" />
     <p v-if="groups.length === 0" class="result__note">{{ t('fans.noMatch') }}</p>
     <section v-for="[points, fans] in groups" :key="points" class="fans__group">
-      <h3>{{ t(config.rules === 'hk' ? 'fans.pointsHk' : 'fans.points', { n: points }) }}</h3>
+      <h3>{{ t(ruleKey('fans.points', config.rules), { n: points }) }}</h3>
       <dl>
         <div v-for="f in fans" :id="`fan-${f.id}`" :key="f.id" class="fans__item" :class="{ 'is-focus': f.id === focus }">
           <dt>

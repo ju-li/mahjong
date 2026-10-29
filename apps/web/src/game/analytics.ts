@@ -59,6 +59,13 @@ function push(...command: unknown[]): void {
 export function startPageviews(): void {
   if (!enabled) return
   push('setCookieDomain', '*.mommymahjong.com')
+  // Back from Logto's sign-in page the URL carries its one-time code: keep that out of the reports.
+  const url = new URL(location.href)
+  if (url.searchParams.has('code')) {
+    url.searchParams.delete('code')
+    url.searchParams.delete('state')
+    push('setCustomUrl', url.href)
+  }
   push('trackPageView')
   push('enableLinkTracking')
   push('setTrackerUrl', `${MATOMO_URL}matomo.php`)
@@ -76,7 +83,11 @@ export function track(name: AnalyticsEvent, label?: string, value?: number): voi
   push('trackEvent', CATEGORY[name], name, ...extra)
 }
 
-/** Tag later hits with the signed-in player's account id, or stop tagging them. */
+/**
+ * Tag later hits with the signed-in player's account id, or stop tagging them. The visitor id from the
+ * cookie stays the same, so the visit before signing in carries on afterwards, as long as Matomo's
+ * `enable_userid_overwrites_visitorid` is 0. With it on, Matomo starts a new visitor for the user id.
+ */
 export function identify(userId: string | null): void {
   if (userId) push('setUserId', userId)
   else push('resetUserId')

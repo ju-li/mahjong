@@ -1,6 +1,6 @@
 import { newHand, type NewHandOptions } from './deal'
 import { applyAction } from './rules'
-import type { Action, GameState, HandResult, MeldType, Seat } from './state'
+import type { Action, Bite, GameState, HandResult, MeldType, Seat } from './state'
 import { seatWind } from './state'
 import type { HouseRules } from './house'
 import type { RuleSet } from './ruleset'
@@ -38,6 +38,8 @@ export type PlayerView = {
   melds: ViewMeld[][]
   discards: Tile[][]
   flowers: Tile[][]
+  /** Singapore bites paid so far this hand (public). Empty for other rule sets. */
+  bites: Bite[]
   wallCount: number
   phase: ViewPhase
 }
@@ -87,6 +89,7 @@ export function viewFor(state: GameState, seat: Seat): PlayerView {
     ),
     discards: state.discards,
     flowers: state.flowers,
+    bites: state.bites ?? [],
     wallCount: state.wall.length,
     phase: viewPhase,
   })

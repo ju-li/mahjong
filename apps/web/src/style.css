@@ -305,8 +305,16 @@ body {
   grid-area: left;
 }
 
+/* The right player's badge sits at the foot of its column, so the four badges take a corner
+   each instead of two crowding the top right. Its hand and melds stay at the head. */
 .seat--right {
   grid-area: right;
+  align-self: stretch;
+}
+
+.seat--right > .badge {
+  order: 1;
+  margin-top: auto;
 }
 
 .seat__hand {
@@ -2205,6 +2213,13 @@ body {
   margin: 0;
   font-size: var(--fs-sm);
   color: var(--felt-muted);
+}
+
+.summary__bites {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--felt-muted);
+  text-align: center;
 }
 
 .summary__players li.is-me {
