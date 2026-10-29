@@ -123,6 +123,22 @@ you friends immediately; caps of 200 friends and 50 outgoing requests.
 - History and stats are read over the social room; nothing about another
   player's matches is served except the public leaderboard.
 
+### Open tables (migration 0005)
+
+- `live_tables(code, state, owner, released, saved_at)`: every open table,
+  mirrored from server memory so a restart or deploy doesn't end it. The
+  process holding a table (`owner` = its boot id) saves it within a second of
+  any change and touches `saved_at` every 5 s.
+- On SIGTERM the server saves each table with `released = true` and closes
+  every socket with 4001. Clients rejoin by code; the new process doesn't know
+  the room, so the client asks it to `create {restore: code}`, which claims
+  the row and rebuilds the table: same code, seats, tokens and hand. Play
+  waits up to 20 s for the players who were there.
+- A process that died without releasing (SIGKILL, crash) is presumed gone once
+  `saved_at` is 15 s old; until then a restore answers 503 and clients retry.
+  The client keeps trying for 2 minutes.
+- Rows of tables nobody came back to are purged after 30 minutes.
+
 ## Environment variables
 
 | Service | Variable | Value |
@@ -161,7 +177,11 @@ the game plays exactly as it does for guests.
    - Social connectors: Google (Google Cloud OAuth client) and Apple (Apple
      Developer account, Services ID, key).
 4. **server service:** set its three variables and the pre-deploy command
-   `node migrate.mjs`.
+   `node migrate.mjs`. Set `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=10` (Railway
+   defaults to 0, so SIGKILL follows SIGTERM at once): with time to release
+   its tables, a deploy hands them over within a second or two; without it,
+   players wait about 15 s for the old process's lease to lapse and may lose
+   the last second of play.
 5. **web service:** set the three `VITE_LOGTO_*` build variables.
 
 Environments created by cloning (including PR environments) start with an

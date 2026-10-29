@@ -22,6 +22,8 @@ export type WinContext = {
   lastTileOfWall: boolean
   /** Self-drawn on a kong replacement tile. */
   replacement: boolean
+  /** Self-drawn on the replacement for a flower or animal (Singapore scores it). */
+  bonusReplacement?: boolean
   robbingKong: boolean
   /** Other copies of the winning kind already visible (discards and exposed melds), not counting the winning tile. */
   winTileVisible: number

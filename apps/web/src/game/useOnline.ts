@@ -1,7 +1,7 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { Client, type Room } from '@colyseus/sdk'
 import { houseOf, type Action } from '@mahjong/engine'
-import { KICKED_CODE, ROOM_NAME, type ClientMessages, type JoinOptions, type RatingChange, type Reaction, type ReactionId, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
+import { KICKED_CODE, REMOVED_CODE, ROOM_NAME, TABLE_FULL_CODE, TABLE_MOVING_CODE, type ClientMessages, type JoinOptions, type RatingChange, type Reaction, type ReactionId, type Snapshot, type TableSettings, type VoiceClip, type VoiceMemo } from '@mahjong/protocol'
 import { useI18n } from '../i18n/useI18n'
 import { track } from './analytics'
 import { useProfile } from './profile'
@@ -17,6 +17,8 @@ import { useVoicePlayer } from './voiceChat'
 const TOKEN_KEY = (code: string) => `mahjong.seat.${code}`
 /** The table this tab is at, so a reload goes straight back to it. */
 const CURRENT_KEY = 'mahjong.table'
+/** How long to keep trying to get back to a table after losing it, e.g. while the server restarts for a deploy. */
+const RETURN_MS = 2 * 60_000
 
 export type OnlineError = 'notFound' | 'full' | 'removed' | 'network'
 /** The link to the table: fine, being restored on its own, or gone until the player picks what to do. */
@@ -39,14 +41,20 @@ function write(storage: () => Storage, key: string, value: string | null): void 
   }
 }
 
-/** Colyseus refuses a join with a code: 522 = no such room, 4003 = ours for full or under way. */
-function classify(error: unknown): OnlineError {
+/** Why a join failed; `moving` = the table is on its way to a new server process, so try again shortly. */
+type JoinFailure = OnlineError | 'moving'
+
+/** Colyseus refuses a join with a code: 522 = no such room; the rest are ours (see `@mahjong/protocol`). */
+function classify(error: unknown): JoinFailure {
   const code = (error as { code?: number })?.code
   if (code === 522) return 'notFound'
-  if (code === 4003 || code === 525) return 'full'
-  if (code === KICKED_CODE) return 'removed'
+  if (code === TABLE_FULL_CODE || code === 525) return 'full'
+  if (code === REMOVED_CODE) return 'removed'
+  if (code === TABLE_MOVING_CODE) return 'moving'
   return 'network'
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
  * Connection to an online table. Holds the latest snapshot the server sent and turns it into a
@@ -115,9 +123,10 @@ export function useOnline() {
         void leave()
         return
       }
-      // The SDK's own reconnection gave up; try once more with the seat token, then let the player choose.
+      // The SDK's own reconnection gave up, or the server restarted (a deploy): get the seat back
+      // with its token, which also brings the table back on a new server, then let the player choose.
       link.value = 'reconnecting'
-      void join(code).then((ok) => {
+      void comeBack(code).then((ok) => {
         if (!ok && snapshot.value?.code === code) link.value = 'lost'
       })
     })
@@ -133,6 +142,8 @@ export function useOnline() {
 
   /** Bumped on every leave, so a join still in flight when the player goes solo is dropped. */
   let generation = 0
+  /** Why the last join failed. */
+  let failure: JoinFailure | null = null
 
   async function connect(open: () => Promise<Room>): Promise<boolean> {
     busy.value = true
@@ -146,9 +157,11 @@ export function useOnline() {
       }
       attach(r)
       link.value = 'up'
+      failure = null
       return true
     } catch (e) {
-      error.value = classify(e)
+      failure = classify(e)
+      error.value = failure === 'moving' ? 'network' : failure
       return false
     } finally {
       busy.value = false
@@ -171,9 +184,27 @@ export function useOnline() {
   }
   /** Sit at a table by its code: from an invite, the join dialog, or to rejoin (only the first two are counted). */
   async function join(code: string, count = false): Promise<boolean> {
-    const ok = await connect(async () => client.joinById(code, await options(code)))
+    let ok = await connect(async () => client.joinById(code, await options(code)))
+    // Not open on the server: it may have been saved before a restart, so bring it back.
+    if (!ok && failure === 'notFound') ok = await connect(async () => client.create(ROOM_NAME, { ...(await options(code)), restore: code }))
     if (ok && count) track('table_joined')
     return ok
+  }
+
+  /**
+   * Back to a table you were at, trying again for a while if the server can't take you yet (it is
+   * restarting, or handing the table on to a new process). Gives up at once if the table is gone,
+   * full or you were removed, or when you go solo.
+   */
+  async function comeBack(code: string): Promise<boolean> {
+    const started = generation
+    const until = Date.now() + RETURN_MS
+    for (let attempt = 0; ; attempt++) {
+      if (await join(code)) return true
+      if (started !== generation || (failure !== 'network' && failure !== 'moving') || Date.now() >= until) return false
+      await sleep(Math.min(500 * 2 ** attempt, 5000))
+      if (started !== generation) return false
+    }
   }
 
   // Signing in or out while seated updates the seat.
@@ -198,7 +229,7 @@ export function useOnline() {
   /** After a reload: rejoin the table this tab was at, if any. */
   function rejoin(): Promise<boolean> {
     const code = read(() => sessionStorage, CURRENT_KEY)
-    return code ? join(code) : Promise.resolve(false)
+    return code ? comeBack(code) : Promise.resolve(false)
   }
 
   /** After losing the table: try to take the seat back. */
@@ -206,7 +237,7 @@ export function useOnline() {
     const code = snapshot.value?.code
     if (!code || link.value !== 'lost') return Promise.resolve(false)
     link.value = 'reconnecting'
-    return join(code).then((ok) => {
+    return comeBack(code).then((ok) => {
       if (!ok && snapshot.value?.code === code) link.value = 'lost'
       return ok
     })
@@ -254,6 +285,13 @@ export function useOnline() {
       if (slot.name === null) return t('player.bot', { n: ++bots })
       return slot.connected ? slot.name : t('player.away', { name: slot.name })
     })
+  })
+
+  /** Just after a server restart: names of the players the table is waiting for, or null. */
+  const waitingFor = computed(() => {
+    const s = snapshot.value
+    const waiting = s?.match?.returning
+    return s && waiting?.length ? waiting.map((p) => s.players[p]?.name ?? t('player.bot', { n: p + 1 })) : null
   })
 
   const source: MatchSource = {
@@ -334,5 +372,6 @@ export function useOnline() {
     /** Player whose voice memo is playing, if any. */
     speaking: voicePlayer.speaking,
     playerNames,
+    waitingFor,
   }
 }

@@ -16,6 +16,7 @@ import {
   nextHand,
   paymentTable,
   settleSG,
+  SG_BITE_UNITS,
   SG_FANS,
   sgBasePoints,
   STANDARD_HOUSE,
@@ -37,29 +38,42 @@ type Case = { fans: Partial<Record<SgFanId, number>>; total: number; hand: strin
 const CASES: Case[] = [
   // Ping Hu: four chows, a plain pair, a two-sided wait (23s waiting on 1s or 4s) and no bonus tiles.
   { hand: '123m 456p 789s 234s 55m', win: '4s', fans: { 'sg.allChows': 1 }, total: 4 },
-  // Closed wait (2_4s), edge wait (12_s), a dragon pair or any bonus tile spoils it.
+  // On a discard, a closed wait (2_4s), an edge wait (12_s) or a dragon pair spoils it.
   { hand: '123m 456p 789s 234s 55m', win: '3s', fans: { 'sg.allChows': 0, 'sg.chickenHand': 1 }, total: 0 },
   { hand: '123m 456p 789s 123s 55m', win: '3s', fans: { 'sg.allChows': 0, 'sg.chickenHand': 1 }, total: 0 },
   { hand: '123m 456p 789s 234s CC', win: '4s', fans: { 'sg.allChows': 0 }, total: 0 },
-  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { flowerNumbers: [3] }, fans: { 'sg.allChows': 0, 'sg.chickenHand': 1 }, total: 0 },
-  // Own flowers and animals score 1 each.
-  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { flowerNumbers: [2, 6, 3] }, fans: { 'sg.ownFlower': 2 }, total: 2 },
-  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { flowerNumbers: [9, 10, 1] }, fans: { 'sg.animal': 2, 'sg.ownFlower': 0 }, total: 2 },
+  // A self-draw takes any wait, and a concealed self-draw adds 1.
+  { hand: '123m 456p 789s 234s 55m', win: '3s', opts: { selfDrawn: true }, fans: { 'sg.allChows': 1, 'sg.concealedSelfDraw': 1 }, total: 5 },
+  // With bonus tiles it is the 1-tai little ping hu.
+  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { flowerNumbers: [3] }, fans: { 'sg.allChows': 0, 'sg.littlePingHu': 1 }, total: 1 },
+  // Own flowers and animals score 1 each; complete flower and animal sets add 1 more.
+  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { flowerNumbers: [2, 6, 3] }, fans: { 'sg.ownFlower': 2, 'sg.littlePingHu': 1 }, total: 3 },
+  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { flowerNumbers: [9, 10, 1] }, fans: { 'sg.animal': 2, 'sg.ownFlower': 0 }, total: 3 },
+  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { flowerNumbers: [1, 2, 3, 4] }, fans: { 'sg.ownFlower': 1, 'sg.flowerSet': 1 }, total: 3 },
+  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { flowerNumbers: [9, 10, 11, 12] }, fans: { 'sg.animal': 4, 'sg.animalSet': 1 }, total: 5 },
+  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { selfDrawn: true, bonusReplacement: true, flowerNumbers: [3] }, fans: { 'sg.bonusReplacement': 1, 'sg.concealedSelfDraw': 1, 'sg.littlePingHu': 1 }, total: 3 },
   { hand: '999p 55m', win: '5m', opts: { melds: ['pung 111m', 'pung 999s', 'pung 777s'] }, fans: { 'sg.allPungs': 1 }, total: 2 },
+  // Mixed terminals (2) adds to all pungs (2).
+  { hand: '111m 999p NNN 111s 99s', win: '9s', fans: { 'sg.mixedOrphans': 1, 'sg.allPungs': 1 }, total: 4 },
   { hand: '123m 456p CCC SSS 99s', win: '9s', fans: { 'sg.dragonPung': 1, 'sg.seatWind': 1 }, total: 2 },
   { hand: '123m 456m 789m EEE 22m', win: '2m', fans: { 'sg.halfFlush': 1, 'sg.prevailingWind': 1 }, total: 3 },
   // Full flush (4) + Ping Hu (4) = 8, capped at the 5-tai limit.
   { hand: '123m 456m 789m 234m 22m', win: '2m', fans: { 'sg.fullFlush': 1, 'sg.allChows': 1, 'sg.halfFlush': 0 }, total: 5 },
-  { hand: 'CCC FFF PP 123m 456p', win: '6p', fans: { 'sg.smallDragons': 1, 'sg.dragonPung': 0 }, total: 4 },
+  { hand: 'CCC FFF PP 123m 456p', win: '6p', fans: { 'sg.smallDragons': 1, 'sg.dragonPung': 0 }, total: 3 },
+  // Small four winds (4) keeps seat and prevailing wind, drops half flush: 4 + 1 + 1 + all pungs 2, capped.
+  { hand: 'EEE SSS WWW NN 555p', win: '5p', fans: { 'sg.smallWinds': 1, 'sg.seatWind': 1, 'sg.prevailingWind': 1, 'sg.halfFlush': 0 }, total: 5 },
   { hand: '11m 22m 55p 66p 88s 99s EE', win: 'E', fans: { 'sg.sevenPairs': 1 }, total: 4 },
-  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { selfDrawn: true, replacement: true }, fans: { 'sg.allChows': 1, 'sg.kongReplacement': 1 }, total: 5 },
+  { hand: '123m 456p 789s 234s 55m', win: '4s', opts: { selfDrawn: true, replacement: true }, fans: { 'sg.allChows': 1, 'sg.kongReplacement': 1, 'sg.bonusReplacement': 0 }, total: 5 },
+  // Four concealed pungs is a limit only when self-drawn.
+  { hand: '111m 555p 777s CCC 22s', win: '2s', fans: { 'sg.fourConcealedPungs': 0, 'sg.allPungs': 1, 'sg.dragonPung': 1 }, total: 3 },
   // Limit hands score the limit and nothing else.
+  { hand: '111m 555p 777s CCC 22s', win: '2s', opts: { selfDrawn: true }, fans: { 'sg.fourConcealedPungs': 1 }, total: 5 },
   { hand: 'CCC FFF PPP 123m 55p', win: '5p', fans: { 'sg.greatDragons': 1, 'sg.dragonPung': 0 }, total: 5 },
-  { hand: 'EEE SSS WWW NN 555p', win: '5p', fans: { 'sg.smallWinds': 1, 'sg.allPungs': 0 }, total: 5 },
   { hand: '1m 9m 1p 9p 1s 9s E S W N C F P P', win: 'P', fans: { 'sg.thirteenOrphans': 1 }, total: 5 },
   { hand: 'EEE SSS WWW NNN CC', win: 'C', fans: { 'sg.allHonors': 1 }, total: 5 },
   { hand: '1112345678999m 5m', win: '5m', fans: { 'sg.nineGates': 1 }, total: 5 },
-  { hand: '111m 555p 777s CCC 22s', win: '2s', fans: { 'sg.fourConcealedPungs': 1 }, total: 5 },
+  { hand: '234s 666s 888s FFF 22s', win: '2s', fans: { 'sg.allGreen': 1 }, total: 5 },
+  { hand: '55m', win: '5m', opts: { melds: ['kong 111m', 'kong 999p', 'kong 777s', 'ckong CCCC'] }, fans: { 'sg.fourKongs': 1 }, total: 5 },
 ]
 
 describe('Singapore scoring', () => {
@@ -99,7 +113,7 @@ describe('Singapore scoring', () => {
     }
     // The standard table hides only the chicken hand.
     expect(fansFor({ rules: 'sg' }).map((f) => f.id)).toEqual(ids.filter((id) => id !== 'sg.chickenHand'))
-    expect(fansFor(sgHouse({ minTai: 0, animals: false })).map((f) => f.id)).toEqual(ids.filter((id) => id !== 'sg.animal'))
+    expect(fansFor(sgHouse({ minTai: 0, animals: false })).map((f) => f.id)).toEqual(ids.filter((id) => id !== 'sg.animal' && id !== 'sg.animalSet'))
   })
 })
 
@@ -136,46 +150,77 @@ function giveBonus(state: GameState, seat: Seat, numbers: number[]): void {
 const sumsToZero = (xs: number[]) => xs.reduce((a, b) => a + b, 0) === 0
 
 describe('Singapore bites', () => {
-  it('pays animal pairs, all four animals and complete flower sets once each', () => {
+  it('pays animal pairs (2), all four animals (4 more) and complete flower sets (4) once each', () => {
     const state = buildState({ rules: 'sg', hands: ['', '', '', ''] })
     giveBonus(state, 1, [9, 10, 1, 2, 3])
     bonusTileBites(state, 1)
-    expect(state.bites).toEqual([{ seat: 1, kind: 'catMouse', units: 1, deltas: [-1, 3, -1, -1] }])
+    expect(state.bites).toEqual([{ seat: 1, kind: 'catMouse', units: 2, deltas: [-2, 6, -2, -2] }])
     bonusTileBites(state, 1)
     expect(state.bites).toHaveLength(1)
     giveBonus(state, 1, [11, 12, 4])
     bonusTileBites(state, 1)
-    expect(state.bites!.map((b) => b.kind)).toEqual(['catMouse', 'roosterCentipede', 'allAnimals', 'flowerSet'])
-    expect(state.bites!.at(-1)!.deltas).toEqual([-2, 6, -2, -2])
+    expect(state.bites!.map((b) => [b.kind, b.units])).toEqual([
+      ['catMouse', 2],
+      ['roosterCentipede', 2],
+      ['allAnimals', 4],
+      ['flowerSet', 4],
+    ])
+    expect(state.bites!.at(-1)!.deltas).toEqual([-4, 12, -4, -4])
+  })
+
+  it('pays the wedding: own flower and own season together', () => {
+    const state = buildState({ rules: 'sg', hands: ['', '', '', ''] })
+    // Seat 1 is South (dealer 0): flower 2 and season 6.
+    giveBonus(state, 1, [2, 7])
+    bonusTileBites(state, 1)
+    expect(state.bites).toBeUndefined()
+    giveBonus(state, 1, [6])
+    bonusTileBites(state, 1)
+    expect(state.bites).toEqual([{ seat: 1, kind: 'wedding', units: 2, deltas: [-2, 6, -2, -2] }])
+  })
+
+  it('pays double for a pair already completed in the deal', () => {
+    let found = 0
+    for (let seed = 1; seed < 400 && found < 3; seed++) {
+      const state = newHand({ seed, dealer: 0, prevailingWind: 'E', rules: 'sg' })
+      for (const b of state.bites ?? []) {
+        const pair = b.kind === 'catMouse' || b.kind === 'roosterCentipede' || b.kind === 'wedding'
+        expect(b.units).toBe(pair ? 4 : SG_BITE_UNITS[b.kind])
+        expect(b.opening === true).toBe(pair)
+        if (pair) found++
+      }
+    }
+    expect(found).toBeGreaterThan(0)
   })
 
   it('pays when a drawn animal completes a pair', () => {
-    const ready = buildState({ rules: 'sg', hands: ['123m 456p 789s 23s', '', '', ''], wallBack: '9s', turn: 0, phase: { kind: 'draw' } })
+    const ready = buildState({ rules: 'sg', hands: ['123m 456p 789s 23s 55m', '', '', ''], wallBack: '9s', turn: 0, phase: { kind: 'draw' } })
     giveBonus(ready, 0, [9])
     const mouse = ready.wall.findIndex((t) => t.kind.suit === 'flowers' && t.kind.flower === 10)
     ready.wall.unshift(ready.wall.splice(mouse, 1)[0]!)
     const drawn = applyAction(ready, { type: 'draw', seat: 0 })
-    expect(drawn.bites?.map((b) => [b.seat, b.kind])).toEqual([[0, 'catMouse']])
+    expect(drawn.bites?.map((b) => [b.seat, b.kind, b.units])).toEqual([[0, 'catMouse', 2]])
+    expect(drawn.phase).toMatchObject({ kind: 'discard', afterBonus: true })
     expect(viewFor(drawn, 2).bites).toEqual(drawn.bites)
     expectConservation(drawn)
   })
 
-  it('pays for kongs: 1 each for a melded kong, 2 each for a concealed kong', () => {
+  it('pays for kongs: 2 each for a melded kong, 4 each for a concealed kong', () => {
     const melded = buildState({ rules: 'sg', hands: ['5m', '555m 123p', '', ''], turn: 0 })
     const claim = applyAction(melded, { type: 'discard', seat: 0, tileId: melded.hands[0]![0]!.id })
     const kong = applyAction(claim, { type: 'kong', seat: 1 })
-    expect(kong.bites![0]).toEqual({ seat: 1, kind: 'meldedKong', units: 1, deltas: [-1, 3, -1, -1] })
+    expect(kong.bites![0]).toEqual({ seat: 1, kind: 'meldedKong', units: 2, deltas: [-2, 6, -2, -2] })
 
     const concealed = buildState({ rules: 'sg', hands: ['5555m 123p 456p 789s E', '', '', ''], wallBack: '9s', wallSize: 1 })
     const ids = concealed.hands[0]!.filter((t) => kindIndex(t.kind) === 4).map((t) => t.id)
     const after = applyAction(concealed, { type: 'kong', seat: 0, tileIds: ids })
-    expect(after.bites).toEqual([{ seat: 0, kind: 'concealedKong', units: 2, deltas: [6, -2, -2, -2] }])
+    expect(after.bites).toEqual([{ seat: 0, kind: 'concealedKong', units: 4, deltas: [12, -4, -4, -4] }])
 
     // The wall is now empty: discarding ends the hand drawn, and the bite still stands.
     const east = after.hands[0]!.find((t) => kindIndex(t.kind) === 27)!
     const ended = applyAction(after, { type: 'discard', seat: 0, tileId: east.id })
-    expect(ended.phase.kind === 'ended' && ended.phase.result).toEqual({ type: 'drawn', bonus: [6, -2, -2, -2] })
-    if (ended.phase.kind === 'ended') expect(handDeltas(ended.phase.result)).toEqual([6, -2, -2, -2])
+    expect(ended.phase.kind === 'ended' && ended.phase.result).toEqual({ type: 'drawn', bonus: [12, -4, -4, -4] })
+    if (ended.phase.kind === 'ended') expect(handDeltas(ended.phase.result)).toEqual([12, -4, -4, -4])
   })
 
   it('pays nothing with bites off, and other rule sets never bite', () => {

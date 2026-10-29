@@ -65,6 +65,7 @@ export function winContext(state: GameState, seat: Seat, tile: Tile, source: Win
     flowerNumbers: state.flowers[seat]!.map((t) => (t.kind.suit === 'flowers' ? t.kind.flower : 0)),
     lastTileOfWall: state.wall.length === 0,
     replacement: source === 'selfDraw' && phase.kind === 'discard' && phase.afterKong,
+    bonusReplacement: source === 'selfDraw' && phase.kind === 'discard' && phase.afterBonus === true,
     robbingKong: source === 'robKong',
     winTileVisible: visible,
   }
@@ -249,10 +250,10 @@ function kongReplacement(s: GameState, seat: Seat, concealed: boolean): void {
   if (!tile) return endDrawn(s)
   const hand = s.hands[seat]!
   hand.push(tile)
-  replaceFlowers(s, seat)
+  const afterBonus = replaceFlowers(s, seat)
   if (hand.length + s.melds[seat]!.length * 3 < 14) return endDrawn(s)
   s.turn = seat
-  s.phase = { kind: 'discard', drawnTileId: hand[hand.length - 1]!.id, afterKong: true }
+  s.phase = { kind: 'discard', drawnTileId: hand[hand.length - 1]!.id, afterKong: true, ...(afterBonus ? { afterBonus } : {}) }
 }
 
 /** Scored win on another seat's tile (discard or robbed kong). Scoring is wired in later. */
@@ -329,9 +330,9 @@ function doDraw(s: GameState, seat: Seat): void {
   if (!tile) return endDrawn(s)
   const hand = s.hands[seat]!
   hand.push(tile)
-  replaceFlowers(s, seat)
+  const afterBonus = replaceFlowers(s, seat)
   if (hand.length + s.melds[seat]!.length * 3 < 14) return endDrawn(s) // wall ran out mid flower replacement
-  s.phase = { kind: 'discard', drawnTileId: hand[hand.length - 1]!.id, afterKong: false }
+  s.phase = { kind: 'discard', drawnTileId: hand[hand.length - 1]!.id, afterKong: false, ...(afterBonus ? { afterBonus } : {}) }
 }
 
 function doDiscard(s: GameState, seat: Seat, tileId: number): void {
