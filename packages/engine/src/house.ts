@@ -30,8 +30,24 @@ export type McrHouseRules = {
   flowers: boolean
 }
 
-export type HouseRulesFor = { mcr: McrHouseRules; hk: HkHouseRules }
-export type HouseRules = McrHouseRules | HkHouseRules
+/** Singapore options. Flowers and seasons are always played. */
+export type SgHouseRules = {
+  /** Tai needed to win, bonus tiles included. 0 allows a chicken hand (鸡胡), paid like 1 tai. */
+  minTai: 0 | 1 | 2 | 3
+  /** Limit: no hand scores more; limit hands score exactly this. */
+  maxTai: 4 | 5 | 10
+  /** Discard win: 'shooter' = the discarder pays for everyone (4b, 包); 'split' = discarder 2b, others b. */
+  payment: 'shooter' | 'split'
+  /** Seven pairs (七对) is a winning hand. */
+  sevenPairs: boolean
+  /** Instant payouts (咬) for animal pairs, complete flower sets and kongs. */
+  bites: boolean
+  /** Cat, mouse, rooster and centipede in the wall (148 tiles). */
+  animals: boolean
+}
+
+export type HouseRulesFor = { mcr: McrHouseRules; hk: HkHouseRules; sg: SgHouseRules }
+export type HouseRules = McrHouseRules | HkHouseRules | SgHouseRules
 
 /** A rule set plus its house rules. `house` missing (older saves) means standard. */
 export type RuleConfig = { rules: RuleSet; house?: HouseRules }
@@ -39,6 +55,7 @@ export type RuleConfig = { rules: RuleSet; house?: HouseRules }
 export const STANDARD_HOUSE: { readonly [R in RuleSet]: Readonly<HouseRulesFor[R]> } = {
   mcr: { minFan: 8, flowers: true },
   hk: { minFaan: 3, maxFaan: 13, curve: 'half', payment: 'half', kongFaan: 'none', flowers: true },
+  sg: { minTai: 1, maxTai: 5, payment: 'shooter', sevenPairs: true, bites: true, animals: true },
 }
 
 /**
@@ -57,6 +74,14 @@ export const HOUSE_OPTIONS: { readonly [R in RuleSet]: { readonly [K in keyof Ho
     payment: ['half', 'full'],
     curve: ['half', 'full'],
     flowers: [true, false],
+  },
+  sg: {
+    minTai: [1, 0, 2, 3],
+    maxTai: [5, 4, 10],
+    payment: ['shooter', 'split'],
+    sevenPairs: [true, false],
+    bites: [true, false],
+    animals: [true, false],
   },
 }
 
@@ -112,7 +137,14 @@ export function sameConfig(a: RuleConfig, b: RuleConfig): boolean {
   return houseKeys(a.rules).every((key) => x[key] === y[key])
 }
 
-/** Whether the wall holds flowers and seasons. */
+/** Whether the wall holds flowers and seasons. Singapore always plays them. */
 export function hasFlowers(config: RuleConfig): boolean {
-  return houseOf(config).flowers
+  const house = houseOf(config)
+  return 'flowers' in house ? house.flowers : true
+}
+
+/** Whether the wall holds the four Singapore animals. */
+export function hasAnimals(config: RuleConfig): boolean {
+  if (config.rules !== 'sg') return false
+  return houseOf({ rules: 'sg', house: config.house }).animals
 }

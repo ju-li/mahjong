@@ -64,9 +64,21 @@ export function handSeed(matchSeed: number, handIndex: number): number {
   return Math.floor(mulberry32((matchSeed ^ Math.imul(handIndex + 1, 0x9e3779b9)) >>> 0)() * 2 ** 32)
 }
 
-/** Seating for a hand. MCR re-seats at each round boundary; Hong Kong keeps the same seats all match. */
+/** Seating for a hand. MCR re-seats at each round boundary; Hong Kong and Singapore keep the same seats all match. */
 export function seatingFor(handIndex: number, rules: RuleSet = DEFAULT_RULES): Player[] {
-  return [...SEATING[rules === 'mcr' ? Math.min(3, Math.floor(handIndex / 4)) : 0]!]
+  switch (rules) {
+    case 'mcr':
+      return [...SEATING[Math.min(3, Math.floor(handIndex / 4))]!]
+    case 'hk':
+    case 'sg':
+      return [...SEATING[0]!]
+  }
+}
+
+/** Seat-indexed point changes of a finished hand: the win settlement plus any Singapore bites (paid on a draw too). */
+export function handDeltas(result: HandResult): number[] {
+  const win = result.type === 'win' ? result.deltas : [0, 0, 0, 0]
+  return win.map((v, seat) => v + (result.bonus?.[seat] ?? 0))
 }
 
 /** Table seat of `player` in the current round. */
@@ -128,8 +140,7 @@ export function settledScores(match: Match): number[] {
 /** Record the finished hand's result and deal the next hand (or end the match). Returns a new match. */
 export function nextHand(match: Match, result: HandResult): Match {
   if (isMatchOver(match)) throw new Error('match is already over')
-  const seatDeltas = result.type === 'win' ? result.deltas : [0, 0, 0, 0]
-  const playerDeltas = toPlayerOrder(match.seating, seatDeltas)
+  const playerDeltas = toPlayerOrder(match.seating, handDeltas(result))
   const handIndex = match.handIndex + 1
   return {
     rules: match.rules,

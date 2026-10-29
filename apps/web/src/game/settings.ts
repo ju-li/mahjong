@@ -1,5 +1,5 @@
 import { computed, ref, watch } from 'vue'
-import { isRuleSet, normalizeHouseRules, type HouseRulesFor, type RuleConfig, type RuleSet } from '@mahjong/engine'
+import { isRuleSet, normalizeHouseRules, RULE_SETS, type HouseRulesFor, type RuleConfig, type RuleSet } from '@mahjong/engine'
 import type { Difficulty } from '@mahjong/bots'
 import { DEFAULT_TERMS, normalizeTerms, type Terms } from '../i18n/terms'
 
@@ -16,6 +16,7 @@ export type ClaimSeconds = (typeof CLAIM_TIMER_OPTIONS)[number]
 export const RULE_OPTIONS = [
   { id: 'mcr', playable: true },
   { id: 'hk', playable: true },
+  { id: 'sg', playable: true },
   { id: 'riichi', playable: false },
   { id: 'taiwan', playable: false },
 ] as const
@@ -46,7 +47,7 @@ export type Settings = {
 }
 
 export function standardHouseByRules(): HouseByRules {
-  return { mcr: normalizeHouseRules('mcr', undefined), hk: normalizeHouseRules('hk', undefined) }
+  return normalizeHouseByRules(undefined)
 }
 
 /** New players start gently: easy bots, no claim timer, sound on, a hand half again as big, discards confirmed. */
@@ -66,7 +67,7 @@ export const DEFAULTS: Settings = {
 
 function normalizeHouseByRules(input: unknown): HouseByRules {
   const raw = input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : {}
-  return { mcr: normalizeHouseRules('mcr', raw.mcr), hk: normalizeHouseRules('hk', raw.hk) }
+  return Object.fromEntries(RULE_SETS.map((rules) => [rules, normalizeHouseRules(rules, raw[rules])])) as HouseByRules
 }
 
 function read(key: string): Record<string, unknown> | null {

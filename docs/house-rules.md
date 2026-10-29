@@ -98,6 +98,17 @@ New engine helper: `paymentTable(config)` returns the per-faan payouts for a dis
 | **3. Flow options** | 一炮多响 vs 截胡 (`win` result becomes `winners[]`, which touches protocol, UI and the DB `result` JSON); dealer repeat (连庄), which breaks the fixed 16-hand match and the `hand_index` 0..15 CHECK; 十三幺 robbing a concealed kong; 天胡 / 地胡 | Each one is a real game-flow change. Do one at a time, and only when asked for. |
 | **4. New rule sets** | Sichuan 血战到底 (108 tiles, no chow, 定缺, play continues after a win, 根 / 刮风下雨) as its own `RuleSet`, reusing phase 2's ledger; Riichi / Taiwanese stay T34/T35 | Not house rules; listed so the phase 1 types leave room for them. |
 
+**Singapore (`sg`, T50) came first in phase 4.** It is its own rule set, and it brought the per-hand ledger phase 2 asks for. `GameState.bites` records each instant payout (咬: animal pairs, all four animals, full flower or season sets, kongs). `HandResult.bonus` carries the hand's sum, and a drawn hand can now have non-zero deltas. Its house rules:
+
+- `minTai`: 1, 0, 2 or 3
+- `maxTai`: 5, 4 or 10
+- `payment`: `shooter` (包铳, 4b) or `split`
+- `sevenPairs`: on or off
+- `bites`: on or off
+- `animals`: on or off
+
+Flowers are always on. HK kong money (phase 2) can reuse the same ledger.
+
 MCR stays fixed in phase 1. It is a competition standard and players pick it for that. The `McrHouseRules` slot exists so a later "casual MCR" (for example a lower minimum) does not need another migration.
 
 ## Open questions

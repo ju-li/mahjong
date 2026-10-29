@@ -41,9 +41,20 @@ export type HandScore = {
   flowerPoints: number
 }
 
+/**
+ * Singapore instant payouts (咬): an animal pair, all four animals, a complete flower or season set, or a kong.
+ * Each other seat pays `units` to `seat` the moment it happens; `deltas` is that transfer (sums to zero).
+ */
+export type BiteKind = 'catMouse' | 'roosterCentipede' | 'allAnimals' | 'flowerSet' | 'seasonSet' | 'meldedKong' | 'concealedKong'
+export type Bite = { seat: Seat; kind: BiteKind; units: number; deltas: number[] }
+
+/**
+ * `deltas` is the win settlement. `bonus` (Singapore) is the sum of the hand's bites per seat; it is paid on
+ * a drawn hand too. A hand's total is `deltas + bonus`.
+ */
 export type HandResult =
-  | { type: 'drawn' }
-  | { type: 'win'; winner: Seat; from: Seat | null; tileId: number; score: HandScore; deltas: number[] }
+  | { type: 'drawn'; bonus?: number[] }
+  | { type: 'win'; winner: Seat; from: Seat | null; tileId: number; score: HandScore; deltas: number[]; bonus?: number[] }
 
 /** Pending replies to a discard (or to a promoted kong that can be robbed). `null` = not answered yet. */
 export type ClaimWindow = {
@@ -78,6 +89,8 @@ export type GameState = {
   melds: Meld[][]
   discards: Tile[][]
   flowers: Tile[][]
+  /** Singapore bites paid so far this hand, in order. Absent (or empty) for other rule sets. */
+  bites?: Bite[]
   turn: Seat
   phase: Phase
 }

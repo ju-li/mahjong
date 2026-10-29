@@ -19,7 +19,7 @@ async function importSettings() {
   return import('./settings')
 }
 
-const STANDARD = { mcr: STANDARD_HOUSE.mcr, hk: STANDARD_HOUSE.hk }
+const STANDARD = { mcr: STANDARD_HOUSE.mcr, hk: STANDARD_HOUSE.hk, sg: STANDARD_HOUSE.sg }
 const DEFAULTS = { claimSeconds: 0, sound: true, voice: true, voiceChat: true, difficulty: 'easy', rules: 'mcr', house: STANDARD, textSize: 'normal', tileSize: 150, oneTapDiscard: false, terms: DEFAULT_TERMS }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -83,7 +83,7 @@ describe('settings', () => {
       voiceChat: false,
       difficulty: 'hard',
       rules: 'hk',
-      house: { mcr: STANDARD_HOUSE.mcr, hk: { ...STANDARD_HOUSE.hk, kongFaan: 'each1' } },
+      house: { ...STANDARD, hk: { ...STANDARD_HOUSE.hk, kongFaan: 'each1' } },
       textSize: 'larger',
       tileSize: 200,
       oneTapDiscard: true,

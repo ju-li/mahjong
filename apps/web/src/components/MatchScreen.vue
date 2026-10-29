@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { HANDS_PER_MATCH, type Player } from '@mahjong/engine'
+import { computed, watch } from 'vue'
+import { biteTotals, handDeltas, HANDS_PER_MATCH, type Player } from '@mahjong/engine'
 import type { ReactionId, VoiceClip } from '@mahjong/protocol'
 import GameTable from './GameTable.vue'
 import HandResult from './HandResult.vue'
 import { avatarSeeds, avatarSvg } from '../game/avatar'
 import { useSettings } from '../game/settings'
+import { useToasts } from '../game/useToasts'
 import type { MatchSource } from '../game/source'
 import { useI18n } from '../i18n/useI18n'
 
@@ -21,12 +22,16 @@ const result = computed(() => (view.value?.phase.kind === 'ended' ? view.value.p
 const seatPlayers = computed(() => props.source.seatPlayers.value)
 /** Names in table-seat order for this round. */
 const seatNames = computed(() => seatPlayers.value.map((p) => props.source.playerNames.value[p]!))
-/** Match totals in seat order, before the hand in play. */
-const seatScores = computed(() => seatPlayers.value.map((p) => props.source.scores.value[p]!))
-/** Match totals in seat order, including the hand just finished. */
-const seatTotals = computed(() =>
-  seatPlayers.value.map((p, seat) => props.source.scores.value[p]! + (result.value?.type === 'win' ? result.value.deltas[seat]! : 0)),
-)
+/** Match totals in seat order, before the hand in play, plus any Singapore bites paid so far this hand. */
+const seatScores = computed(() => {
+  const bites = biteTotals(view.value?.bites)
+  return seatPlayers.value.map((p, seat) => props.source.scores.value[p]! + (bites?.[seat] ?? 0))
+})
+/** Match totals in seat order, including the hand just finished (its bites too). */
+const seatTotals = computed(() => {
+  const deltas = result.value ? handDeltas(result.value) : [0, 0, 0, 0]
+  return seatPlayers.value.map((p, seat) => props.source.scores.value[p]! + deltas[seat]!)
+})
 /** Each player's chosen face, or a random one fixed for the whole match. */
 const playerAvatars = computed(() =>
   avatarSeeds(props.source.matchSeed.value).map((seed, p) => avatarSvg(props.source.avatarChoices.value[p] ?? seed)),
@@ -49,6 +54,21 @@ const canVoice = computed(() => !!props.source.sendVoice && props.source.chat?.v
 /** Online: emoji reactions floating up, by the seat of whoever sent them. */
 const seatReactions = computed(() =>
   (props.source.reactions?.value ?? []).map((r) => ({ id: r.id, seat: seatPlayers.value.indexOf(r.player), reaction: r.reaction, drift: r.drift })),
+)
+/** Singapore: announce each bite as it is paid (including those from the deal). */
+const toasts = useToasts()
+watch(
+  () => [handIndex.value, view.value?.bites?.length ?? 0] as const,
+  ([hand, count], old) => {
+    const from = old && old[0] === hand ? old[1] : 0
+    const bites = view.value?.bites ?? []
+    for (const b of bites.slice(from, count)) {
+      const what = t(`bite.${b.kind}`)
+      const n = b.units
+      toasts.push({ text: b.seat === view.value!.seat ? t('toast.biteYou', { what, n }) : t('toast.bite', { name: seatNames.value[b.seat]!, what, n }) })
+    }
+  },
+  { immediate: true },
 )
 const handLabel = computed(() => t('score.hand', { n: Math.min(handIndex.value + 1, HANDS_PER_MATCH), total: HANDS_PER_MATCH }))
 </script>
