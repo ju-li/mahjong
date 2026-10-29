@@ -149,6 +149,20 @@ export const migrations: Record<string, Migration> = {
       ])
         await statement.execute(db)
     },
+  },  '0005_live_tables': {
+    async up(db: Kysely<unknown>) {
+      // The open tables, mirrored from server memory so a restart or deploy can bring them back.
+      await sql`create table live_tables (
+        code text primary key,
+        state jsonb not null,
+        owner text not null,
+        released boolean not null default false,
+        saved_at timestamptz not null default now()
+      )`.execute(db)
+    },
+    async down(db: Kysely<unknown>) {
+      await db.schema.dropTable('live_tables').execute()
+    },
   },
 }
 

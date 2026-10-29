@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { chooseAction } from '@mahjong/bots'
 import { seatOf, settledScores, STANDARD_HOUSE, type GameState, type Match, type Player } from '@mahjong/engine'
 import { MAX_VOICE_BYTES, MAX_VOICE_MS, REACTION_BURST, REACTION_WINDOW_MS, type Snapshot } from '@mahjong/protocol'
-import { cleanAvatar, cleanName, RESERVE_MS, Table, TURN_MS, VOICE_GAP_MS, VOICE_PER_MINUTE, type TableEnv } from './table'
+import { cleanAvatar, cleanName, RESERVE_MS, RESTORE_GRACE_MS, SAVED_TABLE_VERSION, Table, TURN_MS, VOICE_GAP_MS, VOICE_PER_MINUTE, type TableEnv } from './table'
 
 /** Timers that only fire when the test moves the clock. */
 class FakeEnv implements TableEnv {
@@ -763,5 +763,141 @@ describe('recording finished matches', () => {
     const { records, finish } = start([['Ann', null], ['Bo', 'u-bo']])
     finish()
     expect(records[0]!.players.map((p) => p.fullMatch)).toEqual([false, true, false, false])
+  })
+})
+
+describe('restarts', () => {
+  /** What a save looks like after a trip through the database. */
+  const roundTrip = (t: Table): unknown => JSON.parse(JSON.stringify(t.save()))
+
+  /** The table as a fresh server process would bring it back, on its own clock. */
+  function restart(saved: unknown) {
+    const env = new FakeEnv()
+    env.time = 5_000_000
+    let changes = 0
+    const table = Table.restore('ABCD', env, () => changes++, saved)!
+    expect(table).not.toBeNull()
+    return { env, table, changes: () => changes }
+  }
+
+  /** What a player sees, minus who is connected right now. */
+  const seen = (s: Snapshot) => ({ ...s, players: s.players.map((p) => ({ ...p, connected: null })), match: s.match && { ...s.match, returning: null, claimMs: null } })
+
+  it('brings a match back exactly as it was: same seats, tokens, hands, step and scores (V65)', () => {
+    const { env, table, snap } = setup(['Ann', 'Bo'])
+    table.configure('c0', { difficulty: 'hard' })
+    table.start('c0')
+    for (let i = 0; i < 40; i++) {
+      autoplay(table, ['c0', 'c1'], snap)
+      env.advance(500)
+    }
+    const before = { ann: snap('c0'), bo: snap('c1') }
+    expect(before.ann.match!.step).toBeGreaterThan(5)
+
+    const back = restart(roundTrip(table))
+    expect(back.table.join('x0', { token: before.ann.token })).toBe(0)
+    expect(back.table.join('x1', { token: before.bo.token })).toBe(1)
+    expect(seen(back.table.snapshotFor('x0')!)).toEqual(seen(before.ann))
+    expect(seen(back.table.snapshotFor('x1')!)).toEqual(seen(before.bo))
+    expect(back.table.snapshotFor('x1')!.players.map((p) => p.connected)).toEqual([true, true, false, false])
+    // Play carries on from there.
+    back.env.advance(5_000)
+    expect(back.table.snapshotFor('x0')!.match!.step).toBeGreaterThan(before.ann.match!.step)
+  })
+
+  it('brings back a lobby, its settings and who the host removed (V67)', () => {
+    const { table, snap } = setup(['Ann', 'Bo', 'Cy'])
+    table.configure('c0', { rules: 'hk', claimSeconds: 60 })
+    const cy = snap('c2').token
+    table.kick('c0', 2)
+    const back = restart(roundTrip(table))
+    expect(back.table.phase).toBe('lobby')
+    expect(back.table.canJoin(cy)).toBe(false)
+    expect(back.table.join('x0', { token: snap('c0').token })).toBe(0)
+    expect(back.table.snapshotFor('x0')!.settings).toMatchObject({ rules: 'hk', claimSeconds: 60 })
+    expect(back.table.snapshotFor('x0')!.match).toBeNull()
+  })
+
+  it('holds play until the players who were here are back (V66)', () => {
+    const { env, table, snap } = setup(['Ann', 'Bo'])
+    table.start('c0')
+    env.advance(3_000)
+    const tokens = [snap('c0').token, snap('c1').token]
+    const back = restart(roundTrip(table))
+    back.table.join('x0', { token: tokens[0] })
+    expect(back.table.snapshotFor('x0')!.match!.returning).toEqual([1])
+    const held = state(back.table)
+    back.env.advance(RESTORE_GRACE_MS - 1)
+    expect(state(back.table)).toBe(held)
+    back.table.join('x1', { token: tokens[1] })
+    expect(back.table.snapshotFor('x0')!.match!.returning).toBeNull()
+    expect(back.table.snapshotFor('x0')!.host).toBe(0)
+    for (let i = 0; i < 50; i++) {
+      autoplay(back.table, ['x0', 'x1'], (c) => back.table.snapshotFor(c)!)
+      back.env.advance(1000)
+    }
+    expect(state(back.table)).not.toBe(held)
+  })
+
+  it('stops waiting after the grace period, and a bot covers whoever has not returned (V66)', () => {
+    const { env, table, snap } = setup(['Ann', 'Bo'])
+    table.start('c0')
+    env.advance(3_000)
+    const back = restart(roundTrip(table))
+    back.table.join('x1', { token: snap('c1').token })
+    // The host is expected back, so stays host for now.
+    expect(back.table.snapshotFor('x1')!.host).toBe(0)
+    const held = state(back.table)
+    back.env.advance(RESTORE_GRACE_MS)
+    expect(back.table.snapshotFor('x1')!.match!.returning).toBeNull()
+    expect(back.table.snapshotFor('x1')!.host).toBe(1)
+    for (let i = 0; i < 50; i++) {
+      autoplay(back.table, ['x1'], (c) => back.table.snapshotFor(c)!)
+      back.env.advance(1000)
+    }
+    expect(state(back.table)).not.toBe(held)
+    // Ann's seat is still kept for her (V44): the newcomer gets a bot's.
+    expect(back.table.join('x2', { name: 'Cy' })).toBe(2)
+    expect(back.table.join('x0', { token: snap('c0').token })).toBe(0)
+  })
+
+  it('keeps every seat reserved for its player from the restart on (V44)', () => {
+    const { env, table, snap } = setup(['Ann', 'Bo', 'Cy', 'Di'])
+    table.start('c0')
+    env.advance(RESERVE_MS * 2)
+    const back = restart(roundTrip(table))
+    expect(back.table.canJoin(undefined)).toBe(false)
+    back.env.advance(RESERVE_MS)
+    expect(back.table.canJoin(undefined)).toBe(true)
+    expect(back.table.join('x3', { token: snap('c3').token })).toBe(3)
+  })
+
+  it('keeps the time a claim had left', () => {
+    const { env, table, snap } = setup(['Ann'])
+    table.start('c0')
+    for (let i = 0; i < 2000 && snap('c0').match!.claimMs === null; i++) {
+      const m = snap('c0').match!
+      if (m.legal.length && m.view!.phase.kind === 'discard') table.act('c0', { step: m.step, action: m.legal.find((a) => a.type === 'discard') })
+      else env.advance(200)
+    }
+    env.advance(3_000)
+    const left = snap('c0').match!.claimMs!
+    const back = restart(roundTrip(table))
+    back.table.join('x0', { token: snap('c0').token })
+    expect(back.table.snapshotFor('x0')!.match!.claimMs).toBe(left)
+    const before = state(back.table)
+    back.env.advance(left - 1)
+    expect(state(back.table)).toBe(before)
+    back.env.advance(1)
+    expect(state(back.table)).not.toBe(before)
+  })
+
+  it('refuses a save from another version, or anything that is not one', () => {
+    const { table } = setup(['Ann'])
+    const env = new FakeEnv()
+    expect(Table.restore('ABCD', env, () => {}, { ...table.save(), version: SAVED_TABLE_VERSION + 1 })).toBeNull()
+    expect(Table.restore('ABCD', env, () => {}, null)).toBeNull()
+    expect(Table.restore('ABCD', env, () => {}, 'nope')).toBeNull()
+    expect(Table.restore('ABCD', env, () => {}, { version: SAVED_TABLE_VERSION })).toBeNull()
   })
 })

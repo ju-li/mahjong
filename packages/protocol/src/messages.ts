@@ -33,6 +33,13 @@ export type JoinOptions = {
   token?: string
   /** Logto access token of a signed-in player; absent or invalid = guest. Never needed to play. */
   accessToken?: string
+  /**
+   * `client.create` only: bring back the table with this code, saved before a server restart,
+   * instead of hosting a new one. Fails with 522 if there is nothing to restore, or with
+   * `TABLE_MOVING_CODE` while another server process still holds it (or it is already open here:
+   * join it by id).
+   */
+  restore?: string
 }
 
 export type TableSettings = {
@@ -87,6 +94,11 @@ export type MatchInfo = {
   final: boolean
   /** Who paused play, or null while it runs. While paused nothing moves and no timer runs. */
   paused: Player | null
+  /**
+   * Just restored after a server restart: players who were at the table then and aren't back yet.
+   * Nothing moves until they are, or a short grace period passes. Null otherwise.
+   */
+  returning: Player[] | null
 }
 
 /** Server → client, message type `snapshot`: everything one player may see. */
@@ -150,8 +162,19 @@ export type ClientMessages = {
   kick: { player: number }
 }
 
-/** Close code when the host removes you, and the join error when you try to come back. */
+/** Close code when the host removes you. */
 export const KICKED_CODE = 4006
+
+// Join refusals travel as the HTTP status of the matchmaking request, so they must be valid ones.
+/** Join refused: the host removed you from this table. */
+export const REMOVED_CODE = 403
+/** Join refused: every seat is taken. */
+export const TABLE_FULL_CODE = 409
+/**
+ * Join refused for now: the table is moving to another server process (a deploy is under way), or
+ * this one is shutting down. Try again shortly.
+ */
+export const TABLE_MOVING_CODE = 503
 
 /** Colyseus room type signed-in players stay connected to for friends and online status. */
 export const SOCIAL_ROOM = 'social'
