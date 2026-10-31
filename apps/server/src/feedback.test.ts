@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_FEEDBACK_ATTACHMENT_BYTES } from '@mahjong/protocol'
+import { MAX_FEEDBACK_ATTACHMENT_BYTES, MAX_FEEDBACK_SCREENSHOT_BYTES, MAX_FEEDBACK_SCREENSHOTS } from '@mahjong/protocol'
 import { createFeedbackHandler, FEEDBACK_PER_WINDOW, FEEDBACK_WINDOW_MS, smtpSender, type FeedbackMail } from './feedback'
 
 function setup(table: unknown = null) {
@@ -12,6 +12,9 @@ function setup(table: unknown = null) {
   })
   return { sent, handle, later: (ms: number) => (now += ms) }
 }
+
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]).toString('base64')
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 4, 5, 6]).toString('base64')
 
 const report = { name: 'Ann', email: 'ann@example.com', message: 'The bot discarded twice', diagnostics: { userAgent: 'test' }, game: { seed: 7 } }
 
@@ -56,6 +59,39 @@ describe('feedback', () => {
     await handle({ ...report, diagnostics: { logs: 'x'.repeat(MAX_FEEDBACK_ATTACHMENT_BYTES * 2) } }, 'a')
     const parsed = JSON.parse(sent[0]!.attachments[0]!.content)
     expect(parsed.truncated).toBe(true)
+  })
+
+  it('attaches screenshots as images after the JSON files', async () => {
+    const { sent, handle } = setup()
+    const screenshots = [
+      { type: 'image/png', data: PNG },
+      { type: 'image/jpeg', data: JPEG },
+    ]
+    expect(await handle({ ...report, screenshots }, 'a')).toEqual({ ok: true })
+    const mail = sent[0]!
+    expect(mail.text).toContain('Screenshots: 2')
+    expect(mail.attachments.slice(2)).toEqual([
+      { filename: 'screenshot-1.png', content: PNG, contentType: 'image/png', encoding: 'base64' },
+      { filename: 'screenshot-2.jpg', content: JPEG, contentType: 'image/jpeg', encoding: 'base64' },
+    ])
+  })
+
+  it('refuses screenshots that are too many, too big or not really images', async () => {
+    const { sent, handle } = setup()
+    const shot = { type: 'image/png', data: PNG }
+    const tooBig = Buffer.alloc(MAX_FEEDBACK_SCREENSHOT_BYTES + 1, 0x89)
+    Buffer.from(PNG, 'base64').copy(tooBig)
+    for (const screenshots of [
+      Array(MAX_FEEDBACK_SCREENSHOTS + 1).fill(shot),
+      [{ type: 'image/png', data: tooBig.toString('base64') }],
+      [{ type: 'image/png', data: JPEG }],
+      [{ type: 'image/svg+xml', data: Buffer.from('<svg/>').toString('base64') }],
+      [{ type: 'image/png', data: '' }],
+      'nope',
+    ]) {
+      expect(await handle({ ...report, screenshots }, 'a')).toMatchObject({ ok: false, status: 400 })
+    }
+    expect(sent).toHaveLength(0)
   })
 
   it('limits how often one sender can report', async () => {

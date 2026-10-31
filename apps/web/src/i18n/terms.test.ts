@@ -29,6 +29,7 @@ describe('terminology', () => {
     expect(translate('zh-Hans', 'status.winSelf', { name: '小明' }, terms)).toBe('小明自摸胡牌。')
     expect(translate('zh-Hans', 'result.howYourDiscard', {}, terms)).toBe('你放铳')
     expect(translate('zh-Hans', 'result.banner.draw', {}, terms)).toBe('流局')
+    expect(translate('zh-Hans', 'result.banner.other', {}, terms)).toBe('胡牌')
     expect(translate('zh-Hans', 'tile.dots', {}, terms)).toBe('筒')
     const keys = Object.keys(zhHans) as MessageKey[]
     for (const key of keys) expect(translate('zh-Hans', key, {}, terms)).not.toMatch(/\{t:/)

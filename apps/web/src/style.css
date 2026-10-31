@@ -1892,7 +1892,8 @@ body {
   --summary-glow: 110 170 220;
 }
 
-.summary--draw {
+.summary--draw,
+.summary--other {
   --summary-glow: 170 180 175;
 }
 
@@ -1933,7 +1934,8 @@ body {
   background-image: linear-gradient(#f3fbff 10%, #9fcdec 55%, #3d77a6 90%);
 }
 
-.summary--draw .summary__banner span {
+.summary--draw .summary__banner span,
+.summary--other .summary__banner span {
   background-image: linear-gradient(#ffffff 10%, #c7d0cb 55%, #7b8782 90%);
 }
 
@@ -3233,6 +3235,81 @@ body {
 .feedback textarea:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
+}
+
+.feedback__shots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.feedback__label {
+  flex-basis: 100%;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.feedback__thumbs {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feedback__thumb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  border: 1px solid var(--tile-edge);
+  overflow: hidden;
+  background: var(--button);
+}
+
+.feedback__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.feedback__thumb--loading {
+  animation: feedback-loading 1s ease-in-out infinite alternate;
+}
+
+@keyframes feedback-loading {
+  to {
+    opacity: 0.4;
+  }
+}
+
+.feedback__remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font-size: 16px;
+  line-height: 24px;
+  cursor: pointer;
+}
+
+.feedback__remove:focus-visible {
+  outline: 2px solid var(--focus);
+}
+
+.feedback__hint {
+  font-size: var(--fs-sm);
+  color: var(--muted);
 }
 
 /* ---- Profile dialog: your name and face ---- */
