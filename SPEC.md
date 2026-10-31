@@ -230,3 +230,4 @@ B3|2026-09-25|wait uniqueness ignored kinds fully held by player ∴ extra `sing
 B4|2026-09-25|`allChows` only checked standard form; reference counts knitted straight as chows|V37
 B5|2026-09-25|`nineGates` excluded every terminal pung; reference cancels one|V38
 B6|2026-10-29|join refusals used close-code-style 4003 / 4006 as matchmaking errors; Colyseus sends them as the HTTP status ∴ 500, web showed every full/removed join as a network error|409 / 403 (`TABLE_FULL_CODE`, `REMOVED_CODE`)
+B7|2026-10-31|summary banner read a win that cost you 0 (sg: only discarder pays) as `draw` ∴ showed 荒庄 under "X 胡牌"|`handOutcome` → `other`: banner `{t:win}牌` / "Hand over"; `draw` only for `drawn`
