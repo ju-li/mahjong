@@ -1892,7 +1892,8 @@ body {
   --summary-glow: 110 170 220;
 }
 
-.summary--draw {
+.summary--draw,
+.summary--other {
   --summary-glow: 170 180 175;
 }
 
@@ -1933,7 +1934,8 @@ body {
   background-image: linear-gradient(#f3fbff 10%, #9fcdec 55%, #3d77a6 90%);
 }
 
-.summary--draw .summary__banner span {
+.summary--draw .summary__banner span,
+.summary--other .summary__banner span {
   background-image: linear-gradient(#ffffff 10%, #c7d0cb 55%, #7b8782 90%);
 }
 

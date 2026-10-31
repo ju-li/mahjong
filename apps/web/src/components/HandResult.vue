@@ -4,6 +4,7 @@ import { handDeltas, kindIndex, type HandResult, type PlayerView, type Seat } fr
 import { useI18n } from '../i18n/useI18n'
 import MeldGroup from './MeldGroup.vue'
 import ScoreExplain from './ScoreExplain.vue'
+import { handOutcome } from '../game/outcome'
 import TileFace from './TileFace.vue'
 import type { ReadyButton } from '../game/source'
 
@@ -28,12 +29,7 @@ const { t, fanName } = useI18n()
 const explaining = ref(false)
 
 /** How the hand went for you: decides the banner. */
-const outcome = computed<'win' | 'loss' | 'draw'>(() => {
-  const r = props.result
-  if (r.type === 'drawn') return 'draw'
-  const mine = r.deltas[props.view.seat]!
-  return mine > 0 ? 'win' : mine < 0 ? 'loss' : 'draw'
-})
+const outcome = computed(() => handOutcome(props.result, props.view.seat))
 
 /** One line in the style of "Bot 1 wins 12 fan · you lose 20 (self-draw)". */
 const headline = computed(() => {
