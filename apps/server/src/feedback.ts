@@ -1,5 +1,13 @@
 import { createTransport } from 'nodemailer'
-import { MAX_FEEDBACK_ATTACHMENT_BYTES, MAX_FEEDBACK_MESSAGE, MAX_NAME_LENGTH } from '@mahjong/protocol'
+import {
+  FEEDBACK_SCREENSHOT_TYPES,
+  MAX_FEEDBACK_ATTACHMENT_BYTES,
+  MAX_FEEDBACK_MESSAGE,
+  MAX_FEEDBACK_SCREENSHOT_BYTES,
+  MAX_FEEDBACK_SCREENSHOTS,
+  MAX_NAME_LENGTH,
+  type FeedbackScreenshotType,
+} from '@mahjong/protocol'
 
 /** Where feedback goes unless `FEEDBACK_TO` says otherwise. */
 export const FEEDBACK_RECIPIENTS = ['yuanmingongling@gmail.com', 'juli@opsinsight.ai']
@@ -17,7 +25,8 @@ export type FeedbackMail = {
   replyTo?: string
   subject: string
   text: string
-  attachments: { filename: string; content: string; contentType: string }[]
+  /** `encoding: 'base64'` for binary files (screenshots); JSON is plain text. */
+  attachments: { filename: string; content: string; contentType: string; encoding?: 'base64' }[]
 }
 
 export type FeedbackResult = { ok: true } | { ok: false; status: number; error: string }
@@ -42,9 +51,34 @@ function attachment(filename: string, data: unknown) {
   return { filename, content, contentType: 'application/json' }
 }
 
+/** File extension, and whether the bytes really start like that kind of picture. */
+const IMAGES: Record<FeedbackScreenshotType, { ext: string; looksRight(b: Buffer): boolean }> = {
+  'image/png': { ext: 'png', looksRight: (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) },
+  'image/jpeg': { ext: 'jpg', looksRight: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  'image/webp': { ext: 'webp', looksRight: (b) => b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP' },
+}
+const isScreenshotType = (raw: unknown): raw is FeedbackScreenshotType => (FEEDBACK_SCREENSHOT_TYPES as readonly unknown[]).includes(raw)
+
+/** The pictures the player attached, or null if there are too many or any isn't a small PNG, JPEG or WebP. */
+function screenshots(raw: unknown): FeedbackMail['attachments'] | null {
+  if (raw === undefined || raw === null) return []
+  if (!Array.isArray(raw) || raw.length > MAX_FEEDBACK_SCREENSHOTS) return null
+  const files: FeedbackMail['attachments'] = []
+  for (const shot of raw as unknown[]) {
+    const { type, data } = (shot && typeof shot === 'object' ? shot : {}) as Record<string, unknown>
+    // Base64 is 4 characters per 3 bytes; don't decode anything that can't fit.
+    if (!isScreenshotType(type) || typeof data !== 'string' || data.length > Math.ceil(MAX_FEEDBACK_SCREENSHOT_BYTES / 3) * 4 + 4) return null
+    const bytes = Buffer.from(data, 'base64')
+    if (bytes.length === 0 || bytes.length > MAX_FEEDBACK_SCREENSHOT_BYTES || !IMAGES[type].looksRight(bytes)) return null
+    files.push({ filename: `screenshot-${files.length + 1}.${IMAGES[type].ext}`, content: bytes.toString('base64'), contentType: type, encoding: 'base64' })
+  }
+  return files
+}
+
 /**
  * Turns a player's feedback into an email to the developers, with two JSON attachments:
- * the device diagnostics and the game (plus, at an online table, the server's full copy of it).
+ * the device diagnostics and the game (plus, at an online table, the server's full copy of it),
+ * and any screenshots the player added.
  */
 export function createFeedbackHandler(env: FeedbackEnv) {
   const recent = new Map<string, number[]>()
@@ -57,6 +91,8 @@ export function createFeedbackHandler(env: FeedbackEnv) {
     const message = text(b.message, MAX_FEEDBACK_MESSAGE)
     if (!message) return { ok: false, status: 400, error: 'message is required' }
     if (email && !EMAIL.test(email)) return { ok: false, status: 400, error: 'invalid email' }
+    const pictures = screenshots(b.screenshots)
+    if (!pictures) return { ok: false, status: 400, error: 'invalid screenshots' }
 
     const now = env.now()
     const within = (key: string) => (recent.get(key) ?? []).filter((t) => now - t < FEEDBACK_WINDOW_MS)
@@ -78,8 +114,15 @@ export function createFeedbackHandler(env: FeedbackEnv) {
       await env.send({
         replyTo: email || undefined,
         subject: `Mahjong feedback from ${from}${code ? ` (table ${code})` : ''}`,
-        text: [`From: ${from}${email ? ` <${email}>` : ''}`, `Sent: ${stamp}`, code ? `Online table: ${code}` : 'Solo match', '', message].join('\n'),
-        attachments: [attachment('diagnostics.json', b.diagnostics), attachment('game.json', game)],
+        text: [
+          `From: ${from}${email ? ` <${email}>` : ''}`,
+          `Sent: ${stamp}`,
+          code ? `Online table: ${code}` : 'Solo match',
+          ...(pictures.length ? [`Screenshots: ${pictures.length}`] : []),
+          '',
+          message,
+        ].join('\n'),
+        attachments: [attachment('diagnostics.json', b.diagnostics), attachment('game.json', game), ...pictures],
       })
     } catch (e) {
       console.error('feedback email failed', e)
