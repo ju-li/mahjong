@@ -383,6 +383,15 @@ export const FEEDBACK_PATH = '/feedback'
 export const MAX_FEEDBACK_MESSAGE = 5000
 /** Diagnostics ride along as JSON attachments; the console log is the bulk of it. */
 export const MAX_FEEDBACK_ATTACHMENT_BYTES = 400 * 1024
+/** Pictures a player can attach to a report... */
+export const MAX_FEEDBACK_SCREENSHOTS = 3
+/** ...each at most this big once decoded; the browser shrinks larger ones before sending. */
+export const MAX_FEEDBACK_SCREENSHOT_BYTES = 1536 * 1024
+export const FEEDBACK_SCREENSHOT_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const
+export type FeedbackScreenshotType = (typeof FEEDBACK_SCREENSHOT_TYPES)[number]
+
+/** A picture attached to a report: the image file, base64-encoded. */
+export type FeedbackScreenshot = { type: FeedbackScreenshotType; data: string }
 
 /** Body of a `POST /feedback`. */
 export type FeedbackRequest = {
@@ -395,4 +404,6 @@ export type FeedbackRequest = {
   game: unknown
   /** Code of the online table the player is at; the server adds its full copy of that game. */
   tableCode?: string
+  /** Up to `MAX_FEEDBACK_SCREENSHOTS` pictures the player chose to attach. */
+  screenshots?: FeedbackScreenshot[]
 }
